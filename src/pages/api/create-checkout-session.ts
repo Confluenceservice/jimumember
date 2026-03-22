@@ -2,13 +2,12 @@ import type { APIRoute } from "astro";
 import Stripe from "stripe";
 import {
   formatAmountNzd,
+  getFirstTermAmount,
   getNextJulyAnchorEpoch,
   getPlanDisplayName,
   getPriceForPlan,
-  getProratedAmountToJulyAnchor,
   getSiteBaseUrl,
   isPromoWindowNz,
-  promoCodeMatches,
   type MembershipPlan,
 } from "../../lib/stripe-checkout";
 
@@ -95,14 +94,13 @@ export const POST: APIRoute = async ({ request }) => {
   const annualAmount = recurringPrice.unit_amount;
   const customerInfo = await getExistingCustomerInfo(stripe, email);
   const inPromoWindow = isPromoWindowNz();
+
+  // First-time subscriber in promo window without prior subscriptions
   const promoApplied =
     inPromoWindow &&
-    promoCodeMatches(payload.promoCode) &&
     !customerInfo.hasPriorSubscriptions;
 
-  const dueTodayAmount = promoApplied
-    ? Math.round(annualAmount * 0.5)
-    : getProratedAmountToJulyAnchor(annualAmount);
+  const dueTodayAmount = getFirstTermAmount(annualAmount, inPromoWindow, promoApplied);
 
   const planDisplayName = getPlanDisplayName(plan);
   const renewalMessage = `Then ${formatAmountNzd(annualAmount)} per year starting 1 July.`;
@@ -111,6 +109,7 @@ export const POST: APIRoute = async ({ request }) => {
     mode: "payment",
     success_url: `${siteBaseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${siteBaseUrl}/cancel`,
+    allow_promotion_codes: true,
     payment_intent_data: {
       setup_future_usage: "off_session",
       metadata: {
