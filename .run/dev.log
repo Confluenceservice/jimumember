@@ -1,0 +1,42 @@
+
+> eldaa-membership-checkout@0.1.0 dev
+> astro dev
+
+22:35:15 [@astrojs/node] Enabling sessions with filesystem storage
+[vite] connected.
+22:35:16 [types] Generated 0ms
+22:35:16 [WARN] [content] Content config not loaded
+22:35:16 [vite] Re-optimizing dependencies because vite config has changed
+ astro  v6.0.5 ready in 551 ms
+┃ Local    http://localhost:4321/
+┃ Network  use --host to expose
+22:35:16 watching for file changes...
+22:35:46 [200] / 18ms
+22:37:12 [200] / 2ms
+22:37:12 [vite] ✨ new dependencies optimized: astro/runtime/client/dev-toolbar/entrypoint.js
+22:37:12 [vite] ✨ optimized dependencies changed. reloading
+22:37:12 [200] / 2ms
+22:37:51 [200] POST /api/create-checkout-session 1227ms
+22:38:21 [200] / 7ms
+22:38:26 [200] /success 5ms
+22:38:37 [200] /cancel 3ms
+22:38:43 [200] / 1ms
+07:14:26 [200] / 49ms
+07:14:54 [200] POST /api/create-checkout-session 1211ms
+07:16:00 [200] /cancel 13ms
+07:16:02 [200] / 16ms
+07:16:27 [200] /cancel 6ms
+07:16:37 [200] / 6ms
+07:17:01 [200] POST /api/create-checkout-session 1122ms
+07:19:00 [200] /success 13ms
+07:19:08 [200] / 4ms
+07:19:10 [200] /success 1ms
+14:21:03 [200] /success 27ms
+14:21:23 [200] /success 3ms
+14:33:51 [200] /success 7ms
+14:33:58 [200] /success 2ms
+14:34:04 [200] /success 4ms
+14:34:50 [200] /success 5ms
+16:02:37 [200] /success 10ms
+16:05:28 [200] /success 11ms
+16:05:38 [200] /success 9ms
