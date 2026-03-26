@@ -7,7 +7,10 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@astrojs/node": "^10.0.2",
@@ -19,6 +22,8 @@
     "@astrojs/check": "^0.9.8",
     "@types/luxon": "^3.7.1",
     "@types/node": "^25.5.0",
-    "typescript": "^5.9.3"
+    "@vitest/ui": "^4.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
   }
 }

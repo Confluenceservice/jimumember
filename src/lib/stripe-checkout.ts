@@ -4,16 +4,16 @@ export type MembershipPlan = "associate" | "professional";
 
 const NZ_TIMEZONE = "Pacific/Auckland";
 
-export function isPromoWindowNz(now = DateTime.now()): boolean {
+export function isPromoWindowNz(now: DateTime = DateTime.utc()): boolean {
   const nzNow = now.setZone(NZ_TIMEZONE);
   return nzNow.month >= 1 && nzNow.month <= 6;
 }
 
-export function getNextJulyAnchorEpoch(now = DateTime.now()): number {
+export function getNextJulyAnchorDate(now: DateTime = DateTime.utc()): DateTime {
   const nzNow = now.setZone(NZ_TIMEZONE);
   const anchorYear = nzNow.month >= 7 ? nzNow.year + 1 : nzNow.year;
 
-  const julyFirstNz = DateTime.fromObject(
+  return DateTime.fromObject(
     {
       year: anchorYear,
       month: 7,
@@ -24,32 +24,31 @@ export function getNextJulyAnchorEpoch(now = DateTime.now()): number {
     },
     { zone: NZ_TIMEZONE },
   );
+}
 
-  return Math.floor(julyFirstNz.toSeconds());
+export function getNextJulyAnchorEpoch(now: DateTime = DateTime.utc()): number {
+  return Math.floor(getNextJulyAnchorDate(now).toSeconds());
 }
 
 export function getSiteBaseUrl(requestUrl: string): string {
-  const configured = import.meta.env.PUBLIC_SITE_URL?.trim();
+  const configured = process.env.PUBLIC_SITE_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
   return new URL(requestUrl).origin;
 }
 
 export function getPriceForPlan(plan: MembershipPlan): string {
   const map: Record<MembershipPlan, string> = {
-    associate: import.meta.env.STRIPE_PRICE_ASSOCIATE,
-    professional: import.meta.env.STRIPE_PRICE_PROFESSIONAL,
+    associate: process.env.STRIPE_PRICE_ASSOCIATE,
+    professional: process.env.STRIPE_PRICE_PROFESSIONAL,
   };
 
   return map[plan];
 }
 
-export function getUpfrontPriceForPlan(
-  plan: MembershipPlan,
-): string | undefined {
-  const map: Record<MembershipPlan, string | undefined> = {
-    associate: import.meta.env.STRIPE_UPFRONT_PRICE_ASSOCIATE,
-    professional: import.meta.env.STRIPE_UPFRONT_PRICE_PROFESSIONAL,
-  };
+export function getPlanDisplayName(plan: MembershipPlan): string {
+  return plan === "associate" ? "Associate Membership" : "Professional Membership";
+}
 
-  return map[plan]?.trim() || undefined;
+export function formatAmountNzd(amountInCents: number): string {
+  return `NZ$${(amountInCents / 100).toFixed(2)}`;
 }

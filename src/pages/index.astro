@@ -9,7 +9,11 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   <section class="card">
     <h1 class="headline">Membership checkout</h1>
     <p class="sub">
-      Select a plan and continue to Stripe Checkout. Billing renews on 1 July.
+      Pay today, then annual billing starts on 1 July.
+    </p>
+    <p class="promo-code-display" style="margin: 1rem 0 0; font-weight: 600;">
+      Promotion code: <strong>LDTY8PQR</strong>
+      <span style="font-weight: 400; color: var(--muted);"> (50% off for Jan–Jun first-time subscribers)</span>
     </p>
   </section>
 
@@ -26,14 +30,14 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
     />
     <p style="color: var(--muted); margin: 0.5rem 0 0;">
-      From January to June (NZ time), first-time subscribers get 50% off automatically.
+      From January to June (NZ time), first-time subscribers can use <strong>LDTY8PQR</strong> for 50% off.
     </p>
   </section>
 
   <section class="plan-grid" style="display: grid; gap: 1rem; margin-top: 1rem;">
     <article class="card">
       <h2 style="margin-top: 0;">Associate membership</h2>
-      <p class="sub">Annual plan for associate members.</p>
+      <p class="sub">Then NZ$50.00 per year starting 1 July.</p>
       <button class="button checkout-button" data-plan="associate" style="margin-top: 0.75rem;">
         Continue with Associate
       </button>
@@ -41,7 +45,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
     <article class="card">
       <h2 style="margin-top: 0;">Professional membership</h2>
-      <p class="sub">Annual plan for professional members.</p>
+      <p class="sub">Then NZ$120.00 per year starting 1 July.</p>
       <button class="button checkout-button" data-plan="professional" style="margin-top: 0.75rem;">
         Continue with Professional
       </button>

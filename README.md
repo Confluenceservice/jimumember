@@ -14,10 +14,8 @@ Astro scaffold with:
    - `npm run dev`
 
 ## Key behavior
-- Uses Stripe Checkout Sessions in `subscription` mode.
-- Jan-Jun NZ window:
-  - Uses fixed first-term charge (one-time upfront price) and applies 50% promo to that full annual amount.
-  - Sets `subscription_data[trial_end]` to next July 1 so annual recurring billing starts on July 1.
-- Jul-Dec NZ window:
-  - Uses `subscription_data[billing_cycle_anchor]` with proration to next July 1.
-- Allows manual promo code entry outside that window.
+- Uses Stripe Checkout Sessions in `payment` mode for the first-term charge.
+- Webhook creates the annual recurring subscription after successful payment.
+- Annual recurring billing is deferred to 1 July (handled server-side in webhook).
+- Jan-Jun NZ window: first-time subscribers with valid promo code (`LDTY8PQR`) get 50% off the annual amount.
+- Otherwise, first-term charge is prorated to the next 1 July boundary.
