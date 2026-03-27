@@ -1,5 +1,5 @@
 # WARP Notes
-Last updated: 2026-03-23
+Last updated: 2026-03-27
 
 ## Scope
 Implement Option C custom flow so membership subscriptions can:
@@ -7,6 +7,8 @@ Implement Option C custom flow so membership subscriptions can:
 - Anchor renewals to 1 July each year.
 - Apply a 50% first-subscription discount from 1 January to 30 June with promo code `LDTY8PQR`.
 - Keep renewal logic server-side and auditable via webhook.
+- Separate Associate (index.astro) and Professional (/professional) checkout flows.
+- Log all checkout completions to Google Sheets for downstream processing.
 
 ## Stripe Objects in Use (Test Mode)
 - Associate product: `prod_U7vqEzAEaaK8nC`
@@ -63,10 +65,14 @@ Webhook behavior (`checkout.session.completed`):
 
 ## Current Scaffold Status
 - Created Astro app scaffold with server output and Node adapter.
-- Implemented Option C payment checkout API route: `src/pages/api/create-checkout-session.ts`.
-- Implemented Option C webhook subscription creation: `src/pages/api/stripe-webhook.ts`.
-- Updated frontend membership UI with promo code input and explicit 1 July wording: `src/pages/index.astro`.
-- Added success/cancel pages: `src/pages/success.astro`, `src/pages/cancel.astro`.
+- Associate membership: `src/pages/index.astro` (single plan, uses `/api/create-checkout-session`).
+- Professional membership: `src/pages/professional.astro` with dedicated `/api/create-professional-checkout` endpoint.
+- Option C webhook subscription creation: `src/pages/api/stripe-webhook.ts`.
+- Success page (`/success`) redirects Professional members to `eldaa.org.nz/professional-membership`.
+- Session info API: `src/pages/api/session-info.ts` (used by success page to detect plan).
+- Cancel pages: `src/pages/cancel.astro` (Associate), `src/pages/professional/cancel.astro` (Professional).
+- Webhook logs `checkout.session.completed` to Google Sheets via service account.
+- Google Sheets helper: `src/lib/google-sheets.ts`.
 - Added env template: `.env.example`.
 - Build and diagnostics pass (`npm run build`, `npm run check`).
 - Deployed to Fly.io at `https://eldaa.fly.dev/` with Dockerfile + fly.toml.
@@ -76,10 +82,11 @@ Webhook behavior (`checkout.session.completed`):
 ## Next Steps
 1. ~~Add persistent idempotency/event tracking for webhook processing.~~ (done via idempotencyKey + local membership store)
 2. ~~Add local membership persistence mapping customer/subscription records.~~ (done in `.data/memberships.json`)
-3. Add integration tests for promo-code eligibility and prorated fallback.
-4. ~~Replace placeholder success/cancel URLs with production domain values.~~ (done — eldaa.fly.dev)
+3. ~~Log checkout completions to Google Sheets.~~ (done via service account + googleapis)
+4. Add integration tests for promo-code eligibility and prorated fallback.
 5. Configure production Stripe webhook in Dashboard (register `https://eldaa.fly.dev/api/stripe-webhook`).
 6. Switch from test keys to live Stripe keys before going live.
+7. Share Google Sheets spreadsheet with the service account email before enabling webhook logging.
 
 ## Guardrails For Future Changes
 1. Keep first-term charge calculations in NZ timezone and test boundary dates.
@@ -111,6 +118,9 @@ fly secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 fly secrets set STRIPE_PRICE_ASSOCIATE=price_...
 fly secrets set STRIPE_PRICE_PROFESSIONAL=price_...
 fly secrets set PUBLIC_SITE_URL=https://eldaa.fly.dev
+fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+fly secrets set GOOGLE_SHEETS_SPREADSHEET_ID=1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8
 ```
 
 ### Stripe Webhook (Production)
@@ -147,6 +157,9 @@ docker run -p 4321:4321 \
   -e STRIPE_PRICE_ASSOCIATE=price_... \
   -e STRIPE_PRICE_PROFESSIONAL=price_... \
   -e PUBLIC_SITE_URL=https://your-domain.com \
+  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=... \
+  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n" \
+  -e GOOGLE_SHEETS_SPREADSHEET_ID=... \
   eldaa-membership
 ```
 
@@ -174,6 +187,9 @@ docker run --network eldaa-net --name eldaa-app \
   -e STRIPE_PRICE_ASSOCIATE=price_... \
   -e STRIPE_PRICE_PROFESSIONAL=price_... \
   -e PUBLIC_SITE_URL=https://your-domain.com \
+  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=... \
+  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n" \
+  -e GOOGLE_SHEETS_SPREADSHEET_ID=... \
   eldaa-membership
 ```
 
