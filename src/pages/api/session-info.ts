@@ -23,6 +23,9 @@ export const GET: APIRoute = async ({ request }) => {
 
     return Response.json({
       plan: session.metadata?.plan ?? null,
+      firstName: session.metadata?.first_name ?? null,
+      lastName: session.metadata?.last_name ?? null,
+      phone: session.metadata?.phone ?? null,
       email: session.customer_email ?? null,
       amount: session.amount_total ?? null,
       customerId:

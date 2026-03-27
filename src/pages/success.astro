@@ -41,9 +41,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     }
 
     const plan = data.plan;
+    const name = data.firstName ? ` ${data.firstName}` : "";
 
     if (plan === "professional") {
-      messageEl.textContent = "Thank you! Your Professional Membership payment was successful.";
+      messageEl.textContent = `Thank you${name}! Your Professional Membership payment was successful.`;
       formLinkText.textContent = "Next step:";
       formLinkEl.textContent = "Complete your Professional Membership application";
       formLinkEl.href = "https://www.eldaa.org.nz/professional-membership";

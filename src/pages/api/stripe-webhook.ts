@@ -111,10 +111,12 @@ async function handleCheckoutCompleted(
 
   // Log to Google Sheets (async — don't fail the webhook if this errors)
   const amountPaid = session.amount_total ?? 0;
-  const email = session.customer_email ?? "";
   appendCheckoutLog({
     timestamp: new Date().toISOString(),
-    email,
+    firstName: session.metadata?.first_name ?? "",
+    lastName: session.metadata?.last_name ?? "",
+    phone: session.metadata?.phone ?? "",
+    email: session.customer_email ?? "",
     plan: plan || "",
     amountPaid,
     sessionId: session.id,

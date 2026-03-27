@@ -2,6 +2,9 @@ import { google } from "googleapis";
 
 type CheckoutLogEntry = {
   timestamp: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
   email: string;
   plan: string;
   amountPaid: number;
@@ -41,6 +44,9 @@ export async function appendCheckoutLog(entry: CheckoutLogEntry): Promise<void> 
 
   const row = [
     entry.timestamp,
+    entry.firstName,
+    entry.lastName,
+    entry.phone,
     entry.email,
     entry.plan,
     amountDisplay,
@@ -50,7 +56,7 @@ export async function appendCheckoutLog(entry: CheckoutLogEntry): Promise<void> 
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: "A1:F1",
+    range: "A1:I1",
     valueInputOption: "RAW",
     requestBody: {
       values: [row],
