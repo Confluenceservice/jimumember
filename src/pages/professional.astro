@@ -1,0 +1,121 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Professional Membership Checkout"
+  description="Subscribe to Professional membership."
+>
+  <section class="card">
+    <h1 class="headline">Professional Membership</h1>
+    <p class="sub">
+      Pay today, then annual billing starts on 1 July.
+    </p>
+    <p style="margin: 1rem 0 0; font-weight: 600;">
+      Promotion code: <strong>LDTY8PQR</strong>
+      <span style="font-weight: 400; color: var(--muted);"> (50% off for Jan–Jun first-time subscribers)</span>
+    </p>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <label for="email" style="display: block; font-weight: 600; margin-bottom: 0.45rem;">
+      Email address
+    </label>
+    <input
+      id="email"
+      name="email"
+      type="email"
+      placeholder="you@example.com"
+      autocomplete="email"
+      style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
+    />
+    <p style="color: var(--muted); margin: 0.5rem 0 0;">
+      From January to June (NZ time), first-time subscribers can use <strong>LDTY8PQR</strong> for 50% off.
+    </p>
+  </section>
+
+  <section class="card" style="margin-top: 1rem;">
+    <h2 style="margin-top: 0;">Professional membership</h2>
+    <p class="sub">Then NZ$120.00 per year starting 1 July.</p>
+    <button class="button checkout-button" data-plan="professional" style="margin-top: 0.75rem;">
+      Continue with Professional
+    </button>
+  </section>
+
+  <p id="status" style="margin-top: 0.9rem; min-height: 1.4rem;" aria-live="polite"></p>
+
+  <style>
+    .checkout-button {
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+      letter-spacing: 0.01em;
+      font-size: 1.15rem;
+      padding: 1rem 1.25rem;
+      min-height: 56px;
+      max-width: 360px;
+    }
+  </style>
+
+  <script>
+    // @ts-nocheck
+    const statusEl = document.querySelector("#status");
+    const emailInput = document.querySelector("#email");
+    const buttons = document.querySelectorAll(".checkout-button");
+
+    const setStatus = (message, type = "info") => {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.className =
+        type === "error" ? "status-warn" : type === "ok" ? "status-ok" : "";
+    };
+
+    const setLoading = (isLoading) => {
+      buttons.forEach((btn) => {
+        if (!(btn instanceof HTMLButtonElement)) return;
+        btn.disabled = isLoading;
+        btn.textContent = isLoading ? "Redirecting to Checkout..." : "Continue with Professional";
+      });
+    };
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const plan = button.dataset?.plan;
+        const email = emailInput instanceof HTMLInputElement ? emailInput.value.trim() : "";
+
+        if (!email) {
+          setStatus("Enter an email address before continuing.", "error");
+          return;
+        }
+
+        if (!plan) {
+          setStatus("Plan selection is missing.", "error");
+          return;
+        }
+
+        setLoading(true);
+        setStatus("Creating your secure checkout session...");
+
+        try {
+          const response = await fetch("/api/create-professional-checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ plan, email }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.url) {
+            throw new Error(data.error || "Checkout session creation failed.");
+          }
+
+          window.location.assign(data.url);
+        } catch (error) {
+          setLoading(false);
+          setStatus(error instanceof Error ? error.message : "Checkout error.", "error");
+        }
+      });
+    });
+  </script>
+</BaseLayout>

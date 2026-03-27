@@ -8,6 +8,7 @@ import {
   setCancelled,
   setPaymentFailed,
 } from "../../lib/memberships";
+import { appendCheckoutLog } from "../../lib/google-sheets";
 
 /**
  * Option C (mode=payment):
@@ -107,6 +108,20 @@ async function handleCheckoutCompleted(
 
   // Mark as active since subscription is now set up
   setActive(customerId, subscriptionId);
+
+  // Log to Google Sheets (async — don't fail the webhook if this errors)
+  const amountPaid = session.amount_total ?? 0;
+  const email = session.customer_email ?? "";
+  appendCheckoutLog({
+    timestamp: new Date().toISOString(),
+    email,
+    plan: plan || "",
+    amountPaid,
+    sessionId: session.id,
+    customerId,
+  }).catch((err) => {
+    console.error("Google Sheets log failed:", err);
+  });
 }
 
 async function handleInvoicePaid(

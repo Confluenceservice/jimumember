@@ -5,11 +5,75 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 <BaseLayout title="Subscription complete">
   <section class="card">
     <h1 class="headline">Subscription confirmed</h1>
-    <p class="sub">
-      Thank you. Your subscription checkout completed successfully.
+    <p class="sub" id="message">
+      Loading...
     </p>
-    <p style="margin-top: 1rem;">
-      <a href="https://www.eldaa.org.nz/membership" style="color: var(--accent); font-weight: 600;">Return to membership page</a>
-    </p>
+    <div id="next-steps" style="display: none; margin-top: 1rem;">
+      <p id="form-link-text" style="margin: 0 0 0.75rem;"></p>
+      <a id="form-link" href="#" style="color: var(--accent); font-weight: 600;"></a>
+    </div>
+    <div id="countdown" style="display: none; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem;"></div>
   </section>
 </BaseLayout>
+
+<script>
+  // @ts-nocheck
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("session_id");
+  const messageEl = document.querySelector("#message");
+  const nextStepsEl = document.querySelector("#next-steps");
+  const formLinkText = document.querySelector("#form-link-text");
+  const formLinkEl = document.querySelector("#form-link");
+  const countdownEl = document.querySelector("#countdown");
+
+  if (!sessionId) {
+    messageEl.textContent = "No session found. If you completed checkout, please contact us.";
+    throw new Error("No session_id");
+  }
+
+  try {
+    const res = await fetch(`/api/session-info?session_id=${sessionId}`);
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      messageEl.textContent = "Could not load session details. Please contact us.";
+      throw new Error(data.error || "Session fetch failed");
+    }
+
+    const plan = data.plan;
+
+    if (plan === "professional") {
+      messageEl.textContent = "Thank you! Your Professional Membership payment was successful.";
+      formLinkText.textContent = "Next step:";
+      formLinkEl.textContent = "Complete your Professional Membership application";
+      formLinkEl.href = "https://www.eldaa.org.nz/professional-membership";
+      nextStepsEl.style.display = "block";
+      countdownEl.style.display = "block";
+      countdownEl.textContent = "Redirecting in 4 seconds...";
+      let count = 4;
+      const timer = setInterval(() => {
+        count--;
+        if (count <= 0) {
+          clearInterval(timer);
+          window.location.href = "https://www.eldaa.org.nz/professional-membership";
+        } else {
+          countdownEl.textContent = `Redirecting in ${count} second${count === 1 ? "" : "s"}...`;
+        }
+      }, 1000);
+    } else {
+      // Associate or unknown plan
+      messageEl.textContent = "Thank you. Your subscription checkout completed successfully.";
+      formLinkText.textContent = "Return to the ELDAA website:";
+      formLinkEl.textContent = "eldaa.org.nz/membership";
+      formLinkEl.href = "https://www.eldaa.org.nz/membership";
+      nextStepsEl.style.display = "block";
+    }
+  } catch {
+    // Non-blocking — show generic message
+    messageEl.textContent = "Thank you. Your subscription checkout completed successfully.";
+    formLinkText.textContent = "Return to the ELDAA website:";
+    formLinkEl.textContent = "eldaa.org.nz/membership";
+    formLinkEl.href = "https://www.eldaa.org.nz/membership";
+    nextStepsEl.style.display = "block";
+  }
+</script>
