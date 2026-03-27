@@ -115,6 +115,19 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   <script>
     // @ts-nocheck
+    // Pre-fill from URL params (e.g. /professional?firstName=Jane&lastName=Doe&phone=...)
+    const params = new URLSearchParams(window.location.search);
+    const prefill = (id, key) => {
+      const el = document.querySelector(id);
+      if (el instanceof HTMLInputElement && params.has(key)) {
+        el.value = params.get(key) ?? "";
+      }
+    };
+    prefill("#firstName", "firstName");
+    prefill("#lastName", "lastName");
+    prefill("#phone", "phone");
+    prefill("#email", "email");
+
     const statusEl = document.querySelector("#status");
     const firstNameInput = document.querySelector("#firstName");
     const lastNameInput = document.querySelector("#lastName");

@@ -11,6 +11,9 @@ import {
 
 type CreateSessionPayload = {
   plan?: MembershipPlan;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
   email?: string;
 };
 
@@ -68,10 +71,14 @@ export const POST: APIRoute = async ({ request }) => {
     return badRequest("Invalid plan. Use 'associate' or 'professional'.");
   }
 
+  const firstName = payload.firstName?.trim();
+  const lastName = payload.lastName?.trim();
+  const phone = payload.phone?.trim();
   const email = payload.email?.trim().toLowerCase();
-  if (!email) {
-    return badRequest("Provide an email.");
-  }
+
+  if (!firstName) return badRequest("Provide a first name.");
+  if (!lastName) return badRequest("Provide a last name.");
+  if (!email) return badRequest("Provide an email.");
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
@@ -133,6 +140,9 @@ export const POST: APIRoute = async ({ request }) => {
       annual_amount: String(annualAmount),
       next_july1_epoch: String(billingCycleAnchor),
       renewal_message: renewalMessage,
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone ?? "",
     },
     custom_text: {
       submit: {

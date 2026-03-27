@@ -3,65 +3,101 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
 <BaseLayout
-  title="Membership Checkout"
-  description="Subscribe to Associate or Professional membership."
+  title="Associate Membership Checkout"
+  description="Subscribe to Associate membership."
 >
   <section class="card">
-    <h1 class="headline">Membership checkout</h1>
+    <h1 class="headline">Associate Membership</h1>
     <p class="sub">
       Pay today, then annual billing starts on 1 July.
     </p>
-    <p class="promo-code-display" style="margin: 1rem 0 0; font-weight: 600;">
+    <p style="margin: 1rem 0 0; font-weight: 600;">
       Promotion code: <strong>LDTY8PQR</strong>
       <span style="font-weight: 400; color: var(--muted);"> (50% off for Jan–Jun first-time subscribers)</span>
     </p>
   </section>
 
-  <section class="card" style="margin-top: 1rem;">
-    <label for="email" style="display: block; font-weight: 600; margin-bottom: 0.45rem;">
-      Email address
-    </label>
-    <input
-      id="email"
-      name="email"
-      type="email"
-      placeholder="you@example.com"
-      autocomplete="email"
-      style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
-    />
+  <section class="card personal-details" style="margin-top: 1rem;">
+    <p style="margin: 0 0 1rem; font-weight: 600;">Personal details</p>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="firstName" style="display: block; font-weight: 600; margin-bottom: 0.45rem;">
+          First name
+        </label>
+        <input
+          id="firstName"
+          name="firstName"
+          type="text"
+          placeholder="Jane"
+          autocomplete="given-name"
+          style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
+        />
+      </div>
+      <div class="form-field">
+        <label for="lastName" style="display: block; font-weight: 600; margin-bottom: 0.45rem;">
+          Last name
+        </label>
+        <input
+          id="lastName"
+          name="lastName"
+          type="text"
+          placeholder="Doe"
+          autocomplete="family-name"
+          style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
+        />
+      </div>
+    </div>
+    <div class="form-field" style="margin-top: 0.75rem;">
+      <label for="phone" style="display: block; font-weight: 600; margin-bottom: 0.45rem;">
+        Phone number
+      </label>
+      <input
+        id="phone"
+        name="phone"
+        type="tel"
+        placeholder="+64 21 123 4567"
+        autocomplete="tel"
+        style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
+      />
+    </div>
+    <div class="form-field" style="margin-top: 0.75rem;">
+      <label for="email" style="display: block; font-weight: 600; margin-bottom: 0.45rem;">
+        Email address
+      </label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        placeholder="you@example.com"
+        autocomplete="email"
+        style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px;"
+      />
+    </div>
     <p style="color: var(--muted); margin: 0.5rem 0 0;">
       From January to June (NZ time), first-time subscribers can use <strong>LDTY8PQR</strong> for 50% off.
     </p>
   </section>
 
-  <section class="plan-grid" style="display: grid; gap: 1rem; margin-top: 1rem;">
-    <article class="card">
-      <h2 style="margin-top: 0;">Associate membership</h2>
-      <p class="sub">Then NZ$50.00 per year starting 1 July.</p>
-      <button class="button checkout-button" data-plan="associate" style="margin-top: 0.75rem;">
-        Continue with Associate
-      </button>
-    </article>
-
-    <article class="card">
-      <h2 style="margin-top: 0;">Professional membership</h2>
-      <p class="sub">Then NZ$120.00 per year starting 1 July.</p>
-      <button class="button checkout-button" data-plan="professional" style="margin-top: 0.75rem;">
-        Continue with Professional
-      </button>
-    </article>
+  <section class="card" style="margin-top: 1rem;">
+    <h2 style="margin-top: 0;">Associate membership</h2>
+    <p class="sub">Then NZ$50.00 per year starting 1 July.</p>
+    <button class="button checkout-button" data-plan="associate" style="margin-top: 0.75rem;">
+      Continue with Associate
+    </button>
   </section>
 
   <p id="status" style="margin-top: 0.9rem; min-height: 1.4rem;" aria-live="polite"></p>
 
   <style>
-    .plan-grid {
-      grid-template-columns: 1fr;
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
     }
 
-    @media (min-width: 768px) {
-      .plan-grid {
-        grid-template-columns: 1fr 1fr;
+    @media (max-width: 480px) {
+      .form-row {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -79,51 +115,63 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   <script>
     // @ts-nocheck
+    // Pre-fill from URL params (e.g. /associate?firstName=Jane&lastName=Doe&phone=...)
+    const params = new URLSearchParams(window.location.search);
+    const prefill = (id, key) => {
+      const el = document.querySelector(id);
+      if (el instanceof HTMLInputElement && params.has(key)) {
+        el.value = params.get(key) ?? "";
+      }
+    };
+    prefill("#firstName", "firstName");
+    prefill("#lastName", "lastName");
+    prefill("#phone", "phone");
+    prefill("#email", "email");
+
     const statusEl = document.querySelector("#status");
+    const firstNameInput = document.querySelector("#firstName");
+    const lastNameInput = document.querySelector("#lastName");
+    const phoneInput = document.querySelector("#phone");
     const emailInput = document.querySelector("#email");
     const buttons = document.querySelectorAll(".checkout-button");
 
-    /**
-     * @param {string} message
-     * @param {"info" | "error" | "ok"} [type]
-     */
     const setStatus = (message, type = "info") => {
       if (!statusEl) return;
       statusEl.textContent = message;
       statusEl.className =
         type === "error" ? "status-warn" : type === "ok" ? "status-ok" : "";
     };
-    /**
-     * @param {boolean} isLoading
-     */
+
     const setLoading = (isLoading) => {
       buttons.forEach((btn) => {
         if (!(btn instanceof HTMLButtonElement)) return;
         btn.disabled = isLoading;
-        btn.textContent =
-          isLoading
-            ? "Redirecting to Checkout..."
-            : btn.dataset.plan === "associate"
-              ? "Continue with Associate"
-              : "Continue with Professional";
+        btn.textContent = isLoading ? "Redirecting to Checkout..." : "Continue with Associate";
       });
+    };
+
+    const getVal = (el) => el instanceof HTMLInputElement ? el.value.trim() : "";
+
+    const validate = () => {
+      if (!getVal(firstNameInput)) { setStatus("Enter your first name.", "error"); return false; }
+      if (!getVal(lastNameInput)) { setStatus("Enter your last name.", "error"); return false; }
+      if (!getVal(emailInput)) { setStatus("Enter an email address.", "error"); return false; }
+      return true;
     };
 
     buttons.forEach((button) => {
       button.addEventListener("click", async () => {
         if (!(button instanceof HTMLButtonElement)) return;
+        if (!validate()) return;
+
         const plan = button.dataset?.plan;
-        const email = emailInput instanceof HTMLInputElement ? emailInput.value.trim() : "";
-
-        if (!email) {
-          setStatus("Enter an email address before continuing.", "error");
-          return;
-        }
-
-        if (!plan) {
-          setStatus("Plan selection is missing.", "error");
-          return;
-        }
+        const payload = {
+          plan,
+          firstName: getVal(firstNameInput),
+          lastName: getVal(lastNameInput),
+          phone: getVal(phoneInput),
+          email: getVal(emailInput),
+        };
 
         setLoading(true);
         setStatus("Creating your secure checkout session...");
@@ -132,7 +180,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           const response = await fetch("/api/create-checkout-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ plan, email }),
+            body: JSON.stringify(payload),
           });
 
           const data = await response.json();
@@ -148,6 +196,5 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         }
       });
     });
-
   </script>
 </BaseLayout>
