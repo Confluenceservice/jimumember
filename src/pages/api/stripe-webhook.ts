@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
+import * as Sentry from "@sentry/node";
 import {
   getMembership,
   hasActiveSubscription,
@@ -9,6 +10,15 @@ import {
   setPaymentFailed,
 } from "../../lib/memberships";
 import { appendCheckoutLog } from "../../lib/google-sheets";
+import { logger } from "../../lib/logger";
+
+// Initialize Sentry lazily — only when DSN is present
+function getSentry() {
+  if (process.env.SENTRY_DSN && !Sentry.isInitialized()) {
+    Sentry.init({ dsn: process.env.SENTRY_DSN });
+  }
+  return Sentry;
+}
 
 /**
  * Option C (mode=payment):
@@ -19,6 +29,7 @@ import { appendCheckoutLog } from "../../lib/google-sheets";
 async function handleCheckoutCompleted(
   stripe: Stripe,
   session: Stripe.Checkout.Session,
+  log: ReturnType<typeof logger.child>,
 ): Promise<void> {
   // Only handle Option C flow
   if (session.metadata?.flow !== "option_c") return;
@@ -32,12 +43,23 @@ async function handleCheckoutCompleted(
   const customerId =
     typeof session.customer === "string" ? session.customer : undefined;
 
-  if (!customerId || !recurringPriceId) return;
+  if (!customerId || !recurringPriceId) {
+    log.warn("checkout_completed.missing_metadata", {
+      customerId,
+      recurringPriceId,
+      sessionId: session.id,
+    });
+    return;
+  }
 
   // Already processed this checkout session? (idempotency via local record)
   const existing = getMembership(customerId);
   if (existing?.subscriptionId) {
-    // Already created subscription for this customer
+    log.info("checkout_completed.already_processed", {
+      customerId,
+      sessionId: session.id,
+      existingSubscriptionId: existing.subscriptionId,
+    });
     return;
   }
 
@@ -50,8 +72,14 @@ async function handleCheckoutCompleted(
         typeof pi.payment_method === "string"
           ? pi.payment_method
           : pi.payment_method?.id;
-    } catch {
-      // Continue without payment method - subscription creation may still work
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("checkout_completed.payment_intent_retrieve_failed", {
+        customerId,
+        sessionId: session.id,
+        paymentIntent: session.payment_intent,
+        error: msg,
+      });
     }
   }
 
@@ -66,7 +94,6 @@ async function handleCheckoutCompleted(
       plan: plan ?? "",
       checkout_session_id: session.id,
     },
-    // Expand to get default payment method
     expand: ["default_payment_method"],
   };
 
@@ -80,8 +107,14 @@ async function handleCheckoutCompleted(
         invoice_settings: { default_payment_method: paymentMethodId },
       });
       subscriptionParams.default_payment_method = paymentMethodId;
-    } catch {
-      // Payment method attachment failed — proceed without it
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("checkout_completed.payment_method_attach_failed", {
+        customerId,
+        sessionId: session.id,
+        paymentMethodId,
+        error: msg,
+      });
     }
   }
 
@@ -91,10 +124,26 @@ async function handleCheckoutCompleted(
       idempotencyKey: `option_c_sub_${session.id}`,
     });
     subscriptionId = subscription.id;
-  } catch (error) {
-    // If subscription creation fails (e.g., duplicate), log and rethrow
-    console.error("Failed to create subscription:", error);
-    throw error;
+    log.info("checkout_completed.subscription_created", {
+      customerId,
+      sessionId: session.id,
+      subscriptionId,
+      plan,
+      recurringPriceId,
+      trialEndEpoch: nextJuly1Epoch,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const sentry = getSentry();
+    sentry.captureException(err, {
+      extra: { customerId, sessionId: session.id, recurringPriceId, plan },
+    });
+    log.error("checkout_completed.subscription_create_failed", {
+      customerId,
+      sessionId: session.id,
+      error: msg,
+    });
+    throw err;
   }
 
   // Record the deferred subscription creation
@@ -122,39 +171,48 @@ async function handleCheckoutCompleted(
     sessionId: session.id,
     customerId,
   }).catch((err) => {
-    console.error("Google Sheets log failed:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    const sentry = getSentry();
+    sentry.captureException(err, {
+      extra: { customerId, sessionId: session.id },
+      level: "warning",
+    });
+    log.error("checkout_completed.sheets_log_failed", {
+      customerId,
+      sessionId: session.id,
+      error: msg,
+    });
   });
 }
 
 async function handleInvoicePaid(
   invoice: Stripe.Invoice,
+  log: ReturnType<typeof logger.child>,
 ): Promise<void> {
-  // Only handle invoices for our flow
   if (invoice.metadata?.flow !== "option_c") return;
 
   const customerId =
     typeof invoice.customer === "string" ? invoice.customer : undefined;
   if (!customerId) return;
 
-  // Check if this is a renewal (customer already has an active subscription)
   if (hasActiveSubscription(customerId)) {
-    // Renewal — membership is already active
+    log.info("invoice.paid.renewal_skip", { customerId, invoiceId: invoice.id });
     return;
   }
 
-  // First invoice paid — subscription should already exist from checkout.session.completed
-  // This is a fallback: if the webhook order is reversed or subscription wasn't captured,
-  // create a minimal local record so state is consistent.
   const membership = getMembership(customerId);
   if (!membership) {
-    // Subscription might have been created by Stripe but webhook ordering is uncertain.
-    // Don't create subscription here — let checkout.session.completed handle it.
+    log.warn("invoice.paid.no_membership_record", {
+      customerId,
+      invoiceId: invoice.id,
+    });
     return;
   }
 }
 
 async function handleInvoicePaymentFailed(
   invoice: Stripe.Invoice,
+  log: ReturnType<typeof logger.child>,
 ): Promise<void> {
   if (invoice.metadata?.flow !== "option_c") return;
 
@@ -163,10 +221,12 @@ async function handleInvoicePaymentFailed(
   if (!customerId) return;
 
   setPaymentFailed(customerId);
+  log.warn("invoice.payment_failed", { customerId, invoiceId: invoice.id });
 }
 
 async function handleSubscriptionUpdated(
   subscription: Stripe.Subscription,
+  log: ReturnType<typeof logger.child>,
 ): Promise<void> {
   if (subscription.metadata?.flow !== "option_c") return;
 
@@ -176,12 +236,23 @@ async function handleSubscriptionUpdated(
 
   if (subscription.status === "canceled" || subscription.status === "unpaid") {
     setCancelled(customerId);
+    log.info("subscription.updated.cancelled", {
+      customerId,
+      subscriptionId: subscription.id,
+      status: subscription.status,
+    });
+  } else {
+    log.info("subscription.updated", {
+      customerId,
+      subscriptionId: subscription.id,
+      status: subscription.status,
+    });
   }
-  // 'active' and 'trialing' — membership is active, nothing to update
 }
 
 async function handleSubscriptionDeleted(
   subscription: Stripe.Subscription,
+  log: ReturnType<typeof logger.child>,
 ): Promise<void> {
   if (subscription.metadata?.flow !== "option_c") return;
 
@@ -190,14 +261,17 @@ async function handleSubscriptionDeleted(
   if (!customerId) return;
 
   setCancelled(customerId);
+  log.info("subscription.deleted", { customerId, subscriptionId: subscription.id });
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  const eventId = crypto.randomUUID();
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
 
   if (!signature || !webhookSecret || !secretKey) {
+    logger.error("webhook.missing_config", { eventId, signature: !!signature, webhookSecret: !!webhookSecret, secretKey: !!secretKey });
     return new Response("Missing webhook config.", { status: 400 });
   }
 
@@ -208,8 +282,17 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
   } catch {
+    logger.error("webhook.signature_invalid", { eventId, signatureHeader: signature.slice(0, 20) });
     return new Response("Invalid webhook signature.", { status: 400 });
   }
+
+  const log = logger.child({
+    eventId,
+    eventType: event.type,
+    apiVersion: event.api_version ?? "unknown",
+  });
+
+  log.info("webhook.received");
 
   try {
     switch (event.type) {
@@ -217,30 +300,39 @@ export const POST: APIRoute = async ({ request }) => {
         await handleCheckoutCompleted(
           stripe,
           event.data.object as Stripe.Checkout.Session,
+          log,
         );
         break;
       case "invoice.paid":
-        await handleInvoicePaid(event.data.object as Stripe.Invoice);
+        await handleInvoicePaid(event.data.object as Stripe.Invoice, log);
         break;
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(
           event.data.object as Stripe.Invoice,
+          log,
         );
         break;
       case "customer.subscription.updated":
         await handleSubscriptionUpdated(
           event.data.object as Stripe.Subscription,
+          log,
         );
         break;
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(
           event.data.object as Stripe.Subscription,
+          log,
         );
         break;
     }
-  } catch {
+  } catch (err) {
+    const sentry = getSentry();
+    sentry.captureException(err, { extra: { eventId, eventType: event.type } });
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error("webhook.processing_failed", { error: msg });
     return new Response("Webhook processing failed.", { status: 500 });
   }
 
-  return Response.json({ received: true });
+  log.info("webhook.completed");
+  return Response.json({ received: true, eventId });
 };

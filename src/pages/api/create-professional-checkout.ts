@@ -1,11 +1,13 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
+import * as Sentry from "@sentry/node";
 import {
   formatAmountNzd,
   getNextJulyAnchorEpoch,
   getSiteBaseUrl,
   isPromoWindowNz,
 } from "../../lib/stripe-checkout";
+import { logger } from "../../lib/logger";
 
 type CreateSessionPayload = {
   plan?: string;
@@ -154,6 +156,16 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const session = await stripe.checkout.sessions.create(params);
 
+    logger.info("checkout_session.created", {
+      plan,
+      sessionId: session.id,
+      customerId: customerInfo.id,
+      firstTermAmount,
+      annualAmount,
+      eligibleForPromo,
+      billingCycleAnchor,
+    });
+
     return Response.json({
       id: session.id,
       url: session.url,
@@ -165,11 +177,15 @@ export const POST: APIRoute = async ({ request }) => {
       renewalMessage,
     });
   } catch (error) {
+    Sentry.captureException(error, { extra: { plan, email } });
     const message =
       error instanceof Stripe.errors.StripeError
         ? error.message
         : "Unable to create checkout session.";
-
+    logger.error("checkout_session.create_failed", {
+      plan,
+      error: message,
+    });
     return Response.json({ error: message }, { status: 500 });
   }
 };
