@@ -1,4 +1,4 @@
-# WARP Notes
+# Notes
 Last updated: 2026-03-27
 
 ## Scope
@@ -24,7 +24,7 @@ Implement Option C custom flow so membership subscriptions can:
 - Initial Jan-to-Jun invoices show 50% discount.
 - Renewal cycle invoice at July boundary is full annual price.
 
-## Option C Checkout Pattern
+## Checkout Pattern
 Use `checkout.sessions.create` with:
 - `mode=payment`
 - one-time line item amount = first-term charge today
@@ -73,9 +73,12 @@ Webhook behavior (`checkout.session.completed`):
 - Cancel pages: `src/pages/cancel.astro` (Associate), `src/pages/professional/cancel.astro` (Professional).
 - Webhook logs `checkout.session.completed` to Google Sheets via service account.
 - Google Sheets helper: `src/lib/google-sheets.ts`.
+- Structured JSON logger: `src/lib/logger.ts` (pino, child loggers per request).
+- Health endpoint: `src/pages/api/health.ts` (`GET /api/health` → `{status, stripe}`).
+- Sentry error tracking: `@sentry/node`, initialized lazily from `SENTRY_DSN` env var.
 - Added env template: `.env.example`.
 - Build and diagnostics pass (`npm run build`, `npm run check`).
-- Deployed to Fly.io at `https://eldaa.fly.dev/` with Dockerfile + fly.toml.
+- Deployed to Fly.io at `https://subscribe.eldaa.org.nz/` with Dockerfile + fly.toml.
 - Webhook tested successfully via `stripe trigger checkout.session.completed`.
 - Unit tests for business logic: `src/lib/stripe-checkout.test.ts`, `src/lib/memberships.test.ts`.
 
@@ -84,7 +87,7 @@ Webhook behavior (`checkout.session.completed`):
 2. ~~Add local membership persistence mapping customer/subscription records.~~ (done in `.data/memberships.json`)
 3. ~~Log checkout completions to Google Sheets.~~ (done via service account + googleapis)
 4. Add integration tests for promo-code eligibility and prorated fallback.
-5. Configure production Stripe webhook in Dashboard (register `https://eldaa.fly.dev/api/stripe-webhook`).
+5. Configure production Stripe webhook in Dashboard (register `https://subscribe.eldaa.org.nz/api/stripe-webhook`).
 6. Switch from test keys to live Stripe keys before going live.
 7. Share Google Sheets spreadsheet with the service account email before enabling webhook logging.
 
@@ -117,20 +120,46 @@ fly secrets set STRIPE_SECRET_KEY=sk_live_...
 fly secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 fly secrets set STRIPE_PRICE_ASSOCIATE=price_...
 fly secrets set STRIPE_PRICE_PROFESSIONAL=price_...
-fly secrets set PUBLIC_SITE_URL=https://eldaa.fly.dev
-fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+fly secrets set PUBLIC_SITE_URL=https://subscribe.eldaa.org.nz
+fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=eldaa-sheets@stripe-billing-491503.iam.gserviceaccount.com
 fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 fly secrets set GOOGLE_SHEETS_SPREADSHEET_ID=1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8
+fly secrets set SENTRY_DSN=https://xxxxx@o123456.ingest.sentry.io/xxxxx
 ```
+
+### Optional Env Vars
+- `LOG_LEVEL` — pino log level (`debug`, `info`, `warn`, `error`). Defaults to `info`.
 
 ### Stripe Webhook (Production)
 Register in Stripe Dashboard → Developers → Webhooks:
-- URL: `https://eldaa.fly.dev/api/stripe-webhook`
+- URL: `https://subscribe.eldaa.org.nz/api/stripe-webhook`
 - Events: `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`
+
+### Observability
+
+**Health check** (use with Dead Man's Snitch / Cronitor / Better Uptime):
+```
+GET https://subscribe.eldaa.org.nz/api/health
+→ 200 { "status": "ok", "stripe": "connected" }
+→ 503 { "status": "degraded", "stripe": "disconnected", "error": "..." }
+```
+
+**Live logs** (structured JSON):
+```bash
+fly logs --app eldaa | grep '{"level":"error"}'
+```
+
+**Alerting**: Sentry captures and alerts on:
+- Subscription creation failures
+- Google Sheets logging failures
+- Checkout session creation failures
+- Unhandled 500s in webhook processing
+
+Sentry issues appear within minutes of the first error matching. Set `LOG_LEVEL=debug` in `fly.toml` or Fly secrets for verbose request tracing.
 
 ### Testing Webhooks Locally
 ```bash
-stripe listen --forward-to https://eldaa.fly.dev/api/stripe-webhook
+stripe listen --forward-to https://subscribe.eldaa.org.nz/api/stripe-webhook
 ```
 Note: Always use `https://` — Stripe CLI doesn't follow HTTP→HTTPS redirects.
 
