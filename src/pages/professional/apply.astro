@@ -147,7 +147,12 @@ const token = Astro.url.searchParams.get("token");
         const data = await res.json();
 
         if (data.success) {
-          registerMessage.textContent = `Application started! A link has been sent to ${email}. Check your inbox (and spam folder).`;
+          let message = `Application started!`;
+          if (data.resumeLink) {
+            message += `<br><br><strong>Your resume link:</strong><br><a href="${data.resumeLink}" style="color: var(--accent); word-break: break-all;">${data.resumeLink}</a><br><br><em>Save this link to continue your application later.</em>`;
+          }
+          message += `<br><br>Check your inbox (and spam folder) for the email.`;
+          registerMessage.innerHTML = message;
           registerMessage.style.display = "block";
           registerMessage.classList.add("status-ok");
           registerBtn.textContent = "Link Sent";

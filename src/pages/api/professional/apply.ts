@@ -1,9 +1,16 @@
 import type { APIRoute } from "astro";
+import crypto from "node:crypto";
 import * as Sentry from "@sentry/node";
-import { createApplicant, getApplicantByToken } from "../../../lib/applicant-store";
-import { createApplicantRow, getUploadStatus, REQUIRED_DOC_TYPES } from "../../../lib/upload-sheet";
+import {
+  createApplicantRow,
+  getUploadStatus,
+  getApplicantByToken,
+  getApplicantByEmail,
+  REQUIRED_DOC_TYPES,
+} from "../../../lib/upload-sheet";
 import { sendResumeLink } from "../../../lib/email-sender";
 import { logger } from "../../../lib/logger";
+import { getSiteBaseUrl } from "../../../lib/stripe-checkout";
 
 export const GET: APIRoute = async ({ url }) => {
   const token = url.searchParams.get("token");
@@ -48,7 +55,7 @@ export const GET: APIRoute = async ({ url }) => {
   });
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, url }) => {
   let payload: { fullName?: string; email?: string };
 
   try {
@@ -74,31 +81,50 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const { applicant, resumeLink } = await createApplicant(fullName, email);
+    // Check if email already exists
+    const existingApplicant = await getApplicantByEmail(email);
+    if (existingApplicant) {
+      const siteBaseUrl = getSiteBaseUrl(url.href);
+      const resumeLink = `${siteBaseUrl}/professional/apply?token=${existingApplicant.resumeToken}`;
+      return Response.json({
+        success: true,
+        resumeLink,
+        applicantId: existingApplicant.id,
+        existing: true,
+      });
+    }
 
-    // Create row in Google Sheet
-    await createApplicantRow(applicant.id, fullName, email);
+    // Generate applicant ID and resume token
+    const applicantId = crypto.randomUUID();
+    const resumeToken = crypto.randomUUID();
+
+    // Create row in Google Sheet with all info
+    await createApplicantRow(applicantId, fullName, email, resumeToken);
+
+    // Build resume link
+    const siteBaseUrl = getSiteBaseUrl(url.href);
+    const resumeLink = `${siteBaseUrl}/professional/apply?token=${resumeToken}`;
 
     // Send email with resume link
     try {
       await sendResumeLink(email, fullName, resumeLink);
-      logger.info("resume_email_sent", { applicantId: applicant.id, email });
+      logger.info("resume_email_sent", { applicantId, email });
     } catch (emailError) {
-      // Log but don't fail - the applicant can still complete their application
+      // Log but don't fail - show link on-screen instead
       logger.error("resume_email_failed", {
-        applicantId: applicant.id,
+        applicantId,
         email,
         error: emailError instanceof Error ? emailError.message : "Unknown",
       });
       Sentry.captureMessage("Failed to send resume email", {
-        extra: { applicantId: applicant.id, email },
+        extra: { applicantId, email },
       });
     }
 
     return Response.json({
       success: true,
       resumeLink,
-      applicantId: applicant.id,
+      applicantId,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

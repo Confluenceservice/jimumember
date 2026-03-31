@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import crypto from "node:crypto";
 import * as Sentry from "@sentry/node";
-import { getApplicantByToken } from "../../../lib/applicant-store";
+import { getApplicantByToken } from "../../../lib/upload-sheet";
 import { updateDocUpload, REQUIRED_DOC_TYPES, type DocType } from "../../../lib/upload-sheet";
 import { google } from "googleapis";
 import { logger } from "../../../lib/logger";
@@ -188,8 +188,9 @@ export const POST: APIRoute = async ({ request }) => {
     // The folder must be shared with the service account
     const rootFolderId = appsFolderId;
 
-    // Create applicant's folder
-    const applicantFolderId = await ensureFolderExists(drive, rootFolderId, applicant.id);
+    // Create applicant's folder with human-readable name
+    const folderName = applicant.fullName.replace(/[^a-zA-Z0-9]/g, "_");
+    const applicantFolderId = await ensureFolderExists(drive, rootFolderId, folderName);
 
     // Create doc type folder
     const docFolderId = await ensureFolderExists(drive, applicantFolderId, docType);

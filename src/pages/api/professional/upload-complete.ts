@@ -7,7 +7,7 @@ import {
   getSiteBaseUrl,
   isPromoWindowNz,
 } from "../../../lib/stripe-checkout";
-import { getApplicantByToken } from "../../../lib/applicant-store";
+import { getApplicantByToken } from "../../../lib/upload-sheet";
 import { getUploadStatus, REQUIRED_DOC_TYPES } from "../../../lib/upload-sheet";
 import { logger } from "../../../lib/logger";
 
