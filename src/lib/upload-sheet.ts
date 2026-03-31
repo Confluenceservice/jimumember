@@ -204,15 +204,15 @@ export async function updateDocUpload(
     throw new Error(`Applicant not found: ${applicantId}`);
   }
 
-  // Map docType to column index
+  // Map docType to column letter (A=1, H=8 where doc_application now lives after header restructure)
   const docColumnMap: Record<DocType, string> = {
-    application: "G",
-    training: "H",
-    ethics: "I",
-    criminal: "J",
-    advance_care: "K",
-    assisted_dying: "L",
-    fundamentals: "M",
+    application: "H",
+    training: "I",
+    ethics: "J",
+    criminal: "K",
+    advance_care: "L",
+    assisted_dying: "M",
+    fundamentals: "N",
   };
 
   const column = docColumnMap[docType];
@@ -259,10 +259,10 @@ export async function markComplete(
     throw new Error(`Applicant not found: ${applicantId}`);
   }
 
-  // Update columns N (complete) and O (stripe_session)
+  // Update columns O (complete) and P (stripe_session)
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!N${rowIndex}:O${rowIndex}`,
+    range: `${SHEET_NAME}!O${rowIndex}:P${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [["TRUE", stripeSessionId]],
@@ -298,11 +298,11 @@ export async function markPaid(applicantId: string): Promise<void> {
     throw new Error(`Applicant not found: ${applicantId}`);
   }
 
-  // Update columns P (paid) and Q (paid_at)
+  // Update columns Q (paid) and R (paid_at)
   const paidAt = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!P${rowIndex}:Q${rowIndex}`,
+    range: `${SHEET_NAME}!Q${rowIndex}:R${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [["TRUE", paidAt]],
