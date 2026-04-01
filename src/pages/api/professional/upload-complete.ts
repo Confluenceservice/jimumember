@@ -117,7 +117,7 @@ export const POST: APIRoute = async ({ request, url }) => {
         },
       ],
       metadata: {
-        flow: "option_c_upload",
+        flow: "option_c",
         plan: "professional",
         applicant_id: applicant.id,
         recurring_price_id: recurringPriceId,
