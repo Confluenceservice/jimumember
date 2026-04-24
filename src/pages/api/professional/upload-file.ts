@@ -126,121 +126,123 @@ async function ensureFolderExists(
 
 export const POST: APIRoute = async ({ request }) => {
   const contentType = request.headers.get("content-type") || "";
+  let token: string;
+  let docType: string;
+  let filename: string;
+  let mimeType: string;
+  let buffer: Buffer;
 
-  if (!contentType.includes("multipart/form-data")) {
-    return Response.json({ error: "Content-Type must be multipart/form-data." }, { status: 400 });
-  }
+  if (contentType.includes("application/json")) {
+    // JSON mode: receive base64-encoded file data
+    let payload: Record<string, unknown>;
+    try {
+      payload = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return Response.json({ error: "Invalid JSON payload." }, { status: 400 });
+    }
 
-  const formData = await request.formData();
-  const token = formData.get("token") as string;
-  const docType = formData.get("docType") as DocType;
-  const file = formData.get("file") as File | null;
+    token = (payload.token as string)?.trim();
+    docType = (payload.docType as string)?.trim();
+    filename = (payload.filename as string)?.trim();
+    mimeType = (payload.mimeType as string)?.trim();
+    const base64Data = payload.data as string;
 
-  if (!token) {
-    return Response.json({ error: "Token is required." }, { status: 400 });
+    if (!token) return Response.json({ error: "Token is required." }, { status: 400 });
+    if (!docType) return Response.json({ error: "Document type is required." }, { status: 400 });
+    if (!filename) return Response.json({ error: "Filename is required." }, { status: 400 });
+    if (!mimeType) return Response.json({ error: "MIME type is required." }, { status: 400 });
+    if (!base64Data) return Response.json({ error: "File data is required." }, { status: 400 });
+
+    try {
+      buffer = Buffer.from(base64Data, "base64");
+    } catch {
+      return Response.json({ error: "Invalid base64 data." }, { status: 400 });
+    }
+  } else if (contentType.includes("multipart/form-data")) {
+    // Multipart mode: receive file directly (fallback for compatibility)
+    const formData = await request.formData();
+    token = formData.get("token") as string;
+    docType = formData.get("docType") as string;
+    const file = formData.get("file") as File | null;
+
+    if (!token) return Response.json({ error: "Token is required." }, { status: 400 });
+    if (!docType) return Response.json({ error: "Document type is required." }, { status: 400 });
+    if (!file) return Response.json({ error: "File is required." }, { status: 400 });
+
+    filename = file.name;
+    mimeType = file.type;
+    const arrayBuffer = await file.arrayBuffer();
+    buffer = Buffer.from(arrayBuffer);
+  } else {
+    return Response.json(
+      { error: "Content-Type must be application/json or multipart/form-data." },
+      { status: 400 }
+    );
   }
 
   const allDocTypes = [...REQUIRED_DOC_TYPES, "insurance"] as const;
-  if (!docType || !allDocTypes.includes(docType as typeof allDocTypes[number])) {
+  if (!allDocTypes.includes(docType as typeof allDocTypes[number])) {
     return Response.json({ error: "Valid document type is required." }, { status: 400 });
   }
 
-  if (!file) {
-    return Response.json({ error: "File is required." }, { status: 400 });
-  }
-
-  // Validate file
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
     return Response.json(
       { error: "File type not allowed. Use PDF, JPEG, PNG, GIF, or Word documents." },
       { status: 400 }
     );
   }
 
-  if (file.size > MAX_FILE_SIZE) {
+  if (buffer.length > MAX_FILE_SIZE) {
     return Response.json(
       { error: "File size exceeds 10MB limit." },
       { status: 400 }
     );
   }
 
-  // Get applicant
   const applicant = await getApplicantByToken(token);
-
   if (!applicant) {
     return Response.json({ error: "Invalid or expired session." }, { status: 400 });
   }
-
   if (applicant.paid) {
     return Response.json({ error: "Application already completed." }, { status: 400 });
   }
 
   try {
     const drive = getDriveClient();
-
-    // Use provided folder ID (Shared Drive folder)
     const appsFolderId = process.env.GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID?.trim();
+    if (!appsFolderId) throw new Error("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID not configured");
 
-    if (!appsFolderId) {
-      throw new Error("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID not configured");
-    }
-
-    // Use the Shared Drive folder directly - no need to search/create
-    // The folder must be shared with the service account
-    const rootFolderId = appsFolderId;
-
-    // Create applicant's folder with human-readable name
     const folderName = `${applicant.firstName}_${applicant.lastName}`.replace(/[^a-zA-Z0-9]/g, "_");
-    const applicantFolderId = await ensureFolderExists(drive, rootFolderId, folderName);
-
-    // Create doc type folder
+    const applicantFolderId = await ensureFolderExists(drive, appsFolderId, folderName);
     const docFolderId = await ensureFolderExists(drive, applicantFolderId, docType);
 
-    // Generate random filename
-    const ext = file.name.split(".").pop() || "pdf";
+    const ext = filename.split(".").pop() || "pdf";
     const randomFilename = `${crypto.randomUUID()}.${ext}`;
 
-    // Read file content
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Verify magic bytes match the declared MIME type
-    if (!verifyMagicBytes(buffer, file.type)) {
-      // Try to detect actual type
+    if (!verifyMagicBytes(buffer, mimeType)) {
       const detectedType = detectMimeTypeFromBytes(buffer);
       if (!detectedType || !ALLOWED_MIME_TYPES.includes(detectedType)) {
         logger.warn("file_type_mismatch", {
           applicantId: applicant.id,
-          declared: file.type,
+          declared: mimeType,
           detected: detectedType,
-          size: file.size,
+          size: buffer.length,
         });
         return Response.json(
           { error: "File content does not match declared type. Only PDF, JPEG, PNG, GIF, or Word documents are allowed." },
           { status: 400 }
         );
       }
-      // Use detected type instead
-      file.type as string;
     }
 
-    // Upload to Drive - use Readable stream
     await drive.files.create({
-      requestBody: {
-        name: randomFilename,
-        parents: [docFolderId],
-      },
-      media: {
-        mimeType: file.type,
-        body: Readable.from(buffer),
-      },
+      requestBody: { name: randomFilename, parents: [docFolderId] },
+      media: { mimeType, body: Readable.from(buffer) },
       supportsAllDrives: true,
     });
 
-    // Add file record to Drive Files sheet
-    await addDriveFile(applicant.id, docType, file.name, randomFilename);
+    await addDriveFile(applicant.id, docType, filename, randomFilename);
 
-    // Update doc count in main sheet
     const counts = await getDriveFileCounts(applicant.id);
     const currentCount = counts[docType as DocType] || 1;
     await updateDocCount(applicant.id, docType, currentCount);
@@ -249,14 +251,10 @@ export const POST: APIRoute = async ({ request }) => {
       applicantId: applicant.id,
       docType,
       filename: randomFilename,
-      size: file.size,
+      size: buffer.length,
     });
 
-    return Response.json({
-      success: true,
-      docType,
-      message: "Document uploaded successfully.",
-    });
+    return Response.json({ success: true, docType, message: "Document uploaded successfully." });
   } catch (error) {
     Sentry.captureException(error, { extra: { applicantId: applicant.id, docType } });
     logger.error("document_upload_failed", {

@@ -5,9 +5,16 @@ import { softDeleteDriveFile, listDriveFiles, getDriveFileCounts } from "../../.
 import { logger } from "../../../lib/logger";
 import type { DocType } from "../../../lib/upload-sheet";
 
-export const DELETE: APIRoute = async ({ url }) => {
-  const fileId = url.searchParams.get("fileId");
-  const token = url.searchParams.get("token");
+export const POST: APIRoute = async ({ request }) => {
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return Response.json({ error: "Invalid JSON payload." }, { status: 400 });
+  }
+
+  const fileId = (payload.fileId as string)?.trim();
+  const token = (payload.token as string)?.trim();
 
   if (!fileId || !token) {
     return Response.json({ error: "fileId and token are required." }, { status: 400 });
@@ -18,7 +25,6 @@ export const DELETE: APIRoute = async ({ url }) => {
     return Response.json({ error: "Invalid or expired session." }, { status: 400 });
   }
 
-  // Verify file belongs to this applicant
   const files = await listDriveFiles(applicant.id);
   const file = files.find((f) => f.fileId === fileId);
 
@@ -29,7 +35,6 @@ export const DELETE: APIRoute = async ({ url }) => {
   try {
     await softDeleteDriveFile(fileId);
 
-    // Update doc count in main sheet
     const counts = await getDriveFileCounts(applicant.id);
     if (file.docType) {
       const currentCount = counts[file.docType as DocType] || 0;

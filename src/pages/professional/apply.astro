@@ -800,14 +800,20 @@ const token = Astro.url.searchParams.get("token");
         btn.textContent = "Uploading...";
 
         try {
-          const formData = new FormData();
-          formData.append("token", token);
-          formData.append("docType", docId);
-          formData.append("file", file);
+          // Base64-encode file to avoid Fly CDN blocking multipart/form-data
+          const arrayBuffer = await file.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
           const res = await fetch("/api/professional/upload-file", {
             method: "POST",
-            body: formData
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token,
+              docType: docId,
+              filename: file.name,
+              mimeType: file.type,
+              data: base64,
+            })
           });
 
           const data = await res.json();
@@ -839,7 +845,11 @@ const token = Astro.url.searchParams.get("token");
         btn.disabled = true;
 
         try {
-          const res = await fetch(`/api/professional/delete-file?fileId=${encodeURIComponent(fileId)}&token=${encodeURIComponent(token)}`);
+          const res = await fetch("/api/professional/delete-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileId, token })
+          });
           const data = await res.json();
           if (data.success) {
             window.__docsUploaded__[docType] = (window.__docsUploaded__[docType] || []).filter(f => f.fileId !== fileId);
