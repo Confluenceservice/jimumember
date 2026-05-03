@@ -208,7 +208,7 @@ export const POST: APIRoute = async ({ request }) => {
     logger.warn("upload_token_not_found", { token: token?.substring(0, 8) });
     return Response.json({ error: "Invalid or expired session." }, { status: 400 });
   }
-  if (applicant.paid) {
+  if (String(applicant.paid ?? "").toUpperCase() === "TRUE") {
     logger.warn("upload_paid_applicant", { token: token?.substring(0, 8), applicantId: applicant.id });
     return Response.json({ error: "Application already completed." }, { status: 400 });
   }

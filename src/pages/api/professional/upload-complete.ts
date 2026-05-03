@@ -38,7 +38,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     return badRequest("Invalid or expired session.");
   }
 
-  if (applicant.paid) {
+  if (String(applicant.paid ?? "").toUpperCase() === "TRUE") {
     return badRequest("Application already completed.");
   }
 

@@ -260,6 +260,10 @@ export async function createApplicantRow(
 export async function updateApplicantFormData(
   applicantId: string,
   data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
     dateOfBirth?: string;
     ethnicity?: string;
     address?: string;
@@ -319,6 +323,10 @@ export async function updateApplicantFormData(
 
   // Build update values - column letter -> value
   const colMap: Record<string, string> = {
+    B: data.email ?? "",
+    C: data.firstName ?? "",
+    D: data.lastName ?? "",
+    E: data.phone ?? "",
     F: data.dateOfBirth ?? "",
     G: data.ethnicity ?? "",
     H: data.address ?? "",
@@ -355,15 +363,15 @@ export async function updateApplicantFormData(
       updates.push({ range: `${SHEET_NAME}!${col}${rowIndex}`, values: [[val]] });
     }
   }
+  if (updates.length === 0) return;
 
-  for (const update of updates) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: update.range,
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
       valueInputOption: "RAW",
-      requestBody: { values: update.values },
-    });
-  }
+      data: updates,
+    },
+  });
 }
 
 export async function updateDocCount(
@@ -623,9 +631,9 @@ export async function getApplicantByToken(
         docAssistedDyingCount: Number(row[38]) || 0,
         docFundamentalsCount: Number(row[39]) || 0,
         docInsuranceCount: Number(row[40]) || 0,
-        complete: row[41] ?? "FALSE",
+        complete: String(row[41] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         stripeSession: row[42] ?? "",
-        paid: row[43] === "TRUE",
+        paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
       };
@@ -699,9 +707,9 @@ export async function getApplicantByEmail(
         docAssistedDyingCount: Number(row[38]) || 0,
         docFundamentalsCount: Number(row[39]) || 0,
         docInsuranceCount: Number(row[40]) || 0,
-        complete: row[41] ?? "FALSE",
+        complete: String(row[41] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         stripeSession: row[42] ?? "",
-        paid: row[43] ?? "FALSE",
+        paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
       };
@@ -739,7 +747,7 @@ export async function getUploadStatus(
       docs.assisted_dying = Number(row[38]) || 0;
       docs.fundamentals = Number(row[39]) || 0;
 
-      const complete = row[41] === "TRUE";
+      const complete = String(row[41] ?? "").toUpperCase() === "TRUE";
 
       return {
         applicantId: row[0] ?? "",
@@ -751,7 +759,7 @@ export async function getUploadStatus(
         docs,
         complete,
         stripeSessionId: row[42] || undefined,
-        paid: row[43] === "TRUE",
+        paid: String(row[43] ?? "").toUpperCase() === "TRUE",
         createdAt: row[44] ?? "",
         paidAt: row[45] || undefined,
       };
@@ -801,7 +809,7 @@ function isFormComplete(applicant: ApplicantInfo): boolean {
   ];
 
   for (const decl of declarations) {
-    if (decl !== "TRUE") return false;
+    if (String(decl ?? "").toUpperCase() !== "TRUE") return false;
   }
 
   return true;
@@ -891,9 +899,9 @@ async function getApplicantByTokenFromId(applicantId: string): Promise<Applicant
         docAssistedDyingCount: Number(row[38]) || 0,
         docFundamentalsCount: Number(row[39]) || 0,
         docInsuranceCount: Number(row[40]) || 0,
-        complete: row[41] ?? "FALSE",
+        complete: String(row[41] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         stripeSession: row[42] ?? "",
-        paid: row[43] ?? "FALSE",
+        paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
       };

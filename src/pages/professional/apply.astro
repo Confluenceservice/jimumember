@@ -630,10 +630,23 @@ const token = Astro.url.searchParams.get("token");
 
   document.getElementById("add-experience-btn").addEventListener("click", () => addExperienceRow());
 
+  let saveQueue = Promise.resolve();
+  function queueFormSave() {
+    saveQueue = saveQueue.then(() => saveFormData()).catch(() => {});
+    return saveQueue;
+  }
+
   async function saveFormData() {
-    if (!window.__applicantId__) return;
+    const activeToken = window.__token__ || token;
+    if (!window.__applicantId__ && !activeToken) return;
+
     try {
       const payload = {
+        token: activeToken || "",
+        firstName: document.getElementById("firstName")?.value?.trim() || "",
+        lastName: document.getElementById("lastName")?.value?.trim() || "",
+        phone: document.getElementById("phone")?.value?.trim() || "",
+        email: document.getElementById("email")?.value?.trim() || "",
         dateOfBirth: document.getElementById("dateOfBirth")?.value || "",
         ethnicity: document.getElementById("ethnicity")?.value || "",
         address: document.getElementById("address")?.value || "",
@@ -679,25 +692,35 @@ const token = Astro.url.searchParams.get("token");
         declarationSignedAt: new Date().toISOString(),
       };
 
-      await fetch("/api/professional/apply", {
+      const response = await fetch("/api/professional/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.applicantId) {
+        applicantId = data.applicantId;
+        window.__applicantId__ = data.applicantId;
+      }
+      if (data.resumeLink) {
+        window.__token__ = data.resumeLink?.split("token=")[1] || activeToken;
+      }
     } catch {}
   }
 
   document.querySelectorAll("[data-next]").forEach(btn => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       saveStepData(currentStep);
-      saveFormData();
+      await queueFormSave();
       showStep(parseInt(btn.dataset.next));
     });
   });
 
   document.querySelectorAll("[data-goto]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      saveFormData();
+    btn.addEventListener("click", async () => {
+      await queueFormSave();
       showStep(parseInt(btn.dataset.goto));
     });
   });
@@ -1033,6 +1056,12 @@ const token = Astro.url.searchParams.get("token");
           return;
         }
 
+        window.__token__ = token;
+        if (data.applicantId) {
+          applicantId = data.applicantId;
+          window.__applicantId__ = data.applicantId;
+        }
+
         if (data.firstName) document.getElementById("reg-firstName").value = data.firstName || "";
         if (data.lastName) document.getElementById("reg-lastName").value = data.lastName || "";
         if (data.email) document.getElementById("reg-email").value = data.email || "";
@@ -1067,7 +1096,7 @@ const token = Astro.url.searchParams.get("token");
           const fr = JSON.parse(data.furtherRequirements || "{}");
           const setRadio = (name, val) => {
             if (!val) return;
-            const radio = document.querySelector(`input[name="${name}"[value="${val}"]`);
+            const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
             if (radio) radio.checked = true;
           };
           setRadio("agreeDoulaServices", fr.agreeDoulaServices);
@@ -1106,14 +1135,15 @@ const token = Astro.url.searchParams.get("token");
           if (exps[2]?.description) document.getElementById("example3").value = exps[2].description;
         } catch {}
 
-        if (data.declarationAccuracy === "TRUE") document.getElementById("declAccuracy").checked = true;
-        if (data.declarationEthics === "TRUE") document.getElementById("declEthics").checked = true;
-        if (data.declarationScope === "TRUE") document.getElementById("declScope").checked = true;
-        if (data.declarationDoulaServices === "TRUE") document.getElementById("declDoulaServices").checked = true;
-        if (data.declarationInterview === "TRUE") document.getElementById("declInterview").checked = true;
-        if (data.declarationProfessionalDev === "TRUE") document.getElementById("declProfessionalDev").checked = true;
-        if (data.declarationCriminalCheck === "TRUE") document.getElementById("declCriminalCheck").checked = true;
-        if (data.declarationMeetings === "TRUE") document.getElementById("declMeetings").checked = true;
+        const isTrueFlag = (value) => String(value || "").toUpperCase() === "TRUE";
+        if (isTrueFlag(data.declarationAccuracy)) document.getElementById("declAccuracy").checked = true;
+        if (isTrueFlag(data.declarationEthics)) document.getElementById("declEthics").checked = true;
+        if (isTrueFlag(data.declarationScope)) document.getElementById("declScope").checked = true;
+        if (isTrueFlag(data.declarationDoulaServices)) document.getElementById("declDoulaServices").checked = true;
+        if (isTrueFlag(data.declarationInterview)) document.getElementById("declInterview").checked = true;
+        if (isTrueFlag(data.declarationProfessionalDev)) document.getElementById("declProfessionalDev").checked = true;
+        if (isTrueFlag(data.declarationCriminalCheck)) document.getElementById("declCriminalCheck").checked = true;
+        if (isTrueFlag(data.declarationMeetings)) document.getElementById("declMeetings").checked = true;
 
         if (data.docsUploaded) {
           window.__docsUploaded__ = data.docsUploaded;

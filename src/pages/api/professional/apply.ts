@@ -3,17 +3,30 @@ import crypto from "node:crypto";
 import * as Sentry from "@sentry/node";
 import {
   createApplicantRow,
-  getUploadStatus,
   getApplicantByToken,
   getApplicantByEmail,
   updateApplicantFormData,
-  REQUIRED_DOC_TYPES,
   validateCompletion,
 } from "../../../lib/upload-sheet";
 import { sendResumeLink } from "../../../lib/email-sender";
 import { logger } from "../../../lib/logger";
 import { getSiteBaseUrl } from "../../../lib/stripe-checkout";
 import { listDriveFiles } from "../../../lib/drive-files";
+const applicantSaveQueues = new Map<string, Promise<void>>();
+async function queueApplicantSave(applicantId: string, operation: () => Promise<void>): Promise<void> {
+  const previous = applicantSaveQueues.get(applicantId) ?? Promise.resolve();
+  let current: Promise<void>;
+  current = previous
+    .catch(() => {})
+    .then(operation)
+    .finally(() => {
+      if (applicantSaveQueues.get(applicantId) === current) {
+        applicantSaveQueues.delete(applicantId);
+      }
+    });
+  applicantSaveQueues.set(applicantId, current);
+  return current;
+}
 
 export const GET: APIRoute = async ({ url }) => {
   const token = url.searchParams.get("token");
@@ -66,6 +79,7 @@ export const GET: APIRoute = async ({ url }) => {
     const status = isComplete ? "complete" : "partial";
 
     return Response.json({
+      applicantId: applicant.id,
       status,
       firstName: applicant.firstName,
       lastName: applicant.lastName,
@@ -129,28 +143,17 @@ export const POST: APIRoute = async ({ request, url }) => {
     return Response.json({ error: "Invalid JSON payload." }, { status: 400 });
   }
 
-  const firstName = (payload.firstName as string)?.trim();
-  const lastName = (payload.lastName as string)?.trim();
-  const phone = (payload.phone as string)?.trim();
-  const email = (payload.email as string)?.trim().toLowerCase();
+  const resumeToken = (payload.token as string)?.trim() || "";
+  const firstName = (payload.firstName as string)?.trim() || "";
+  const lastName = (payload.lastName as string)?.trim() || "";
+  const phone = (payload.phone as string)?.trim() || "";
+  const emailRaw = (payload.email as string)?.trim() || "";
+  const email = emailRaw.toLowerCase();
+  const fullName = `${firstName} ${lastName}`.trim();
 
-  if (!firstName) {
-    return Response.json({ error: "First name is required." }, { status: 400 });
-  }
-
-  if (!lastName) {
-    return Response.json({ error: "Last name is required." }, { status: 400 });
-  }
-
-  if (!email) {
-    return Response.json({ error: "Email is required." }, { status: 400 });
-  }
-
-  if (!email.includes("@") || !email.includes(".")) {
+  if (email && (!email.includes("@") || !email.includes("."))) {
     return Response.json({ error: "Valid email is required." }, { status: 400 });
   }
-
-  const fullName = `${firstName} ${lastName}`;
 
   // Extract all form fields
   const dateOfBirth = (payload.dateOfBirth as string)?.trim() || "";
@@ -182,41 +185,56 @@ export const POST: APIRoute = async ({ request, url }) => {
   const declarationSignedAt = (payload.declarationSignedAt as string) || "";
 
   try {
-    const existingApplicant = await getApplicantByEmail(email);
+    let existingApplicant = null;
+    if (resumeToken) {
+      existingApplicant = await getApplicantByToken(resumeToken);
+      if (!existingApplicant) {
+        return Response.json({ error: "Invalid or expired link." }, { status: 404 });
+      }
+    } else if (email) {
+      existingApplicant = await getApplicantByEmail(email);
+    }
     if (existingApplicant) {
       // Update existing applicant with form data
-      await updateApplicantFormData(existingApplicant.id, {
-        dateOfBirth,
-        ethnicity,
-        address,
-        postalAddress,
-        businessName,
-        website,
-        qualifications,
-        experience,
-        furtherRequirements,
-        coreCompetencies,
-        referee1Name,
-        referee1Role,
-        referee1Email,
-        referee1Phone,
-        referee2Name,
-        referee2Role,
-        referee2Email,
-        referee2Phone,
-        declarationAccuracy,
-        declarationEthics,
-        declarationScope,
-        declarationDoulaServices,
-        declarationInterview,
-        declarationProfessionalDev,
-        declarationCriminalCheck,
-        declarationMeetings,
-        declarationSignedAt: declarationSignedAt || new Date().toISOString(),
+      await queueApplicantSave(existingApplicant.id, async () => {
+        await updateApplicantFormData(existingApplicant.id, {
+          firstName: firstName || existingApplicant.firstName,
+          lastName: lastName || existingApplicant.lastName,
+          phone: phone || existingApplicant.phone,
+          email: email || existingApplicant.email,
+          dateOfBirth,
+          ethnicity,
+          address,
+          postalAddress,
+          businessName,
+          website,
+          qualifications,
+          experience,
+          furtherRequirements,
+          coreCompetencies,
+          referee1Name,
+          referee1Role,
+          referee1Email,
+          referee1Phone,
+          referee2Name,
+          referee2Role,
+          referee2Email,
+          referee2Phone,
+          declarationAccuracy,
+          declarationEthics,
+          declarationScope,
+          declarationDoulaServices,
+          declarationInterview,
+          declarationProfessionalDev,
+          declarationCriminalCheck,
+          declarationMeetings,
+          declarationSignedAt: declarationSignedAt || new Date().toISOString(),
+        });
       });
 
       const siteBaseUrl = getSiteBaseUrl(url.href);
-      const resumeLink = `${siteBaseUrl}/professional/apply?token=${existingApplicant.resumeToken}`;
+      const tokenForResumeLink = existingApplicant.resumeToken || resumeToken;
+      const resumeLink = `${siteBaseUrl}/professional/apply?token=${tokenForResumeLink}`;
       return Response.json({
         success: true,
         resumeLink,
@@ -225,12 +243,24 @@ export const POST: APIRoute = async ({ request, url }) => {
       });
     }
 
+    if (!firstName) {
+      return Response.json({ error: "First name is required." }, { status: 400 });
+    }
+
+    if (!lastName) {
+      return Response.json({ error: "Last name is required." }, { status: 400 });
+    }
+
+    if (!email) {
+      return Response.json({ error: "Email is required." }, { status: 400 });
+    }
+
     const applicantId = crypto.randomUUID();
-    const resumeToken = crypto.randomUUID();
+    const newResumeToken = crypto.randomUUID();
 
     // Create new row with all form data
     await createApplicantRow(
-      applicantId, firstName, lastName, phone, email, resumeToken,
+      applicantId, firstName, lastName, phone, email, newResumeToken,
       dateOfBirth, ethnicity, address, postalAddress, businessName, website,
       qualifications, experience, furtherRequirements, coreCompetencies,
       referee1Name, referee1Role, referee1Email, referee1Phone,
@@ -242,7 +272,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     );
 
     const siteBaseUrl = getSiteBaseUrl(url.href);
-    const resumeLink = `${siteBaseUrl}/professional/apply?token=${resumeToken}`;
+    const resumeLink = `${siteBaseUrl}/professional/apply?token=${newResumeToken}`;
 
     try {
       await sendResumeLink(email, fullName, resumeLink);

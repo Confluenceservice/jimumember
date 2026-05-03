@@ -1,13 +1,27 @@
 # Professional Membership — Phase 2: Digital Form + Multi-File Upload
 
 **Date:** 2026-04-19
-**Status:** Complete
+**Last Updated:** 2026-05-01
+**Status:** Active (production reliability fixes applied)
 
 ---
 
 ## Overview
 
 Professional Membership applicants complete a structured digital form (8-step wizard) and upload supporting documents. The form supports multi-session completion (resume via link), gates submission until all requirements are met, and transitions to Stripe payment upon completion.
+
+## Essential Current State
+
+- Resume flow persistence is hardened: applicant matching is **token-first** (`resume_token`) with email fallback only when no token is supplied.
+- Autosave is serialized on both sides to avoid races:
+  - client-side queue in `src/pages/professional/apply.astro`
+  - server-side per-applicant queue in `src/pages/api/professional/apply.ts`
+- Autosave now persists identity fields (`firstName`, `lastName`, `phone`, `email`) together with form data.
+- `GET /api/professional/apply?token=...` now returns `applicantId` for reliable resume hydration.
+- Flag parsing is case-insensitive for reads: `true` and `TRUE` are both treated as true for completion/payment/declaration checks.
+- Validation status:
+  - `npm run test` passes (37/37).
+  - `npm run check` still reports pre-existing unrelated type errors in other files.
 
 ---
 
@@ -54,17 +68,20 @@ new → partial → complete → paid
 ## API Endpoints
 
 ### `GET /api/professional/apply?token=xxx`
-Returns: `{ status, firstName, lastName, email, phone, docsUploaded: { [docType]: FileInfo[] }, formData, complete }`
+Returns: `{ applicantId, status, firstName, lastName, email, phone, docsUploaded: { [docType]: FileInfo[] }, ...formFields, complete }`
 
 ### `POST /api/professional/apply`
-Accepts: `{ firstName, lastName, phone, email, dateOfBirth, ethnicity, address, postalAddress, businessName, website, qualifications, experience, furtherRequirements, coreCompetencies, referee1*, referee2*, declarations*, ... }`
+Accepts: `{ token?, firstName, lastName, phone, email, dateOfBirth, ethnicity, address, postalAddress, businessName, website, qualifications, experience, furtherRequirements, coreCompetencies, referee1*, referee2*, declarations*, ... }`
 
 ### `POST /api/professional/upload-file`
-Multipart: `token`, `docType`, `file`
-Returns: `{ success, fileId, filename }`
+JSON or multipart:
+- JSON: `{ token, docType, filename, mimeType, data(base64) }`
+- Multipart: `token`, `docType`, `file`
+Returns: `{ success, docType, message }`
 
-### `DELETE /api/professional/delete-file?fileId=xxx&token=xxx`
-Soft-deletes file from Drive Files sheet, trashes Drive file.
+### `POST /api/professional/delete-file`
+Accepts JSON: `{ fileId, token }`
+Soft-deletes file from Drive Files sheet and trashes the Drive file.
 Returns: `{ success }`
 
 ### `POST /api/professional/upload-complete`
@@ -124,6 +141,8 @@ AS:  created_at
 AT:  paid_at
 AU:  (spare/reserved)
 ```
+
+Reads normalize `complete`/`paid`/declaration flags case-insensitively (`true` and `TRUE` are both accepted).
 
 **`Drive Files` tab** (new, lazy-created on first upload):
 ```
