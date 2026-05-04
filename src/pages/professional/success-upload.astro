@@ -1,0 +1,36 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const sessionId = Astro.url.searchParams.get("session_id");
+---
+
+<BaseLayout
+  title="Application Complete"
+  description="Your Professional Membership application has been submitted."
+>
+  <section class="bg-white border border-gray-200 rounded-xl p-4">
+    <h1 class="text-2xl sm:text-4xl font-bold mb-1">Application Submitted</h1>
+    <p class="text-gray-600 m-0">
+      Thank you for applying for Professional Membership with ELDAA.
+    </p>
+
+    {sessionId && (
+      <p class="mt-4 text-gray-600 text-sm">
+        Reference: {sessionId}
+      </p>
+    )}
+
+    <div class="mt-6 p-4 bg-emerald-50 rounded-lg border border-emerald-700">
+      <p class="text-emerald-700 font-semibold m-0">
+        Your application is now being reviewed.
+      </p>
+      <p class="text-gray-600 mt-2 mb-0">
+        You will receive confirmation once your documents have been verified.
+      </p>
+    </div>
+
+    <p class="mt-6">
+      <a href="https://eldaa.org.nz" class="text-blue-600 hover:text-blue-700">Return to ELDAA website</a>
+    </p>
+  </section>
+</BaseLayout>

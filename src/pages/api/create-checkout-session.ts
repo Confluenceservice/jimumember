@@ -2,11 +2,11 @@ import type { APIRoute } from "astro";
 import Stripe from "stripe";
 import * as Sentry from "@sentry/node";
 import {
+  calcFirstTermAmount,
   formatAmountNzd,
   getNextJulyAnchorEpoch,
   getPriceForPlan,
   getSiteBaseUrl,
-  isPromoWindowNz,
   type MembershipPlan,
 } from "../../lib/stripe-checkout";
 import { logger } from "../../lib/logger";
@@ -105,15 +105,12 @@ export const POST: APIRoute = async ({ request }) => {
 
   const annualAmount = recurringPrice.unit_amount;
   const customerInfo = await getExistingCustomerInfo(stripe, email);
-  const inPromoWindow = isPromoWindowNz();
-  const eligibleForPromo = inPromoWindow && !customerInfo.hasPriorSubscriptions;
 
-  // First-term amount: 50% off for Jan-Jun first-time subscribers, full price otherwise.
-  // mode=payment doesn't show a promo code field on hosted checkout, so we compute
-  // the discount here and pass the resulting amount directly to price_data.
-  const firstTermAmount = eligibleForPromo
-    ? Math.round(annualAmount * 0.5)
-    : annualAmount;
+  // First-term amount: prorated based on weeks remaining until next July 1.
+  // New customers get the prorated amount; existing subscribers pay full price.
+  const firstTermAmount = customerInfo.hasPriorSubscriptions
+    ? annualAmount
+    : calcFirstTermAmount(annualAmount);
 
   const renewalMessage = `Then ${formatAmountNzd(annualAmount)} per year starting 1 July.`;
 
@@ -171,13 +168,15 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const session = await stripe.checkout.sessions.create(params);
 
+    const proratedFirstTerm = firstTermAmount !== annualAmount;
+
     logger.info("checkout_session.created", {
       plan,
       sessionId: session.id,
       customerId: customerInfo.id,
       firstTermAmount,
       annualAmount,
-      eligibleForPromo,
+      proratedFirstTerm,
       billingCycleAnchor,
     });
 
@@ -188,7 +187,7 @@ export const POST: APIRoute = async ({ request }) => {
       firstTermAmount,
       annualAmount,
       billingCycleAnchor,
-      eligibleForPromo,
+      proratedFirstTerm,
       renewalMessage,
     });
   } catch (error) {

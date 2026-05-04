@@ -1,0 +1,30 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const token = Astro.url.searchParams.get("token");
+---
+
+<BaseLayout
+  title="Application Cancelled"
+  description="Your Professional Membership application was cancelled."
+>
+  <section class="bg-white border border-gray-200 rounded-xl p-4">
+    <h1 class="text-2xl sm:text-4xl font-bold mb-1">Application Cancelled</h1>
+    <p class="text-gray-600 m-0">
+      Your application has been cancelled. Your uploaded documents have been saved.
+    </p>
+
+    {token && (
+      <p class="mt-6">
+        <a href={`/professional/apply?token=${token}`}
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg inline-block no-underline">
+          Continue Application
+        </a>
+      </p>
+    )}
+
+    <p class="mt-6">
+      <a href="/professional/apply" class="text-blue-600 hover:text-blue-700">Start New Application</a>
+    </p>
+  </section>
+</BaseLayout>

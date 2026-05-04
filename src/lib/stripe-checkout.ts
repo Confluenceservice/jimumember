@@ -30,6 +30,33 @@ export function getNextJulyAnchorEpoch(now: DateTime = DateTime.utc()): number {
   return Math.floor(getNextJulyAnchorDate(now).toSeconds());
 }
 
+export type ProrationUnit = "week" | "month";
+
+/**
+ * Calculate first-term amount using proration from now until next July 1.
+ * Rounds to nearest cent (whole number of cents).
+ */
+export function calcFirstTermAmount(
+  annualAmountCents: number,
+  now: DateTime = DateTime.utc(),
+  unit: ProrationUnit = "week",
+): number {
+  const nextJuly = getNextJulyAnchorDate(now);
+  const nowInNz = now.setZone(NZ_TIMEZONE);
+
+  if (unit === "week") {
+    const diff = nextJuly.diff(nowInNz, "weeks");
+    const weeksRemaining = diff.weeks;
+    // Rounding: use Math.round to round to nearest cent
+    return Math.round(annualAmountCents * (weeksRemaining / 52));
+  } else {
+    // month-based: uses fractional months
+    const diff = nextJuly.diff(nowInNz, "months");
+    const monthsRemaining = diff.months;
+    return Math.round(annualAmountCents * (monthsRemaining / 12));
+  }
+}
+
 export function getSiteBaseUrl(requestUrl: string): string {
   const configured = process.env.PUBLIC_SITE_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");

@@ -1,4 +1,6 @@
 ---
+import "../styles/global.css";
+
 interface Props {
   title: string;
   description?: string;
@@ -17,103 +19,9 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <!-- Security headers -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
-    <meta name="Permissions-Policy" content="payment=(self)" />
-    <style is:global>
-      :root {
-        --surface: #ffffff;
-        --text: #1f2937;
-        --muted: #4b5563;
-        --accent: #2563eb;
-        --accent-hover: #1d4ed8;
-        --border: #e5e7eb;
-        --bg: #f8fafc;
-        --ok: #166534;
-        --warn: #92400e;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        color: var(--text);
-        background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
-        min-height: 100vh;
-      }
-
-      .shell {
-        width: min(100%, 1024px);
-        margin: 0 auto;
-        padding: 1rem;
-      }
-
-      .card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 1rem;
-      }
-
-      .headline {
-        margin: 0 0 0.25rem;
-        font-size: clamp(1.5rem, 4vw, 2rem);
-      }
-
-      .sub {
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .button {
-        appearance: none;
-        border: 1px solid #1d4ed8;
-        border-radius: 12px;
-        padding: 0.9rem 1.2rem;
-        min-height: 52px;
-        background: var(--accent);
-        color: #fff;
-        font-size: 1rem;
-        font-weight: 700;
-        line-height: 1.1;
-        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.28);
-        cursor: pointer;
-        transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
-      }
-
-      .button:hover {
-        background: var(--accent-hover);
-        transform: translateY(-1px);
-        box-shadow: 0 8px 16px rgba(29, 78, 216, 0.35);
-      }
-
-      .button:focus-visible {
-        outline: 3px solid #bfdbfe;
-        outline-offset: 2px;
-      }
-
-      .button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      .status-ok {
-        color: var(--ok);
-      }
-
-      .status-warn {
-        color: var(--warn);
-      }
-    </style>
   </head>
-  <body>
-    <main class="shell">
+  <body class="font-sans text-gray-800 bg-gradient-to-b from-gray-50 to-indigo-100 min-h-screen">
+    <main class="w-full max-w-5xl mx-auto px-4 py-4">
       <slot />
     </main>
   </body>

@@ -11,7 +11,7 @@ const rateLimitStore = new Map<
 >();
 
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_REQUESTS = 15;
+const MAX_REQUESTS = 30;
 
 function getClientIp(request: Request): string {
   return (
@@ -30,12 +30,25 @@ function cleanStaleEntries(): void {
   }
 }
 
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "payment=(self)",
+};
+
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url);
 
   // Only rate-limit API routes
   if (!url.pathname.startsWith("/api/")) {
-    return next();
+    const response = await next();
+    // Apply security headers to all responses
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+      response.headers.set(key, value);
+    }
+    return response;
   }
 
   // Clean stale entries on every request (cheap enough at this scale)
@@ -51,7 +64,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       rateLimitStore.set(ip, { count: 1, resetAt: now + WINDOW_MS });
     } else if (entry.count >= MAX_REQUESTS) {
       // Limit exceeded
-      return new Response(
+      const rateLimitedResponse = new Response(
         JSON.stringify({
           error: "Too many requests. Please try again later.",
         }),
@@ -68,6 +81,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
           },
         },
       );
+      for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+        rateLimitedResponse.headers.set(key, value);
+      }
+      return rateLimitedResponse;
     } else {
       entry.count++;
     }
@@ -91,6 +108,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
       "X-RateLimit-Reset",
       String(Math.ceil(currentEntry.resetAt / 1000)),
     );
+  }
+
+  // Apply security headers
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value);
   }
 
   return response;

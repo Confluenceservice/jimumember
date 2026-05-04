@@ -11,6 +11,8 @@ import {
 } from "../../lib/memberships";
 import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
+import { getApplicantByToken, getUploadStatus } from "../../lib/upload-sheet";
+import { createApplicationReviewDoc } from "../../lib/google-docs";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -183,6 +185,25 @@ async function handleCheckoutCompleted(
       error: msg,
     });
   });
+
+  // Create a Google Doc review document for professional applications
+  if (plan === "professional") {
+    const resumeToken = session.metadata?.resume_token;
+    if (resumeToken) {
+      const applicant = await getApplicantByToken(resumeToken);
+      if (applicant) {
+        const docCounts = await getUploadStatus(applicant.id);
+        createApplicationReviewDoc(applicant, docCounts ?? {}).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.error("checkout_completed.review_doc_failed", {
+            applicantId: applicant.id,
+            sessionId: session.id,
+            error: msg,
+          });
+        });
+      }
+    }
+  }
 }
 
 async function handleInvoicePaid(

@@ -19,6 +19,6 @@ Astro SSR app with:
 - Uses Stripe Checkout Sessions in `payment` mode for the first-term charge.
 - Webhook creates the annual recurring subscription after successful payment.
 - Annual recurring billing is deferred to 1 July (handled server-side in webhook).
-- Jan-Jun NZ window: first-time subscribers with valid promo code (`LDTY8PQR`) get 50% off the annual amount.
-- Otherwise, first-term charge is prorated to the next 1 July boundary.
+- First-time subscribers: prorated first-term charge based on weeks remaining until 1 July.
+- Existing subscribers: full annual amount (no proration).
 - Professional checkout redirects to `eldaa.org.nz/professional-membership` after payment.

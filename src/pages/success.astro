@@ -3,21 +3,20 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
 <BaseLayout title="Subscription complete">
-  <section class="card">
-    <h1 class="headline">Subscription confirmed</h1>
-    <p class="sub" id="message">
+  <section class="bg-white border border-gray-200 rounded-xl p-4">
+    <h1 class="text-2xl sm:text-4xl font-bold mb-1">Subscription confirmed</h1>
+    <p class="text-gray-600 m-0" id="message">
       Loading...
     </p>
-    <div id="next-steps" style="display: none; margin-top: 1rem;">
-      <p id="form-link-text" style="margin: 0 0 0.75rem;"></p>
-      <a id="form-link" href="#" style="color: var(--accent); font-weight: 600;"></a>
+    <div id="next-steps" class="hidden mt-4">
+      <p id="form-link-text" class="m-0 mb-2"></p>
+      <a id="form-link" href="#" class="text-blue-600 hover:text-blue-700 font-semibold"></a>
     </div>
-    <div id="countdown" style="display: none; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem;"></div>
+    <div id="countdown" class="hidden mt-3 text-gray-600 text-sm"></div>
   </section>
 </BaseLayout>
 
 <script>
-  // @ts-nocheck
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get("session_id");
   const messageEl = document.querySelector("#message");
@@ -27,7 +26,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   const countdownEl = document.querySelector("#countdown");
 
   if (!sessionId) {
-    messageEl.textContent = "No session found. If you completed checkout, please contact us.";
+    messageEl!.textContent = "No session found. If you completed checkout, please contact us.";
     throw new Error("No session_id");
   }
 
@@ -36,7 +35,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      messageEl.textContent = "Could not load session details. Please contact us.";
+      messageEl!.textContent = "Could not load session details. Please contact us.";
       throw new Error(data.error || "Session fetch failed");
     }
 
@@ -44,13 +43,13 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     const name = data.firstName ? ` ${data.firstName}` : "";
 
     if (plan === "professional") {
-      messageEl.textContent = `Thank you${name}! Your Professional Membership payment was successful.`;
-      formLinkText.textContent = "Next step:";
-      formLinkEl.textContent = "Complete your Professional Membership application";
-      formLinkEl.href = "https://www.eldaa.org.nz/professional-membership";
-      nextStepsEl.style.display = "block";
-      countdownEl.style.display = "block";
-      countdownEl.textContent = "Redirecting in 4 seconds...";
+      messageEl!.textContent = `Thank you${name}! Your Professional Membership payment was successful.`;
+      formLinkText!.textContent = "Next step:";
+      formLinkEl!.textContent = "Complete your Professional Membership application";
+      formLinkEl!.href = "https://www.eldaa.org.nz/professional-membership";
+      nextStepsEl!.classList.remove("hidden");
+      countdownEl!.classList.remove("hidden");
+      countdownEl!.textContent = "Redirecting in 4 seconds...";
       let count = 4;
       const timer = setInterval(() => {
         count--;
@@ -58,23 +57,21 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           clearInterval(timer);
           window.location.href = "https://www.eldaa.org.nz/professional-membership";
         } else {
-          countdownEl.textContent = `Redirecting in ${count} second${count === 1 ? "" : "s"}...`;
+          countdownEl!.textContent = `Redirecting in ${count} second${count === 1 ? "" : "s"}...`;
         }
       }, 1000);
     } else {
-      // Associate or unknown plan
-      messageEl.textContent = "Thank you. Your subscription checkout completed successfully.";
-      formLinkText.textContent = "Return to the ELDAA website:";
-      formLinkEl.textContent = "eldaa.org.nz/membership";
-      formLinkEl.href = "https://www.eldaa.org.nz/membership";
-      nextStepsEl.style.display = "block";
+      messageEl!.textContent = "Thank you. Your subscription checkout completed successfully.";
+      formLinkText!.textContent = "Return to the ELDAA website:";
+      formLinkEl!.textContent = "eldaa.org.nz/membership";
+      formLinkEl!.href = "https://www.eldaa.org.nz/membership";
+      nextStepsEl!.classList.remove("hidden");
     }
   } catch {
-    // Non-blocking — show generic message
-    messageEl.textContent = "Thank you. Your subscription checkout completed successfully.";
-    formLinkText.textContent = "Return to the ELDAA website:";
-    formLinkEl.textContent = "eldaa.org.nz/membership";
-    formLinkEl.href = "https://www.eldaa.org.nz/membership";
-    nextStepsEl.style.display = "block";
+    messageEl!.textContent = "Thank you. Your subscription checkout completed successfully.";
+    formLinkText!.textContent = "Return to the ELDAA website:";
+    formLinkEl!.textContent = "eldaa.org.nz/membership";
+    formLinkEl!.href = "https://www.eldaa.org.nz/membership";
+    nextStepsEl!.classList.remove("hidden");
   }
 </script>

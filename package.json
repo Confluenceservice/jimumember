@@ -13,13 +13,17 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@astrojs/node": "^10.0.2",
+    "@astrojs/node": "^10.0.4",
     "@sentry/node": "^10.46.0",
-    "astro": "^6.0.5",
+    "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/vite": "^4.2.4",
+    "astro": "^6.1.2",
+    "dotenv": "^17.3.1",
     "googleapis": "^140.0.0",
     "luxon": "^3.7.2",
     "pino": "^10.3.1",
-    "stripe": "^20.4.1"
+    "stripe": "^20.4.1",
+    "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",

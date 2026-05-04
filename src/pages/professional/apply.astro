@@ -1,0 +1,1164 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const token = Astro.url.searchParams.get("token");
+---
+
+<BaseLayout
+  title="Professional Membership Application"
+  description="Apply for Professional Membership with ELDAA."
+>
+  <section class="bg-white border border-gray-200 rounded-xl p-4">
+    <h1 class="text-2xl sm:text-4xl font-bold mb-1">Professional Membership</h1>
+    <p class="text-gray-600 m-0">
+      Complete all sections and upload required documents to apply.
+    </p>
+  </section>
+
+  <!-- Step Indicator -->
+  <div id="step-indicator" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <div class="flex justify-between items-center mb-3">
+      <span id="step-label" class="font-semibold">Step 1 of 8</span>
+      <span id="step-name" class="text-gray-600 text-sm"></span>
+    </div>
+    <div id="step-dots" class="grid grid-cols-4 sm:grid-cols-8 gap-2"></div>
+  </div>
+
+  <!-- Registration (step 0 - shown when no token) -->
+  <section id="section-register" class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
+    <h2 class="m-0 mb-4 text-xl">Start Your Application</h2>
+    <p class="text-gray-600 mb-4">
+      Enter your basic details to begin. You'll receive a unique link to resume your application.
+    </p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="reg-firstName" class="block font-semibold mb-1.5">First name</label>
+        <input id="reg-firstName" name="firstName" type="text" placeholder="Jane" autocomplete="given-name"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+      <div>
+        <label for="reg-lastName" class="block font-semibold mb-1.5">Last name</label>
+        <input id="reg-lastName" name="lastName" type="text" placeholder="Doe" autocomplete="family-name"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <label for="reg-phone" class="block font-semibold mb-1.5">Phone number</label>
+      <input id="reg-phone" name="phone" type="tel" placeholder="+64 21 123 4567" autocomplete="tel"
+        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+    </div>
+
+    <div class="mt-3">
+      <label for="reg-email" class="block font-semibold mb-1.5">Email Address</label>
+      <input id="reg-email" name="email" type="email" placeholder="jane@example.com" autocomplete="email"
+        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+    </div>
+
+    <button id="register-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg mt-6 w-full">
+      Start Application
+    </button>
+
+    <p id="register-message" class="mt-4 text-gray-600 hidden"></p>
+  </section>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-xl">
+      <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-gray-600 font-medium">Loading your application...</p>
+    </div>
+  </div>
+
+  <!-- Step 1: About You -->
+  <section id="section-1" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">About You</h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="firstName" class="block font-semibold mb-1.5">First name *</label>
+        <input id="firstName" name="firstName" type="text" placeholder="Jane" autocomplete="given-name"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+      <div>
+        <label for="lastName" class="block font-semibold mb-1.5">Last name *</label>
+        <input id="lastName" name="lastName" type="text" placeholder="Doe" autocomplete="family-name"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <div>
+        <label for="dateOfBirth" class="block font-semibold mb-1.5">Date of Birth *</label>
+        <input id="dateOfBirth" name="dateOfBirth" type="text" placeholder="DD/MM/YYYY"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+      <div>
+        <label for="ethnicity" class="block font-semibold mb-1.5">Ethnicity *</label>
+        <input id="ethnicity" name="ethnicity" type="text" placeholder="e.g. New Zealand European"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <label for="address" class="block font-semibold mb-1.5">Address *</label>
+      <input id="address" name="address" type="text" placeholder="123 Main Street, Auckland, 1010"
+        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+    </div>
+
+    <div class="mt-3">
+      <label for="postalAddress" class="block font-semibold mb-1.5">Postal Address</label>
+      <input id="postalAddress" name="postalAddress" type="text" placeholder="Optional — if different from above"
+        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <div>
+        <label for="phone" class="block font-semibold mb-1.5">Phone *</label>
+        <input id="phone" name="phone" type="tel" placeholder="+64 21 123 4567" autocomplete="tel"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+      <div>
+        <label for="email" class="block font-semibold mb-1.5">Email *</label>
+        <input id="email" name="email" type="email" placeholder="jane@example.com" autocomplete="email"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+      <div>
+        <label for="businessName" class="block font-semibold mb-1.5">Business Name</label>
+        <input id="businessName" name="businessName" type="text" placeholder="Optional"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+      <div>
+        <label for="website" class="block font-semibold mb-1.5">Website / Social</label>
+        <input id="website" name="website" type="text" placeholder="Optional"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+      </div>
+    </div>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="2">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 2: Training & Education -->
+  <section id="section-2" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Your Training & Education</h2>
+    <p class="text-gray-600 mb-4 text-sm">
+      List all End of Life Doula courses you have completed. Attach certificates separately in the Document Upload section.
+    </p>
+
+    <div id="courses-list" class="flex flex-col gap-3"></div>
+
+    <button type="button" id="add-course-btn" class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg mt-3 w-full sm:w-auto">
+      + Add Another Course
+    </button>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="1">Back</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="3">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 3: EOL Doula Experience -->
+  <section id="section-3" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Your EOL Doula Experience</h2>
+
+    <div id="experience-list" class="flex flex-col gap-3 mb-4"></div>
+    <button type="button" id="add-experience-btn" class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg w-full sm:w-auto">+ Add Experience</button>
+
+    <h3 class="mt-6 mb-3 text-lg">Example 1 *</h3>
+    <p class="text-gray-600 text-sm mb-3">Describe an example including setting/context, role, skills used, ethical/cultural considerations, and outcome/learning.</p>
+    <textarea id="example1" rows="4" placeholder="Describe your experience..."
+      class="w-full px-4 py-3 border border-gray-200 rounded-xl text-base resize-y"></textarea>
+
+    <h3 class="mt-4 mb-3 text-lg">Example 2</h3>
+    <textarea id="example2" rows="4" placeholder="Optional second example..."
+      class="w-full px-4 py-3 border border-gray-200 rounded-xl text-base resize-y"></textarea>
+
+    <h3 class="mt-4 mb-3 text-lg">Example 3</h3>
+    <textarea id="example3" rows="4" placeholder="Optional third example..."
+      class="w-full px-4 py-3 border border-gray-200 rounded-xl text-base resize-y"></textarea>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="2">Back</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="4">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 4: Further Requirements -->
+  <section id="section-4" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Further Requirements</h2>
+
+    <div class="flex flex-col gap-3">
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Do you agree to actively provide Doula Services? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="agreeDoulaServices" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="agreeDoulaServices" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Do you agree to an interview by one or more committee members? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="agreeInterview" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="agreeInterview" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Do you agree to submit proof of up to 10 hours of professional development each year? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="commitProfessionalDev" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="commitProfessionalDev" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Will you take out professional indemnity insurance? (recommended)</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="willInsurance" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="willInsurance" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Do you wish to be listed as a practicing End of Life Doula in our directory? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="listDirectory" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="listDirectory" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Are you willing to provide a current Ministry of Justice criminal record check? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="provideCriminalCheck" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="provideCriminalCheck" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Are you willing to attend regular ELDAA meetings and events, and engage with and support your local ELDAA community? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="attendMeetings" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="attendMeetings" value="NO" /> No</label>
+        </div>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <p class="font-semibold mb-2">Are you willing to work remotely where there is no other available Professional Member in a Client's area? *</p>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="workRemotely" value="YES" /> Yes</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="workRemotely" value="NO" /> No</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="3">Back</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="5">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 5: Core Competencies -->
+  <section id="section-5" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">EOL Doula Standards & Core Competencies</h2>
+    <p class="text-gray-600 mb-4 text-sm">Please tick the competencies you are confident in providing.</p>
+
+    <div id="competencies-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="4">Back</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="6">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 6: Referees -->
+  <section id="section-6" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Referees</h2>
+    <p class="text-gray-600 mb-4 text-sm">Please provide two referees who have witnessed your work with the dying, or who have worked alongside you in a related field.</p>
+
+    <h3 class="m-0 mb-3 text-lg">Referee 1 *</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="ref1Name" class="block font-semibold mb-1">Full Name *</label>
+        <input id="ref1Name" type="text" placeholder="Full name"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+      <div>
+        <label for="ref1Role" class="block font-semibold mb-1">Role / Relationship *</label>
+        <input id="ref1Role" type="text" placeholder="e.g. Nurse, Social Worker"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+      <div>
+        <label for="ref1Email" class="block font-semibold mb-1">Email *</label>
+        <input id="ref1Email" type="email" placeholder="referee@example.com"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+      <div>
+        <label for="ref1Phone" class="block font-semibold mb-1">Phone *</label>
+        <input id="ref1Phone" type="tel" placeholder="+64 21 123 4567"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+    </div>
+
+    <h3 class="mt-6 mb-3 text-lg">Referee 2 *</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="ref2Name" class="block font-semibold mb-1">Full Name *</label>
+        <input id="ref2Name" type="text" placeholder="Full name"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+      <div>
+        <label for="ref2Role" class="block font-semibold mb-1">Role / Relationship *</label>
+        <input id="ref2Role" type="text" placeholder="e.g. Nurse, Social Worker"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+      <div>
+        <label for="ref2Email" class="block font-semibold mb-1">Email *</label>
+        <input id="ref2Email" type="email" placeholder="referee@example.com"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+      <div>
+        <label for="ref2Phone" class="block font-semibold mb-1">Phone *</label>
+        <input id="ref2Phone" type="tel" placeholder="+64 21 123 4567"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base" />
+      </div>
+    </div>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="5">Back</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="7">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 7: Declarations -->
+  <section id="section-7" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Declarations</h2>
+    <p class="text-gray-600 mb-4 text-sm">Please confirm all statements below to proceed.</p>
+
+    <div class="flex flex-col gap-3">
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declAccuracy" class="mt-1" />
+          <span>I confirm the information provided is accurate and complete. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declEthics" class="mt-1" />
+          <span>I have read and agree to the ELDAA Code of Ethics. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declScope" class="mt-1" />
+          <span>I have read and understand the Scope of Practice. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declDoulaServices" class="mt-1" />
+          <span>I agree to actively provide Doula Services as part of my professional membership. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declInterview" class="mt-1" />
+          <span>I agree to an interview by the committee if required. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declProfessionalDev" class="mt-1" />
+          <span>I commit to completing 10 hours of professional development per year. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declCriminalCheck" class="mt-1" />
+          <span>I agree to provide a Ministry of Justice criminal record check. *</span>
+        </label>
+      </div>
+      <div class="p-3 border border-gray-200 rounded-lg">
+        <label class="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="declMeetings" class="mt-1" />
+          <span>I agree to attend regular ELDAA meetings and support my local community. *</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="mt-6 flex gap-3 justify-end">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="6">Back</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl" data-next="8">Continue to Documents</button>
+    </div>
+  </section>
+
+  <!-- Step 8: Document Upload -->
+  <section id="section-8" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Document Upload</h2>
+    <p class="text-gray-600 mb-6 text-sm">Upload your supporting documents below. You can upload multiple files per category.</p>
+
+    <div id="progress-info" class="mb-6 p-4 bg-gray-50 rounded-lg">
+      <p class="m-0 mb-2 font-semibold">Documents: <span id="upload-count">0</span> / 6 required categories</p>
+      <p id="upload-status-text" class="m-0 text-gray-600 text-sm"></p>
+    </div>
+
+    <div id="document-list" class="flex flex-col gap-4"></div>
+
+    <div id="payment-section" class="mt-8 pt-6 border-t border-gray-200">
+      <button id="proceed-payment-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg w-full" disabled>
+        Complete all sections to continue
+      </button>
+    </div>
+
+    <div class="mt-6 flex gap-3 justify-start">
+      <button class="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg cursor-pointer" data-goto="7">Back</button>
+    </div>
+  </section>
+
+  <!-- Already Paid -->
+  <section id="paid-section" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-xl">Application Complete</h2>
+    <p>Your Professional Membership application has been completed. Thank you!</p>
+    <p class="mt-4">
+      <a href="https://eldaa.org.nz" class="text-blue-600 hover:text-blue-700">Return to ELDAA website</a>
+    </p>
+  </section>
+
+  <!-- Error -->
+  <section id="error-section" class="bg-white border border-gray-200 rounded-xl p-4 mt-4 hidden">
+    <h2 class="m-0 mb-4 text-amber-800">Error</h2>
+    <p id="error-message"></p>
+    <a href="/professional/apply" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg inline-block mt-4">Start New Application</a>
+  </section>
+</BaseLayout>
+
+<script is:inline define:vars={{ token }}>
+  const STEPS = [
+    { id: "section-register", label: "Start" },
+    { id: "section-1", label: "About You" },
+    { id: "section-2", label: "Training" },
+    { id: "section-3", label: "Experience" },
+    { id: "section-4", label: "Requirements" },
+    { id: "section-5", label: "Competencies" },
+    { id: "section-6", label: "Referees" },
+    { id: "section-7", label: "Declarations" },
+    { id: "section-8", label: "Documents" },
+  ];
+
+  const REQUIRED_DOCS = [
+    { id: "training", label: "Certificates of Training", description: "Evidence of completed training" },
+    { id: "ethics", label: "Code of Ethics", description: "Signed ELDAA Code of Ethics and Scope of Practice" },
+    { id: "criminal", label: "Criminal Records Check", description: "Ministry of Justice background check" },
+    { id: "advance_care", label: "Advanced Care Planning (NZ)", description: "4 modules completed" },
+    { id: "assisted_dying", label: "Assisted Dying Training", description: "Te Whatu Ora, 3 modules completed" },
+    { id: "fundamentals", label: "Fundamentals of Palliative Care", description: "Hospice NZ, 4 online modules" },
+  ];
+
+  const OPTIONAL_DOCS = [
+    { id: "insurance", label: "Professional Indemnity Insurance", description: "Optional but recommended" },
+  ];
+
+  const COMPETENCIES = [
+    "Effective Communication Skills — deep listening, open-ended questioning, holding space",
+    "Advocacy & Empowerment — navigating medical/healthcare systems",
+    "Understanding of Cultural & Spiritual Diversity",
+    "Shows initiative — anticipate needs, seek information",
+    "Compassionate Presence — quiet, calm presence, follow the lead",
+    "Ongoing Education & Development",
+    "Self-Care & Professional Boundaries",
+    "Knowledge of End-of-Life Options — palliative care, hospice, VAD, home death",
+    "Business acumen — contractual agreement, sliding scale, timely invoices",
+    "Networking & Referrals",
+    "Holistic support — emotional, spiritual, cultural, practical, social",
+    "Illness journey advocacy and empowerment",
+    "Legacy & Life Review",
+    "Holistic Advance Care Planning",
+    "Vigil Planning & Support",
+    "Practical Assistance during illness",
+    "Funeral & Memorial Planning",
+    "Body care and After Death care",
+    "Grief & Bereavement Awareness",
+    "Interdisciplinary Collaboration",
+    "Mentorship — willing to mentor other ELDAA members",
+  ];
+
+  let currentStep = 0;
+  let applicantId = null;
+  let courses = [];
+  let experiences = [];
+  let competencyStates = {};
+  let stepCompletion = {};  // step index -> true if completed
+
+  function markStepComplete(stepIdx) {
+    // Token-based resume: step 0 is always "complete" since data was pre-filled server-side
+    if (stepIdx === 0 && token) { stepCompletion[0] = true; updateDots(); return; }
+    if (validateStep(stepIdx)) {
+      stepCompletion[stepIdx] = true;
+      updateDots();
+    }
+  }
+  function isStepComplete(stepIdx) { return !!stepCompletion[stepIdx]; }
+  function completedCount() { return Object.keys(stepCompletion).length; }
+
+  function updateDots() {
+    const dotsContainer = document.getElementById("step-dots");
+    if (!dotsContainer) return;
+    dotsContainer.innerHTML = "";
+    for (let i = 1; i <= 8; i++) {
+      const dot = document.createElement("button");
+      dot.className = "flex flex-col items-center gap-1 p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-300";
+      const isCurrent = i === currentStep;
+      const isDone = isStepComplete(i);
+      dot.innerHTML = `
+        <div class="w-8 h-2 rounded-full transition-colors duration-200 ${isDone ? "bg-emerald-700" : isCurrent ? "bg-blue-600" : "bg-gray-200"}"></div>
+        <span class="text-xs font-medium ${isDone ? "text-emerald-700" : isCurrent ? "text-blue-600" : "text-gray-400"}">${STEPS[i]?.label || ""}</span>
+      `;
+      dot.addEventListener("click", () => showStep(i));
+      dotsContainer.appendChild(dot);
+    }
+  }
+
+  function showStep(n) {
+    // Auto-mark previous step complete when advancing
+    if (n > currentStep && currentStep > 0) markStepComplete(currentStep);
+
+    document.querySelectorAll("section").forEach(s => s.classList.add("hidden"));
+    const section = document.getElementById(STEPS[n].id);
+    if (section) section.classList.remove("hidden");
+
+    const indicator = document.getElementById("step-indicator");
+    if (indicator) {
+      indicator.classList.toggle("hidden", n === 0);
+      document.getElementById("step-label").textContent = `Step ${Math.min(n, 8)} of 8`;
+      document.getElementById("step-name").textContent = STEPS[n]?.label || "";
+      updateDots();
+    }
+
+    currentStep = n;
+    if (n === 8) renderDocuments();
+  }
+
+  function buildCompetencyGrid() {
+    const grid = document.getElementById("competencies-grid");
+    grid.innerHTML = "";
+    COMPETENCIES.forEach((comp, i) => {
+      const item = document.createElement("div");
+      const checked = competencyStates[i];
+      item.className = "px-3 py-2 border rounded-md text-sm " + (checked ? "border-emerald-700 bg-emerald-50" : "border-gray-200");
+      item.innerHTML = `<label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" data-comp="${i}" ${checked ? "checked" : ""} />
+        <span>${comp}</span>
+      </label>`;
+      item.querySelector("input").addEventListener("change", (e) => {
+        competencyStates[i] = e.target.checked;
+        item.className = "px-3 py-2 border rounded-md text-sm " + (e.target.checked ? "border-emerald-700 bg-emerald-50" : "border-gray-200");
+      });
+      grid.appendChild(item);
+    });
+  }
+
+  function addCourseRow(data = {}) {
+    const list = document.getElementById("courses-list");
+    const idx = courses.length;
+    courses.push(data);
+    const row = document.createElement("div");
+    row.className = "p-3 border border-gray-200 rounded-lg bg-gray-50";
+    row.id = `course-${idx}`;
+    row.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+        <div>
+          <label class="text-xs font-semibold block mb-1">Course Name *</label>
+          <input type="text" data-course="name" value="${data.name || ""}" placeholder="e.g. EOL Doula Foundation"
+            class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold block mb-1">Provider *</label>
+          <input type="text" data-course="provider" value="${data.provider || ""}" placeholder="e.g. ELDAA"
+            class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold block mb-1">Year *</label>
+          <input type="text" data-course="year" value="${data.year || ""}" placeholder="2024"
+            class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm" />
+        </div>
+        <div class="flex justify-end">
+          <button type="button" class="remove-course px-3 py-2 border border-amber-700 text-amber-800 rounded-md bg-white text-sm font-medium cursor-pointer"
+            data-idx="${idx}">&times;</button>
+        </div>
+      </div>`;
+    row.querySelector(".remove-course").addEventListener("click", () => {
+      courses[idx] = null;
+      row.style.display = "none";
+    });
+    list.appendChild(row);
+  }
+
+  document.getElementById("add-course-btn").addEventListener("click", () => addCourseRow());
+
+  function addExperienceRow(data = {}) {
+    const list = document.getElementById("experience-list");
+    const idx = experiences.length;
+    experiences.push(data);
+    const row = document.createElement("div");
+    row.className = "p-3 border border-gray-200 rounded-lg bg-gray-50";
+    row.id = `exp-${idx}`;
+    row.innerHTML = `
+      <div class="flex flex-col gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-semibold block mb-1">Role / Context *</label>
+            <textarea data-exp="role" rows="2" placeholder="Describe the role or context"
+              class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm resize-y">${data.role || ""}</textarea>
+          </div>
+          <div>
+            <label class="text-xs font-semibold block mb-1">Skills that relate to EOL *</label>
+            <textarea data-exp="skills" rows="2" placeholder="Skills used"
+              class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm resize-y">${data.skills || ""}</textarea>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="button" class="remove-exp px-3 py-1 border border-amber-700 text-amber-800 rounded bg-white text-xs font-medium cursor-pointer"
+            data-idx="${idx}">Remove</button>
+        </div>
+      </div>`;
+    row.querySelector(".remove-exp").addEventListener("click", () => {
+      experiences[idx] = null;
+      row.style.display = "none";
+    });
+    list.appendChild(row);
+  }
+
+  document.getElementById("add-experience-btn").addEventListener("click", () => addExperienceRow());
+
+  let saveQueue = Promise.resolve();
+  function queueFormSave() {
+    saveQueue = saveQueue.then(() => saveFormData()).catch(() => {});
+    return saveQueue;
+  }
+
+  async function saveFormData() {
+    const activeToken = window.__token__ || token;
+    if (!window.__applicantId__ && !activeToken) return;
+
+    try {
+      const payload = {
+        token: activeToken || "",
+        firstName: document.getElementById("firstName")?.value?.trim() || "",
+        lastName: document.getElementById("lastName")?.value?.trim() || "",
+        phone: document.getElementById("phone")?.value?.trim() || "",
+        email: document.getElementById("email")?.value?.trim() || "",
+        dateOfBirth: document.getElementById("dateOfBirth")?.value || "",
+        ethnicity: document.getElementById("ethnicity")?.value || "",
+        address: document.getElementById("address")?.value || "",
+        postalAddress: document.getElementById("postalAddress")?.value || "",
+        businessName: document.getElementById("businessName")?.value || "",
+        website: document.getElementById("website")?.value || "",
+        qualifications: JSON.stringify(courses.filter(Boolean).map(c => ({
+          name: document.querySelector(`#course-${courses.indexOf(c)} [data-course="name"]`)?.value || c.name,
+          provider: document.querySelector(`#course-${courses.indexOf(c)} [data-course="provider"]`)?.value || c.provider,
+          year: document.querySelector(`#course-${courses.indexOf(c)} [data-course="year"]`)?.value || c.year,
+        }))),
+        experience: JSON.stringify(experiences.filter(Boolean).map(e => ({
+          role: document.querySelector(`#exp-${experiences.indexOf(e)} [data-exp="role"]`)?.value || e.role,
+          skills: document.querySelector(`#exp-${experiences.indexOf(e)} [data-exp="skills"]`)?.value || e.skills,
+        }))),
+        furtherRequirements: JSON.stringify({
+          agreeDoulaServices: document.querySelector('input[name="agreeDoulaServices"]:checked')?.value || "",
+          agreeInterview: document.querySelector('input[name="agreeInterview"]:checked')?.value || "",
+          commitProfessionalDev: document.querySelector('input[name="commitProfessionalDev"]:checked')?.value || "",
+          willInsurance: document.querySelector('input[name="willInsurance"]:checked')?.value || "",
+          listDirectory: document.querySelector('input[name="listDirectory"]:checked')?.value || "",
+          provideCriminalCheck: document.querySelector('input[name="provideCriminalCheck"]:checked')?.value || "",
+          attendMeetings: document.querySelector('input[name="attendMeetings"]:checked')?.value || "",
+          workRemotely: document.querySelector('input[name="workRemotely"]:checked')?.value || "",
+        }),
+        coreCompetencies: JSON.stringify(Object.values(competencyStates)),
+        referee1Name: document.getElementById("ref1Name")?.value || "",
+        referee1Role: document.getElementById("ref1Role")?.value || "",
+        referee1Email: document.getElementById("ref1Email")?.value || "",
+        referee1Phone: document.getElementById("ref1Phone")?.value || "",
+        referee2Name: document.getElementById("ref2Name")?.value || "",
+        referee2Role: document.getElementById("ref2Role")?.value || "",
+        referee2Email: document.getElementById("ref2Email")?.value || "",
+        referee2Phone: document.getElementById("ref2Phone")?.value || "",
+        declarationAccuracy: document.getElementById("declAccuracy")?.checked ? "TRUE" : "",
+        declarationEthics: document.getElementById("declEthics")?.checked ? "TRUE" : "",
+        declarationScope: document.getElementById("declScope")?.checked ? "TRUE" : "",
+        declarationDoulaServices: document.getElementById("declDoulaServices")?.checked ? "TRUE" : "",
+        declarationInterview: document.getElementById("declInterview")?.checked ? "TRUE" : "",
+        declarationProfessionalDev: document.getElementById("declProfessionalDev")?.checked ? "TRUE" : "",
+        declarationCriminalCheck: document.getElementById("declCriminalCheck")?.checked ? "TRUE" : "",
+        declarationMeetings: document.getElementById("declMeetings")?.checked ? "TRUE" : "",
+        declarationSignedAt: new Date().toISOString(),
+      };
+
+      const response = await fetch("/api/professional/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.applicantId) {
+        applicantId = data.applicantId;
+        window.__applicantId__ = data.applicantId;
+      }
+      if (data.resumeLink) {
+        window.__token__ = data.resumeLink?.split("token=")[1] || activeToken;
+      }
+    } catch {}
+  }
+
+  document.querySelectorAll("[data-next]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      saveStepData(currentStep);
+      await queueFormSave();
+      showStep(parseInt(btn.dataset.next));
+    });
+  });
+
+  document.querySelectorAll("[data-goto]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await queueFormSave();
+      showStep(parseInt(btn.dataset.goto));
+    });
+  });
+
+  function validateStep(n) {
+    if (n === 0) {
+      const f = document.getElementById("reg-firstName").value.trim();
+      const l = document.getElementById("reg-lastName").value.trim();
+      const e = document.getElementById("reg-email").value.trim();
+      if (!f || !l || !e) { alert("Please fill in your name and email."); return false; }
+      return true;
+    }
+    if (n === 1) return true;
+    if (n === 2) return true;
+    if (n === 4) {
+      const required = ["agreeDoulaServices", "agreeInterview", "commitProfessionalDev", "listDirectory", "provideCriminalCheck", "attendMeetings", "workRemotely"];
+      for (const id of required) {
+        const el = document.getElementById(id);
+        if (el && !el.checked) {
+          alert("Please answer all required questions.");
+          return false;
+        }
+      }
+      return true;
+    }
+    if (n === 5) return true;
+    if (n === 6) {
+      const fields = ["ref1Name", "ref1Role", "ref1Email", "ref1Phone", "ref2Name", "ref2Role", "ref2Email", "ref2Phone"];
+      for (const id of fields) {
+        const el = document.getElementById(id);
+        if (el && !el.value.trim()) {
+          alert("Please fill in all referee fields.");
+          return false;
+        }
+      }
+      return true;
+    }
+    if (n === 7) {
+      const decls = ["declAccuracy", "declEthics", "declScope", "declDoulaServices", "declInterview", "declProfessionalDev", "declCriminalCheck", "declMeetings"];
+      for (const id of decls) {
+        const el = document.getElementById(id);
+        if (el && !el.checked) {
+          alert("Please confirm all declarations to proceed.");
+          return false;
+        }
+      }
+      return true;
+    }
+    return true;
+  }
+
+  function saveStepData(n) {}
+
+  function renderDocuments() {
+    const uploaded = window.__docsUploaded__ || {};
+    const allDocs = [...REQUIRED_DOCS, ...OPTIONAL_DOCS];
+    const list = document.getElementById("document-list");
+    list.innerHTML = "";
+
+    let requiredComplete = 0;
+    allDocs.forEach(doc => {
+      const files = uploaded[doc.id] || [];
+      const isRequired = REQUIRED_DOCS.some(d => d.id === doc.id);
+      const isUploaded = files.length > 0;
+      if (isRequired && isUploaded) requiredComplete++;
+
+      const item = document.createElement("div");
+      const borderColor = isUploaded ? "border-emerald-700" : "border-gray-200";
+      const bgColor = isUploaded ? "bg-emerald-50" : "bg-white";
+      item.className = `p-4 border rounded-lg ${borderColor} ${bgColor}`;
+
+      let filesHtml = "";
+      files.forEach(f => {
+        filesHtml += `<div class="flex justify-between items-center py-2 border-b border-gray-200">
+          <div class="flex items-center gap-2">
+            <span class="text-sm">${f.filename}</span>
+            <span class="text-xs text-gray-500">${new Date(f.uploadedAt).toLocaleDateString()}</span>
+          </div>
+          <button class="delete-file-btn px-2 py-1 border border-amber-700 text-amber-800 rounded text-xs font-medium bg-white cursor-pointer"
+            data-fileid="${f.fileId}" data-doctype="${doc.id}">Delete</button>
+        </div>`;
+      });
+
+      const badgeBg = isUploaded ? "bg-emerald-700" : "bg-gray-100";
+      const badgeColor = isUploaded ? "text-white" : "text-gray-600";
+      item.innerHTML = `
+        <div class="flex justify-between items-center mb-3">
+          <div>
+            <p class="font-semibold m-0">${doc.label} ${isRequired ? "*" : "(optional)"}</p>
+            <p class="m-0 mt-1 text-gray-600 text-sm">${doc.description}</p>
+          </div>
+          <span class="px-2 py-1 rounded text-xs font-semibold ${badgeBg} ${badgeColor}">${isUploaded ? files.length + " file(s)" : "Required"}</span>
+        </div>
+        ${filesHtml}
+        <div class="mt-3">
+          <input type="file" id="file-${doc.id}" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" class="hidden" />
+          <button class="upload-btn px-4 py-2 border border-blue-600 text-blue-600 rounded-md bg-white text-sm font-medium cursor-pointer hover:bg-blue-50"
+            data-doc="${doc.id}">${isUploaded ? "Upload More" : "Choose File"}</button>
+        </div>`;
+      list.appendChild(item);
+    });
+
+    document.getElementById("upload-count").textContent = requiredComplete;
+    document.getElementById("upload-status-text").textContent =
+      requiredComplete === 6 ? "All required documents uploaded!" : `${6 - requiredComplete} category(ies) remaining`;
+
+    const paymentBtn = document.getElementById("proceed-payment-btn");
+    if (requiredComplete === 6) {
+      paymentBtn.disabled = false;
+      paymentBtn.textContent = "Proceed to Payment";
+      paymentBtn.onclick = goToPayment;
+    }
+
+    setupUploadHandlers();
+    setupDeleteHandlers();
+  }
+
+  function setupUploadHandlers() {
+    document.querySelectorAll(".upload-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const docId = btn.dataset.doc;
+        document.getElementById(`file-${docId}`).click();
+      });
+    });
+
+    document.querySelectorAll("input[type=file]").forEach(input => {
+      input.addEventListener("change", async (e) => {
+        const docId = e.target.id.replace("file-", "");
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const btn = document.querySelector(`.upload-btn[data-doc="${docId}"]`);
+        btn.disabled = true;
+        btn.textContent = "Uploading...";
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+          const res = await fetch("/api/professional/upload-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token: window.__token__ || token,
+              docType: docId,
+              filename: file.name,
+              mimeType: file.type,
+              data: base64,
+            })
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            if (!window.__docsUploaded__[docId]) window.__docsUploaded__[docId] = [];
+            window.__docsUploaded__[docId].push({ fileId: data.fileId || data.filename, filename: file.name, uploadedAt: new Date().toISOString() });
+            renderDocuments();
+          } else {
+            btn.disabled = false;
+            btn.textContent = "Upload More";
+            alert(data.error || "Upload failed");
+          }
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Upload More";
+          alert("Upload failed");
+        }
+      });
+    });
+  }
+
+  function setupDeleteHandlers() {
+    document.querySelectorAll(".delete-file-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const fileId = btn.dataset.fileid;
+        const docType = btn.dataset.doctype;
+        if (!confirm("Delete this file?")) return;
+        btn.textContent = "...";
+        btn.disabled = true;
+
+        try {
+          const res = await fetch("/api/professional/delete-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileId, token: window.__token__ || token })
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.__docsUploaded__[docType] = (window.__docsUploaded__[docType] || []).filter(f => f.fileId !== fileId);
+            renderDocuments();
+          } else {
+            btn.textContent = "Delete";
+            btn.disabled = false;
+            alert(data.error || "Delete failed");
+          }
+        } catch {
+          btn.textContent = "Delete";
+          btn.disabled = false;
+          alert("Delete failed");
+        }
+      });
+    });
+  }
+
+  async function goToPayment() {
+    const btn = document.getElementById("proceed-payment-btn");
+    btn.disabled = true;
+    btn.textContent = "Loading...";
+
+    try {
+      const res = await fetch("/api/professional/upload-complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: window.__token__ || token })
+      });
+
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Proceed to Payment";
+        alert(data.error || "Failed to create payment session");
+      }
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Proceed to Payment";
+      alert("Failed to create payment session");
+    }
+  }
+
+  document.getElementById("register-btn").addEventListener("click", async () => {
+    const firstName = document.getElementById("reg-firstName").value.trim();
+    const lastName = document.getElementById("reg-lastName").value.trim();
+    const phone = document.getElementById("reg-phone").value.trim();
+    const email = document.getElementById("reg-email").value.trim();
+
+    if (!firstName || !lastName || !email) {
+      document.getElementById("register-message").textContent = "Please enter your first name, last name, and email.";
+      document.getElementById("register-message").classList.remove("hidden");
+      return;
+    }
+
+    const btn = document.getElementById("register-btn");
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+
+    try {
+      const res = await fetch("/api/professional/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          phone,
+          email,
+          dateOfBirth: "",
+          ethnicity: "",
+          address: "",
+          postalAddress: "",
+          businessName: "",
+          website: "",
+          qualifications: "[]",
+          experience: "[]",
+          furtherRequirements: "{}",
+          coreCompetencies: "[]",
+          referee1Name: "",
+          referee1Role: "",
+          referee1Email: "",
+          referee1Phone: "",
+          referee2Name: "",
+          referee2Role: "",
+          referee2Email: "",
+          referee2Phone: "",
+          declarationAccuracy: "",
+          declarationEthics: "",
+          declarationScope: "",
+          declarationDoulaServices: "",
+          declarationInterview: "",
+          declarationProfessionalDev: "",
+          declarationCriminalCheck: "",
+          declarationMeetings: "",
+          declarationSignedAt: new Date().toISOString(),
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        applicantId = data.applicantId;
+        window.__applicantId__ = data.applicantId;
+        window.__token__ = data.resumeLink?.split("token=")[1] || token;
+
+        document.getElementById("firstName").value = firstName;
+        document.getElementById("lastName").value = lastName;
+        document.getElementById("phone").value = phone;
+        document.getElementById("email").value = email;
+
+        document.getElementById("section-register").classList.add("hidden");
+        document.getElementById("step-indicator").classList.remove("hidden");
+        showStep(1);
+      } else {
+        document.getElementById("register-message").textContent = data.error || "Failed.";
+        document.getElementById("register-message").classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Start Application";
+      }
+    } catch (err) {
+      document.getElementById("register-message").textContent = "Network error.";
+      document.getElementById("register-message").classList.remove("hidden");
+      btn.disabled = false;
+      btn.textContent = "Start Application";
+    }
+  });
+
+  if (token) {
+    (async () => {
+      try {
+        const res = await fetch(`/api/professional/apply?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+
+        window.__docsUploaded__ = {};
+
+        if (data.status === "paid") {
+          document.getElementById("step-indicator").classList.add("hidden");
+          showStep(0);
+          document.getElementById("section-register").classList.add("hidden");
+          document.getElementById("paid-section").classList.remove("hidden");
+          return;
+        }
+
+        if (data.status === "new" || data.status === "error") {
+          document.getElementById("step-indicator").classList.add("hidden");
+          showStep(0);
+          return;
+        }
+
+        window.__token__ = token;
+        if (data.applicantId) {
+          applicantId = data.applicantId;
+          window.__applicantId__ = data.applicantId;
+        }
+
+        if (data.firstName) document.getElementById("reg-firstName").value = data.firstName || "";
+        if (data.lastName) document.getElementById("reg-lastName").value = data.lastName || "";
+        if (data.email) document.getElementById("reg-email").value = data.email || "";
+        if (data.phone) document.getElementById("reg-phone").value = data.phone || "";
+
+        document.getElementById("section-register").classList.add("hidden");
+
+        document.getElementById("firstName").value = data.firstName || "";
+        document.getElementById("lastName").value = data.lastName || "";
+        document.getElementById("phone").value = data.phone || "";
+        document.getElementById("email").value = data.email || "";
+        if (data.dateOfBirth) document.getElementById("dateOfBirth").value = data.dateOfBirth;
+        if (data.ethnicity) document.getElementById("ethnicity").value = data.ethnicity;
+        if (data.address) document.getElementById("address").value = data.address;
+        if (data.postalAddress) document.getElementById("postalAddress").value = data.postalAddress;
+        if (data.businessName) document.getElementById("businessName").value = data.businessName;
+        if (data.website) document.getElementById("website").value = data.website;
+
+        document.getElementById("step-indicator").classList.remove("hidden");
+
+        try {
+          const quals = JSON.parse(data.qualifications || "[]");
+          quals.forEach(q => addCourseRow(q));
+        } catch {}
+
+        try {
+          const exps = JSON.parse(data.experience || "[]");
+          exps.forEach(e => addExperienceRow(e));
+        } catch {}
+
+        try {
+          const fr = JSON.parse(data.furtherRequirements || "{}");
+          const setRadio = (name, val) => {
+            if (!val) return;
+            const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
+            if (radio) radio.checked = true;
+          };
+          setRadio("agreeDoulaServices", fr.agreeDoulaServices);
+          setRadio("agreeInterview", fr.agreeInterview);
+          setRadio("commitProfessionalDev", fr.commitProfessionalDev);
+          setRadio("willInsurance", fr.willInsurance);
+          setRadio("listDirectory", fr.listDirectory);
+          setRadio("provideCriminalCheck", fr.provideCriminalCheck);
+          setRadio("attendMeetings", fr.attendMeetings);
+          setRadio("workRemotely", fr.workRemotely);
+        } catch {}
+
+        try {
+          const comps = JSON.parse(data.coreCompetencies || "[]");
+          comps.forEach((c, i) => { competencyStates[i] = c; });
+          buildCompetencyGrid();
+        } catch {}
+
+        if (data.referee1) {
+          document.getElementById("ref1Name").value = data.referee1.name || "";
+          document.getElementById("ref1Role").value = data.referee1.role || "";
+          document.getElementById("ref1Email").value = data.referee1.email || "";
+          document.getElementById("ref1Phone").value = data.referee1.phone || "";
+        }
+        if (data.referee2) {
+          document.getElementById("ref2Name").value = data.referee2.name || "";
+          document.getElementById("ref2Role").value = data.referee2.role || "";
+          document.getElementById("ref2Email").value = data.referee2.email || "";
+          document.getElementById("ref2Phone").value = data.referee2.phone || "";
+        }
+
+        try {
+          const exps = JSON.parse(data.experience || "[]");
+          if (exps[0]?.description) document.getElementById("example1").value = exps[0].description;
+          if (exps[1]?.description) document.getElementById("example2").value = exps[1].description;
+          if (exps[2]?.description) document.getElementById("example3").value = exps[2].description;
+        } catch {}
+
+        const isTrueFlag = (value) => String(value || "").toUpperCase() === "TRUE";
+        if (isTrueFlag(data.declarationAccuracy)) document.getElementById("declAccuracy").checked = true;
+        if (isTrueFlag(data.declarationEthics)) document.getElementById("declEthics").checked = true;
+        if (isTrueFlag(data.declarationScope)) document.getElementById("declScope").checked = true;
+        if (isTrueFlag(data.declarationDoulaServices)) document.getElementById("declDoulaServices").checked = true;
+        if (isTrueFlag(data.declarationInterview)) document.getElementById("declInterview").checked = true;
+        if (isTrueFlag(data.declarationProfessionalDev)) document.getElementById("declProfessionalDev").checked = true;
+        if (isTrueFlag(data.declarationCriminalCheck)) document.getElementById("declCriminalCheck").checked = true;
+        if (isTrueFlag(data.declarationMeetings)) document.getElementById("declMeetings").checked = true;
+
+        if (data.docsUploaded) {
+          window.__docsUploaded__ = data.docsUploaded;
+        }
+
+        document.getElementById("loading-overlay").classList.add("hidden");
+        showStep(1);
+      } catch (err) {
+        document.getElementById("loading-overlay").classList.add("hidden");
+        showStep(0);
+      }
+    })();
+  } else {
+    document.getElementById("loading-overlay").classList.add("hidden");
+    showStep(0);
+    buildCompetencyGrid();
+  }
+</script>

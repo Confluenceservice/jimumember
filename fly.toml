@@ -21,8 +21,8 @@ primary_region = 'syd'
   processes = ['app']
 
 [[http_service.checks]]
-  interval = "10s"
-  timeout = "5s"
+  interval = "30s"
+  timeout = "15s"
 
 [[vm]]
   memory = '256mb'

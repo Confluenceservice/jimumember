@@ -1,237 +1,198 @@
-# Notes
-Last updated: 2026-03-27
+# Professional Membership — Phase 2: Digital Form + Multi-File Upload
 
-## Scope
-Implement Option C custom flow so membership subscriptions can:
-- Charge first-term amount in Checkout without Stripe trial copy on the hosted page.
-- Anchor renewals to 1 July each year.
-- Apply a 50% first-subscription discount from 1 January to 30 June with promo code `LDTY8PQR`.
-- Keep renewal logic server-side and auditable via webhook.
-- Separate Associate (index.astro) and Professional (/professional) checkout flows.
-- Log all checkout completions to Google Sheets for downstream processing.
+**Date:** 2026-04-19
+**Last Updated:** 2026-05-01
+**Status:** Active (production reliability fixes applied)
 
-## Stripe Objects in Use (Test Mode)
-- Associate product: `prod_U7vqEzAEaaK8nC`
-- Professional product: `prod_U7vDD3Q6088P3i`
-- Associate yearly price: `price_1T9fz1CqKoUYavpqs4Kb7p0d`
-- Professional yearly price: `price_1T9fNECqKoUYavpqJr5YzSll`
-- Promotion code: `LDTY8PQR`
-- Coupon: `half` (50% off, once)
+---
 
-## Verified Business Logic
-- Promo code is restricted to first-time transactions.
-- Promo code expires at end of 30 June 2026 (NZ time).
-- Initial Jan-to-Jun invoices show 50% discount.
-- Renewal cycle invoice at July boundary is full annual price.
+## Overview
 
-## Checkout Pattern
-Use `checkout.sessions.create` with:
-- `mode=payment`
-- one-time line item amount = first-term charge today
-- `payment_intent_data[setup_future_usage]=off_session`
-- metadata containing:
-  - plan
-  - recurring annual price id
-  - next Jul 1 anchor epoch
-- custom copy: `Then NZ$X per year starting 1 July.`
+Professional Membership applicants complete a structured digital form (8-step wizard) and upload supporting documents. The form supports multi-session completion (resume via link), gates submission until all requirements are met, and transitions to Stripe payment upon completion.
 
-First-term amount logic:
-- Jan-Jun NZ + first-time subscriber + promo code `LDTY8PQR`: charge 50% of annual amount.
-- Otherwise: charge full amount to next 1 July.
+## Essential Current State
 
-Webhook behavior (`checkout.session.completed`):
-- set customer default payment method from PaymentIntent
-- create annual subscription with `trial_end=<next Jul 1 epoch>`
-- use idempotency key derived from session id
+- Resume flow persistence is hardened: applicant matching is **token-first** (`resume_token`) with email fallback only when no token is supplied.
+- Autosave is serialized on both sides to avoid races:
+  - client-side queue in `src/pages/professional/apply.astro`
+  - server-side per-applicant queue in `src/pages/api/professional/apply.ts`
+- Autosave now persists identity fields (`firstName`, `lastName`, `phone`, `email`) together with form data.
+- `GET /api/professional/apply?token=...` now returns `applicantId` for reliable resume hydration.
+- Flag parsing is case-insensitive for reads: `true` and `TRUE` are both treated as true for completion/payment/declaration checks.
+- Validation status:
+  - `npm run test` passes (37/37).
+  - `npm run check` still reports pre-existing unrelated type errors in other files.
 
-## Implementation Rules
-1. Keep Stripe secret keys server-side only in environment variables.
-2. Never embed secret keys in frontend code or markdown.
-3. Keep product and price IDs in server config, not hardcoded in templates.
-4. Compute promo-window dates in `Pacific/Auckland` timezone.
-5. Compute billing anchor as next 1 July boundary.
-6. Enforce entitlement changes only from webhook events, not client redirects.
+---
 
-## Minimum Webhook Events
-- `checkout.session.completed` (creates deferred recurring subscription)
-- `invoice.paid`
-- `invoice.payment_failed`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
+## Application States
 
-## Latest Test Checkout Sessions
-- Associate: `cs_test_a1dtZnS3gE4TxwZ7TViHxUOy3n2SnLxUHZaaFKtn5pZhAxl6zsc8IdVjrj`
-- Professional: `cs_test_a1WuRmT0ulJuvwYQr43EK8TZYR8nMSwxc6RUMPZBEKWErSnDmRBmjVE08K`
-
-## Current Scaffold Status
-- Created Astro app scaffold with server output and Node adapter.
-- Associate membership: `src/pages/index.astro` (single plan, uses `/api/create-checkout-session`).
-- Professional membership: `src/pages/professional.astro` with dedicated `/api/create-professional-checkout` endpoint.
-- Option C webhook subscription creation: `src/pages/api/stripe-webhook.ts`.
-- Success page (`/success`) redirects Professional members to `eldaa.org.nz/professional-membership`.
-- Session info API: `src/pages/api/session-info.ts` (used by success page to detect plan).
-- Cancel pages: `src/pages/cancel.astro` (Associate), `src/pages/professional/cancel.astro` (Professional).
-- Webhook logs `checkout.session.completed` to Google Sheets via service account.
-- Google Sheets helper: `src/lib/google-sheets.ts`.
-- Structured JSON logger: `src/lib/logger.ts` (pino, child loggers per request).
-- Health endpoint: `src/pages/api/health.ts` (`GET /api/health` → `{status, stripe}`).
-- Sentry error tracking: `@sentry/node`, initialized lazily from `SENTRY_DSN` env var.
-- Added env template: `.env.example`.
-- Build and diagnostics pass (`npm run build`, `npm run check`).
-- Deployed to Fly.io at `https://subscribe.eldaa.org.nz/` with Dockerfile + fly.toml.
-- Webhook tested successfully via `stripe trigger checkout.session.completed`.
-- Unit tests for business logic: `src/lib/stripe-checkout.test.ts`, `src/lib/memberships.test.ts`.
-
-## Next Steps
-1. ~~Add persistent idempotency/event tracking for webhook processing.~~ (done via idempotencyKey + local membership store)
-2. ~~Add local membership persistence mapping customer/subscription records.~~ (done in `.data/memberships.json`)
-3. ~~Log checkout completions to Google Sheets.~~ (done via service account + googleapis)
-4. Add integration tests for promo-code eligibility and prorated fallback.
-5. Configure production Stripe webhook in Dashboard (register `https://subscribe.eldaa.org.nz/api/stripe-webhook`).
-6. Switch from test keys to live Stripe keys before going live.
-7. Share Google Sheets spreadsheet with the service account email before enabling webhook logging.
-
-## Guardrails For Future Changes
-1. Keep first-term charge calculations in NZ timezone and test boundary dates.
-2. Keep recurring subscription creation in webhook only, not on client redirect.
-3. Keep recurring price IDs in env/config, not hardcoded in frontend scripts.
-4. Keep webhook creation path idempotent by checkout session id.
-
-## Deployment (Fly.io)
-
-### Files
-- `Dockerfile` — multi-stage Node.js build
-- `.dockerignore` — excludes node_modules, dist, tests, env files
-- `fly.toml` — app config (1x shared CPU, 256MB RAM, Sydney region)
-
-### Commands
-```bash
-fly launch                    # First-time setup (already done — app: eldaa)
-fly deploy                    # Deploy to Fly.io
-fly secrets set KEY=value    # Set secrets
-fly machines list            # List running machines
-fly machines stop <id>       # Stop machine
-fly machines start <id>      # Start machine
+```
+new → partial → complete → paid
 ```
 
-### Required Secrets
-```bash
-fly secrets set STRIPE_SECRET_KEY=sk_live_...
-fly secrets set STRIPE_WEBHOOK_SECRET=whsec_...
-fly secrets set STRIPE_PRICE_ASSOCIATE=price_...
-fly secrets set STRIPE_PRICE_PROFESSIONAL=price_...
-fly secrets set PUBLIC_SITE_URL=https://subscribe.eldaa.org.nz
-fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=eldaa-sheets@stripe-billing-491503.iam.gserviceaccount.com
-fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-fly secrets set GOOGLE_SHEETS_SPREADSHEET_ID=1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8
-fly secrets set SENTRY_DSN=https://xxxxx@o123456.ingest.sentry.io/xxxxx
+- **new:** Form started but not submitted
+- **partial:** Form in progress, can resume via link
+- **complete:** All required fields filled AND all required document categories have ≥1 file → payment unlocked
+- **paid:** Stripe payment confirmed
+
+---
+
+## Required Uploads
+
+| Doc Type | Description | Required |
+|----------|-------------|----------|
+| `training` | Certificates of training (may be multiple) | Yes |
+| `ethics` | Signed ELDAA Code of Ethics and Scope of Practice | Yes |
+| `criminal` | Ministry of Justice criminal record check | Yes |
+| `advance_care` | Advanced Care Planning NZ (4 modules) | Yes |
+| `assisted_dying` | Assisted Dying online training (Te Whatu Ora, 3 modules) | Yes |
+| `fundamentals` | Fundamentals of Palliative Care (Hospice NZ, 4 modules) | Yes |
+| `insurance` | Professional indemnity insurance certificate | Recommended (optional) |
+
+---
+
+## Form Sections (8-step wizard)
+
+1. **About You** — name, DOB, ethnicity, address, phone, email, business name, website
+2. **Training & Education** — repeatable course rows (name, provider, year)
+3. **EOL Doula Experience** — repeatable experience rows + 3 example narratives
+4. **Further Requirements** — 8 Y/N questions
+5. **Core Competencies** — 21 Y/N tickboxes
+6. **Referees** — 2 referees (name, role, email, phone)
+7. **Declarations** — 8 confirmation checkboxes
+8. **Document Upload** — multi-file per category, delete support
+
+---
+
+## API Endpoints
+
+### `GET /api/professional/apply?token=xxx`
+Returns: `{ applicantId, status, firstName, lastName, email, phone, docsUploaded: { [docType]: FileInfo[] }, ...formFields, complete }`
+
+### `POST /api/professional/apply`
+Accepts: `{ token?, firstName, lastName, phone, email, dateOfBirth, ethnicity, address, postalAddress, businessName, website, qualifications, experience, furtherRequirements, coreCompetencies, referee1*, referee2*, declarations*, ... }`
+
+### `POST /api/professional/upload-file`
+JSON or multipart:
+- JSON: `{ token, docType, filename, mimeType, data(base64) }`
+- Multipart: `token`, `docType`, `file`
+Returns: `{ success, docType, message }`
+
+### `POST /api/professional/delete-file`
+Accepts JSON: `{ fileId, token }`
+Soft-deletes file from Drive Files sheet and trashes the Drive file.
+Returns: `{ success }`
+
+### `POST /api/professional/upload-complete`
+Creates Stripe Checkout session if all requirements met.
+Returns: `{ url }` or `{ error }`
+
+---
+
+## Google Sheet: Professional Applications (47 columns, A–AU)
+
+```
+A:   applicant_id
+B:   email
+C:   first_name
+D:   last_name
+E:   phone
+F:   date_of_birth
+G:   ethnicity
+H:   address
+I:   postal_address
+J:   business_name
+K:   website
+L:   qualifications (JSON array)
+M:   experience (JSON array)
+N:   further_requirements (JSON object of Y/N responses)
+O:   core_competencies (JSON array of Y/N responses)
+P:   referee1_name
+Q:   referee1_role
+R:   referee1_email
+S:   referee1_phone
+T:   referee2_name
+U:   referee2_role
+V:   referee2_email
+W:   referee2_phone
+X:   declaration_accuracy ("TRUE"/"FALSE")
+Y:   declaration_ethics
+Z:   declaration_scope
+AA:  declaration_doula_services
+AB:  declaration_interview
+AC:  declaration_professional_dev
+AD:  declaration_criminal_check
+AE:  declaration_meetings
+AF:  declaration_signed_at (ISO timestamp)
+AG:  resume_token
+AH:  email_hash
+AI:  doc_training_count
+AJ:  doc_ethics_count
+AK:  doc_criminal_count
+AL:  doc_advance_care_count
+AM:  doc_assisted_dying_count
+AN:  doc_fundamentals_count
+AO:  doc_insurance_count
+AP:  complete ("TRUE"/"FALSE")
+AQ:  stripe_session
+AR:  paid ("TRUE"/"FALSE")
+AS:  created_at
+AT:  paid_at
+AU:  (spare/reserved)
 ```
 
-### Optional Env Vars
-- `LOG_LEVEL` — pino log level (`debug`, `info`, `warn`, `error`). Defaults to `info`.
+Reads normalize `complete`/`paid`/declaration flags case-insensitively (`true` and `TRUE` are both accepted).
 
-### Stripe Webhook (Production)
-Register in Stripe Dashboard → Developers → Webhooks:
-- URL: `https://subscribe.eldaa.org.nz/api/stripe-webhook`
-- Events: `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`
-
-### Observability
-
-**Health check** (use with Dead Man's Snitch / Cronitor / Better Uptime):
+**`Drive Files` tab** (new, lazy-created on first upload):
 ```
-GET https://subscribe.eldaa.org.nz/api/health
-→ 200 { "status": "ok", "stripe": "connected" }
-→ 503 { "status": "degraded", "stripe": "disconnected", "error": "..." }
+A: file_id
+B: applicant_id
+C: doc_type
+D: original_filename
+E: uploaded_at
+F: deleted ("TRUE"/"FALSE")
 ```
 
-**Live logs** (structured JSON):
-```bash
-fly logs --app eldaa | grep '{"level":"error"}'
-```
+---
 
-**Alerting**: Sentry captures and alerts on:
-- Subscription creation failures
-- Google Sheets logging failures
-- Checkout session creation failures
-- Unhandled 500s in webhook processing
+## Key Functions (upload-sheet.ts)
 
-Sentry issues appear within minutes of the first error matching. Set `LOG_LEVEL=debug` in `fly.toml` or Fly secrets for verbose request tracing.
+- `createApplicantRow(...47 params...)` — creates row with all form fields
+- `updateApplicantFormData(applicantId, data)` — partial update of form fields
+- `validateCompletion(applicantId)` — returns true only when all form fields filled AND all 6 required doc categories have ≥1 file
+- `getApplicantByToken(token)` — returns `ApplicantInfo` with all 47 columns
+- `getUploadStatus(applicantId)` — returns `UploadStatus` with doc counts
 
-### Testing Webhooks Locally
-```bash
-stripe listen --forward-to https://subscribe.eldaa.org.nz/api/stripe-webhook
-```
-Note: Always use `https://` — Stripe CLI doesn't follow HTTP→HTTPS redirects.
+---
 
-### Scaling
-`fly.toml` sets `max_machines = 1` and `min_machines_running = 0` — machines stop when idle and start on traffic. Currently running 1x shared-cpu-1x with 256MB RAM.
+## Multi-File Upload (Drive Files Sheet)
 
-### Env Var Note
-Server-side code uses `process.env.*` (not `import.meta.env.*`) for env vars. `import.meta.env` does not reliably expose runtime env vars in Fly.io's Node.js SSR container.
+- One row **per uploaded file** (not per applicant)
+- `deleted = "TRUE"` for soft deletes
+- File path in Drive: `/applications/{applicant_id}/documents/{doc_type}/{file_id}.{ext}`
+- `file_id` is a random UUID — original filename stored only in Drive Files sheet
 
-## Deploying Elsewhere
+**File limits:**
+- Max 10MB per file
+- Allowed types: PDF, JPEG, PNG, GIF, DOC, DOCX
 
-The Dockerfile is a standard multi-stage Node.js build. It builds the Astro SSR app and runs it as a standalone Node.js server.
+---
 
-### Build Image
-```bash
-docker build -t eldaa-membership .
-```
+## Backwards Compatibility
 
-### Run Container
-```bash
-docker run -p 4321:4321 \
-  -e STRIPE_SECRET_KEY=sk_... \
-  -e STRIPE_WEBHOOK_SECRET=whsec_... \
-  -e STRIPE_PRICE_ASSOCIATE=price_... \
-  -e STRIPE_PRICE_PROFESSIONAL=price_... \
-  -e PUBLIC_SITE_URL=https://your-domain.com \
-  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=... \
-  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n" \
-  -e GOOGLE_SHEETS_SPREADSHEET_ID=... \
-  eldaa-membership
-```
+Existing applicants (pre-Phase 2) have blank new columns — acceptable.
+Resume links continue to work.
 
-### Key Details
-- **Base image**: `node:22-alpine`
-- **Port**: 4321 (set `PORT=4321`, `HOST=0.0.0.0`)
-- **Entry point**: `node dist/server/entry.mjs`
-- **Dependencies**: installed via `npm install` (not `npm ci` — no lockfile required)
-- **Build artifact**: Astro SSR output in `dist/`
-- **User**: runs as root (no explicit USER set — adjust for non-test deployments)
+---
 
-### Cloudflare Tunnel (alternative to Fly.io)
-Run the container internally (no direct public internet), then expose via Cloudflare tunnel.
+## Testing Checklist
 
-**1. Create a Docker network:**
-```bash
-docker network create eldaa-net
-```
-
-**2. Run the app container privately (no port exposed to host):**
-```bash
-docker run --network eldaa-net --name eldaa-app \
-  -e STRIPE_SECRET_KEY=sk_... \
-  -e STRIPE_WEBHOOK_SECRET=whsec_... \
-  -e STRIPE_PRICE_ASSOCIATE=price_... \
-  -e STRIPE_PRICE_PROFESSIONAL=price_... \
-  -e PUBLIC_SITE_URL=https://your-domain.com \
-  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL=... \
-  -e GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n" \
-  -e GOOGLE_SHEETS_SPREADSHEET_ID=... \
-  eldaa-membership
-```
-
-**3. Run cloudflared as a container (no install needed):**
-```bash
-docker run --network eldaa-net cloudflare/cloudflared tunnel \
-  --url http://eldaa-app:4321
-```
-`cloudflared` is the official Cloudflare container image — no host install required.
-
-This outputs a `*.trycloudflare.com` URL. For a permanent tunnel, create one in Cloudflare Zero Trust → Tunnels, then point it to `http://eldaa-app:4321`.
-
-**Env var for self-hosted:** Set `PUBLIC_SITE_URL` to your Cloudflare tunnel domain (e.g., `https://eldaa.yourdomain.com`).
-
-**Note:** This does not affect Fly.io deployment — Fly uses its own wireguard network and TLS termination by default.
-Server-side code uses `process.env.*` (not `import.meta.env.*`) for env vars. `import.meta.env` does not reliably expose runtime env vars in Fly.io's Node.js SSR container.
+- [ ] New application → all form fields written to correct sheet columns
+- [ ] Resume link → all form fields pre-populated
+- [ ] Upload 3 files to "training" category → all 3 shown with filenames
+- [ ] Delete middle file → remaining 2 still shown, deleted gone
+- [ ] "Proceed to Payment" activates only when all required sections complete
+- [ ] Y/N questions all answered → declaration section allows submission
+- [ ] Stripe payment → webhook fires → Sheet1 logged
+- [ ] Existing applicant resume link still works
