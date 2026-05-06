@@ -1,18 +1,23 @@
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
-
-name: Fly Deploy
+name: Fly Deploy Production
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (branch, tag, or SHA) to deploy
+        required: true
+        default: main
 jobs:
   deploy:
-    name: Deploy app
+    name: Deploy production
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    environment: production
+    concurrency: deploy-production
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --remote-only --app eldaa-production
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
