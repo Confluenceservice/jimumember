@@ -21,7 +21,8 @@ function getDriveClient() {
 
 function buildContent(applicant: ApplicantInfo) {
   const requests: object[] = [];
-  let index = 0;
+  // Google Docs insertText locations are 1-based in a newly created doc.
+  let index = 1;
 
   function insert(text: string) {
     requests.push({ insertText: { text, location: { index } } });
@@ -43,29 +44,24 @@ function buildContent(applicant: ApplicantInfo) {
     const start = index;
     insert(text + "\n");
     setStyle(start, start + text.length, true, 20);
-    index++; // newline
   }
 
   function h2(text: string) {
     const start = index;
     insert(text + "\n");
     setStyle(start, start + text.length, true, 14);
-    index++; // newline
   }
 
   function p(text: string) {
     insert(text + "\n");
-    index++;
   }
 
   function bullet(text: string) {
     insert("• " + text + "\n");
-    index++;
   }
 
   function gap() {
     insert("\n");
-    index++;
   }
 
   // Title
@@ -228,16 +224,37 @@ export async function createApplicationReviewDoc(
   applicant: ApplicantInfo
 ): Promise<string> {
   const docs = getDocsClient();
-  const folderId = process.env.GOOGLE_DRIVE_REVIEW_DOCS_FOLDER_ID?.trim();
+  const folderId =
+    process.env.GOOGLE_DRIVE_REVIEW_DOCS_FOLDER_ID?.trim() ||
+    process.env.GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID?.trim() ||
+    "";
 
   const docTitle = `Professional Application — ${applicant.firstName} ${applicant.lastName} (${applicant.email})`;
 
-  // Create the document
-  const doc = await docs.documents.create({
-    requestBody: { title: docTitle },
-  });
+  let docId: string | undefined;
 
-  const docId = doc.data.documentId;
+  // Prefer creating the Google Doc directly inside a configured Drive folder.
+  // Service accounts commonly do not have a usable "root" My Drive, so
+  // creating in root and then moving can fail with permission errors.
+  if (folderId) {
+    const drive = getDriveClient();
+    const created = await drive.files.create({
+      requestBody: {
+        name: docTitle,
+        mimeType: "application/vnd.google-apps.document",
+        parents: [folderId],
+      },
+      fields: "id",
+      supportsAllDrives: true,
+    });
+    docId = created.data.id ?? undefined;
+  } else {
+    // Fallback for environments without a configured folder.
+    const doc = await docs.documents.create({
+      requestBody: { title: docTitle },
+    });
+    docId = doc.data.documentId ?? undefined;
+  }
   if (!docId) throw new Error("Failed to create Google Doc");
 
   // Build and push content
@@ -249,26 +266,13 @@ export async function createApplicationReviewDoc(
     });
   }
 
-  // Move to folder if folderId provided
-  if (folderId) {
-    try {
-      const drive = getDriveClient();
-      await drive.files.update({
-        fileId: docId,
-        addParents: [folderId],
-        removeParents: ["root"],
-      } as never);
-    } catch (err) {
-      logger.warn("review_doc_move_to_folder_failed", {
-        docId,
-        folderId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
   const docUrl = `https://docs.google.com/document/d/${docId}`;
-  logger.info("review_doc_created", { applicantId: applicant.id, docId, docUrl });
+  logger.info("review_doc_created", {
+    applicantId: applicant.id,
+    docId,
+    docUrl,
+    folderId: folderId || null,
+  });
 
   return docUrl;
 }

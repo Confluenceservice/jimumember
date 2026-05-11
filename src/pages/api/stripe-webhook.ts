@@ -11,7 +11,7 @@ import {
 } from "../../lib/memberships";
 import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
-import { getApplicantByToken } from "../../lib/upload-sheet";
+import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { createApplicationReviewDoc } from "../../lib/google-docs";
 
 // Initialize Sentry lazily — only when DSN is present
@@ -56,109 +56,121 @@ async function handleCheckoutCompleted(
 
   // Already processed this checkout session? (idempotency via local record)
   const existing = getMembership(customerId);
-  if (existing?.subscriptionId) {
+  const alreadyProcessed = !!existing?.subscriptionId;
+  if (alreadyProcessed) {
     log.info("checkout_completed.already_processed", {
       customerId,
       sessionId: session.id,
       existingSubscriptionId: existing.subscriptionId,
     });
-    return;
   }
 
-  // Retrieve the PaymentIntent to get the saved payment method
-  let paymentMethodId: string | undefined;
-  if (session.payment_intent && typeof session.payment_intent === "string") {
+  if (!alreadyProcessed) {
+    // Retrieve the PaymentIntent to get the saved payment method
+    let paymentMethodId: string | undefined;
+    if (session.payment_intent && typeof session.payment_intent === "string") {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(session.payment_intent);
+        paymentMethodId =
+          typeof pi.payment_method === "string"
+            ? pi.payment_method
+            : pi.payment_method?.id;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn("checkout_completed.payment_intent_retrieve_failed", {
+          customerId,
+          sessionId: session.id,
+          paymentIntent: session.payment_intent,
+          error: msg,
+        });
+      }
+    }
+
+    // Create the recurring subscription with trial ending at July 1
+    // Use checkout session id as idempotency key to prevent duplicates
+    const subscriptionParams: Stripe.SubscriptionCreateParams = {
+      customer: customerId,
+      items: [{ price: recurringPriceId }],
+      trial_end: nextJuly1Epoch,
+      metadata: {
+        flow: "option_c",
+        plan: plan ?? "",
+        checkout_session_id: session.id,
+      },
+      expand: ["default_payment_method"],
+    };
+
+    // Attach the payment method from the checkout if available
+    if (paymentMethodId) {
+      try {
+        await stripe.paymentMethods.attach(paymentMethodId, {
+          customer: customerId,
+        });
+        await stripe.customers.update(customerId, {
+          invoice_settings: { default_payment_method: paymentMethodId },
+        });
+        subscriptionParams.default_payment_method = paymentMethodId;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn("checkout_completed.payment_method_attach_failed", {
+          customerId,
+          sessionId: session.id,
+          paymentMethodId,
+          error: msg,
+        });
+      }
+    }
+
+    let subscriptionId: string;
     try {
-      const pi = await stripe.paymentIntents.retrieve(session.payment_intent);
-      paymentMethodId =
-        typeof pi.payment_method === "string"
-          ? pi.payment_method
-          : pi.payment_method?.id;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("checkout_completed.payment_intent_retrieve_failed", {
+      const subscription = await stripe.subscriptions.create(subscriptionParams, {
+        idempotencyKey: `option_c_sub_${session.id}`,
+      });
+      subscriptionId = subscription.id;
+      log.info("checkout_completed.subscription_created", {
         customerId,
         sessionId: session.id,
-        paymentIntent: session.payment_intent,
-        error: msg,
+        subscriptionId,
+        plan,
+        recurringPriceId,
+        trialEndEpoch: nextJuly1Epoch,
       });
-    }
-  }
-
-  // Create the recurring subscription with trial ending at July 1
-  // Use checkout session id as idempotency key to prevent duplicates
-  const subscriptionParams: Stripe.SubscriptionCreateParams = {
-    customer: customerId,
-    items: [{ price: recurringPriceId }],
-    trial_end: nextJuly1Epoch,
-    metadata: {
-      flow: "option_c",
-      plan: plan ?? "",
-      checkout_session_id: session.id,
-    },
-    expand: ["default_payment_method"],
-  };
-
-  // Attach the payment method from the checkout if available
-  if (paymentMethodId) {
-    try {
-      await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId,
-      });
-      await stripe.customers.update(customerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
-      });
-      subscriptionParams.default_payment_method = paymentMethodId;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.warn("checkout_completed.payment_method_attach_failed", {
+      const sentry = getSentry();
+      sentry.captureException(err, {
+        extra: { customerId, sessionId: session.id, recurringPriceId, plan },
+      });
+      log.error("checkout_completed.subscription_create_failed", {
         customerId,
         sessionId: session.id,
-        paymentMethodId,
         error: msg,
       });
+      throw err;
     }
-  }
 
-  let subscriptionId: string;
-  try {
-    const subscription = await stripe.subscriptions.create(subscriptionParams, {
-      idempotencyKey: `option_c_sub_${session.id}`,
-    });
-    subscriptionId = subscription.id;
-    log.info("checkout_completed.subscription_created", {
-      customerId,
-      sessionId: session.id,
-      subscriptionId,
-      plan,
+    // Record the deferred subscription creation
+    setAwaitingSubscription(customerId, {
+      plan: plan || "",
       recurringPriceId,
-      trialEndEpoch: nextJuly1Epoch,
+      nextJuly1Epoch,
+      joinedAt: new Date().toISOString(),
+      subscriptionId,
     });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const sentry = getSentry();
-    sentry.captureException(err, {
-      extra: { customerId, sessionId: session.id, recurringPriceId, plan },
-    });
-    log.error("checkout_completed.subscription_create_failed", {
-      customerId,
-      sessionId: session.id,
-      error: msg,
-    });
-    throw err;
+
+    // Mark as active since subscription is now set up
+    setActive(customerId, subscriptionId);
   }
 
-  // Record the deferred subscription creation
-  setAwaitingSubscription(customerId, {
-    plan: plan || "",
-    recurringPriceId,
-    nextJuly1Epoch,
-    joinedAt: new Date().toISOString(),
-    subscriptionId,
-  });
-
-  // Mark as active since subscription is now set up
-  setActive(customerId, subscriptionId);
+  // Mark professional applicant paid/complete in the application sheet.
+  const applicantId = session.metadata?.applicant_id;
+  if (plan === "professional" && applicantId) {
+    await markApplicantPaid(applicantId, session.id);
+    log.info("checkout_completed.applicant_marked_paid", {
+      applicantId,
+      sessionId: session.id,
+    });
+  }
 
   // Log to Google Sheets (async — don't fail the webhook if this errors)
   const amountPaid = session.amount_total ?? 0;
@@ -188,9 +200,8 @@ async function handleCheckoutCompleted(
 
   // Create a Google Doc review document for professional applications
   if (plan === "professional") {
-    const resumeToken = session.metadata?.resume_token;
-    if (resumeToken) {
-      const applicant = await getApplicantByToken(resumeToken);
+    if (applicantId) {
+      const applicant = await getApplicantById(applicantId);
       if (applicant) {
         createApplicationReviewDoc(applicant).catch((err) => {
           const msg = err instanceof Error ? err.message : String(err);
@@ -199,6 +210,11 @@ async function handleCheckoutCompleted(
             sessionId: session.id,
             error: msg,
           });
+        });
+      } else {
+        log.warn("checkout_completed.applicant_not_found_for_review_doc", {
+          applicantId,
+          sessionId: session.id,
         });
       }
     }

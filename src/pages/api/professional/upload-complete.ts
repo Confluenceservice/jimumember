@@ -142,6 +142,7 @@ export const POST: APIRoute = async ({ request, url }) => {
         flow: "option_c",
         plan: "professional",
         applicant_id: applicant.id,
+        resume_token: token,
         recurring_price_id: recurringPriceId,
         annual_amount: String(annualAmount),
         next_july1_epoch: String(billingCycleAnchor),

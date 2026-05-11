@@ -22,3 +22,9 @@ Astro SSR app with:
 - First-time subscribers: prorated first-term charge based on weeks remaining until 1 July.
 - Existing subscribers: full annual amount (no proration).
 - Professional checkout redirects to `eldaa.org.nz/professional-membership` after payment.
+
+## Stripe webhook endpoints
+- Staging (`eldaa`): `https://eldaa.fly.dev/api/stripe-webhook`
+- Production (`eldaa-production`): `https://subscribe.eldaa.org.nz/api/stripe-webhook`
+
+If a payment succeeded while the webhook URL was incorrect, fix the endpoint in Stripe and replay the `checkout.session.completed` event to backfill post-payment side effects.

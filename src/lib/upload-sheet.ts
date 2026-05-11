@@ -499,12 +499,20 @@ export async function markPaid(applicantId: string): Promise<void> {
 
   // Update columns AR (paid) and AT (paid_at)
   const paidAt = new Date().toISOString();
-  await sheets.spreadsheets.values.update({
+  await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    range: `${SHEET_NAME}!AR${rowIndex}:AT${rowIndex}`,
-    valueInputOption: "RAW",
     requestBody: {
-      values: [["TRUE", paidAt]],
+      valueInputOption: "RAW",
+      data: [
+        {
+          range: `${SHEET_NAME}!AR${rowIndex}`,
+          values: [["TRUE"]],
+        },
+        {
+          range: `${SHEET_NAME}!AT${rowIndex}`,
+          values: [[paidAt]],
+        },
+      ],
     },
   });
 }
@@ -816,7 +824,7 @@ function isFormComplete(applicant: ApplicantInfo): boolean {
 }
 
 export async function validateCompletion(applicantId: string): Promise<boolean> {
-  const applicant = await getApplicantByTokenFromId(applicantId);
+  const applicant = await getApplicantById(applicantId);
   if (!applicant) return false;
 
   // Check form fields complete
@@ -839,7 +847,7 @@ export async function validateCompletion(applicantId: string): Promise<boolean> 
   return true;
 }
 
-async function getApplicantByTokenFromId(applicantId: string): Promise<ApplicantInfo | null> {
+export async function getApplicantById(applicantId: string): Promise<ApplicantInfo | null> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
   if (!spreadsheetId) {
     throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");

@@ -88,6 +88,15 @@ Returns: `{ success }`
 Creates Stripe Checkout session if all requirements met.
 Returns: `{ url }` or `{ error }`
 
+### `POST /api/stripe-webhook`
+Receives Stripe events for checkout completion, subscription setup, and post-payment side effects.
+
+Environment URL mapping:
+- Staging (`eldaa`): `https://eldaa.fly.dev/api/stripe-webhook`
+- Production (`eldaa-production`): `https://subscribe.eldaa.org.nz/api/stripe-webhook`
+
+If the webhook URL was wrong during a successful payment, correct it in Stripe and replay `checkout.session.completed`.
+
 ---
 
 ## Google Sheet: Professional Applications (47 columns, A–AU)

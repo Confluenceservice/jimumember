@@ -636,6 +636,30 @@ const token = Astro.url.searchParams.get("token");
     return saveQueue;
   }
 
+  function setContinueButtonLoading(btn, isLoading) {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    if (isLoading) {
+      if (!btn.dataset.originalLabel) btn.dataset.originalLabel = btn.innerHTML;
+      btn.dataset.loading = "true";
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.classList.add("opacity-70", "cursor-not-allowed", "pointer-events-none");
+      btn.innerHTML = `
+        <span class="inline-flex items-center gap-2">
+          <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
+          <span>Saving...</span>
+        </span>
+      `;
+      return;
+    }
+
+    if (btn.dataset.originalLabel) btn.innerHTML = btn.dataset.originalLabel;
+    btn.disabled = false;
+    delete btn.dataset.loading;
+    btn.removeAttribute("aria-busy");
+    btn.classList.remove("opacity-70", "cursor-not-allowed", "pointer-events-none");
+  }
+
   async function saveFormData() {
     const activeToken = window.__token__ || token;
     if (!window.__applicantId__ && !activeToken) return;
@@ -712,9 +736,19 @@ const token = Astro.url.searchParams.get("token");
 
   document.querySelectorAll("[data-next]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      saveStepData(currentStep);
-      await queueFormSave();
-      showStep(parseInt(btn.dataset.next));
+      if (btn.dataset.loading === "true") return;
+      const nextStep = parseInt(btn.dataset.next, 10);
+      if (Number.isNaN(nextStep)) return;
+
+      setContinueButtonLoading(btn, true);
+      try {
+        saveStepData(currentStep);
+        await queueFormSave();
+        showStep(nextStep);
+        await new Promise(resolve => requestAnimationFrame(() => resolve()));
+      } finally {
+        setContinueButtonLoading(btn, false);
+      }
     });
   });
 
