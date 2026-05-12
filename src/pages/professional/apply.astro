@@ -248,6 +248,10 @@ const token = Astro.url.searchParams.get("token");
       </div>
       <div class="p-3 border border-gray-200 rounded-lg">
         <p class="font-semibold mb-2">Are you willing to provide a current Ministry of Justice criminal record check? *</p>
+        <p class="text-sm text-gray-600 mb-2">
+          Apply here:
+          <a href="https://www.justice.govt.nz/criminal-records/" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">www.justice.govt.nz/criminal-records/</a>
+        </p>
         <div class="flex gap-6">
           <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="provideCriminalCheck" value="YES" /> Yes</label>
           <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="provideCriminalCheck" value="NO" /> No</label>
@@ -465,7 +469,7 @@ const token = Astro.url.searchParams.get("token");
   const REQUIRED_DOCS = [
     { id: "training", label: "Certificates of Training", description: "Evidence of completed training" },
     { id: "ethics", label: "Code of Ethics", description: "Signed ELDAA Code of Ethics and Scope of Practice" },
-    { id: "criminal", label: "Criminal Records Check", description: "Ministry of Justice background check" },
+    { id: "criminal", label: "Criminal Records Check", description: "Ministry of Justice background check — <a href='https://www.justice.govt.nz/criminal-records/' target='_blank' rel='noopener noreferrer' class='text-blue-600 underline'>www.justice.govt.nz/criminal-records/</a>" },
     { id: "advance_care", label: "Advanced Care Planning (NZ)", description: "4 modules completed" },
     { id: "assisted_dying", label: "Assisted Dying Training", description: "Te Whatu Ora, 3 modules completed" },
     { id: "fundamentals", label: "Fundamentals of Palliative Care", description: "Hospice NZ, 4 online modules" },
@@ -945,34 +949,38 @@ const token = Astro.url.searchParams.get("token");
 
     document.querySelectorAll("input[type=file]").forEach(input => {
       input.addEventListener("change", async (e) => {
-        const docId = e.target.id.replace("file-", "");
-        const file = e.target.files[0];
+        const fileInput = e.target;
+        const docId = fileInput.id.replace("file-", "");
+        const file = fileInput.files[0];
         if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+          alert("File size exceeds 10MB limit.");
+          fileInput.value = "";
+          return;
+        }
 
         const btn = document.querySelector(`.upload-btn[data-doc="${docId}"]`);
         btn.disabled = true;
         btn.textContent = "Uploading...";
 
         try {
-          const arrayBuffer = await file.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const formData = new FormData();
+          formData.append("token", window.__token__ || token || "");
+          formData.append("docType", docId);
+          formData.append("file", file, file.name);
 
           const res = await fetch("/api/professional/upload-file", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              token: window.__token__ || token,
-              docType: docId,
-              filename: file.name,
-              mimeType: file.type,
-              data: base64,
-            })
+            body: formData
           });
-
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           if (data.success) {
             if (!window.__docsUploaded__[docId]) window.__docsUploaded__[docId] = [];
-            window.__docsUploaded__[docId].push({ fileId: data.fileId || data.filename, filename: file.name, uploadedAt: new Date().toISOString() });
+            window.__docsUploaded__[docId].push({
+              fileId: data.fileId || "",
+              filename: data.originalFilename || file.name,
+              uploadedAt: data.uploadedAt || new Date().toISOString()
+            });
             renderDocuments();
           } else {
             btn.disabled = false;
@@ -983,6 +991,8 @@ const token = Astro.url.searchParams.get("token");
           btn.disabled = false;
           btn.textContent = "Upload More";
           alert("Upload failed");
+        } finally {
+          fileInput.value = "";
         }
       });
     });

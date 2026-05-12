@@ -34,6 +34,11 @@ const ALLOWED_MIME_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
+const GENERIC_MIME_TYPES = [
+  "",
+  "application/octet-stream",
+  "binary/octet-stream",
+];
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -188,11 +193,17 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
-    logger.warn("upload_bad_mimetype", { mimeType });
-    return Response.json(
-      { error: "File type not allowed. Use PDF, JPEG, PNG, GIF, or Word documents." },
-      { status: 400 }
-    );
+    const detectedType = detectMimeTypeFromBytes(buffer);
+    if (detectedType && ALLOWED_MIME_TYPES.includes(detectedType) && GENERIC_MIME_TYPES.includes(mimeType)) {
+      logger.info("upload_mimetype_inferred", { providedMimeType: mimeType, detectedType });
+      mimeType = detectedType;
+    } else {
+      logger.warn("upload_bad_mimetype", { mimeType, detectedType });
+      return Response.json(
+        { error: "File type not allowed. Use PDF, JPEG, PNG, GIF, or Word documents." },
+        { status: 400 }
+      );
+    }
   }
 
   if (buffer.length > MAX_FILE_SIZE) {
@@ -279,6 +290,7 @@ export const POST: APIRoute = async ({ request }) => {
       throw driveError;
     }
 
+    const uploadedAt = new Date().toISOString();
     await addDriveFile(applicant.id, docType, filename, randomFilename);
 
     const counts = await getDriveFileCounts(applicant.id);
@@ -292,7 +304,14 @@ export const POST: APIRoute = async ({ request }) => {
       size: buffer.length,
     });
 
-    return Response.json({ success: true, docType, message: "Document uploaded successfully." });
+    return Response.json({
+      success: true,
+      docType,
+      fileId: randomFilename,
+      originalFilename: filename,
+      uploadedAt,
+      message: "Document uploaded successfully.",
+    });
   } catch (error) {
     Sentry.captureException(error, { extra: { applicantId: applicant.id, docType } });
     logger.error("document_upload_failed", {
