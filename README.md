@@ -31,6 +31,7 @@ Astro SSR app with:
   - `GMAIL_OAUTH_CLIENT_SECRET`
   - `GMAIL_OAUTH_REFRESH_TOKEN`
 - Local fallback: if OAuth env vars are not set, the app can use Application Default Credentials (ADC) with `gmail.send` scope.
+- Ops runbook: `docs/runbooks/gmail-oauth-token-rotation.md`
 
 ## Stripe webhook endpoints
 - Staging (`eldaa`): `https://eldaa.fly.dev/api/stripe-webhook`
