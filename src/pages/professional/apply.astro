@@ -512,6 +512,13 @@ const token = Astro.url.searchParams.get("token");
   let competencyStates = {};
   let stepCompletion = {};  // step index -> true if completed
 
+  function ensureDocsUploadedStore() {
+    if (!window.__docsUploaded__ || typeof window.__docsUploaded__ !== "object") {
+      window.__docsUploaded__ = {};
+    }
+    return window.__docsUploaded__;
+  }
+
   function markStepComplete(stepIdx) {
     // Token-based resume: step 0 is always "complete" since data was pre-filled server-side
     if (stepIdx === 0 && token) { stepCompletion[0] = true; updateDots(); return; }
@@ -878,7 +885,7 @@ const token = Astro.url.searchParams.get("token");
   function saveStepData(n) {}
 
   function renderDocuments() {
-    const uploaded = window.__docsUploaded__ || {};
+    const uploaded = ensureDocsUploadedStore();
     const allDocs = [...REQUIRED_DOCS, ...OPTIONAL_DOCS];
     const list = document.getElementById("document-list");
     list.innerHTML = "";
@@ -960,7 +967,7 @@ const token = Astro.url.searchParams.get("token");
     }
 
     function resetUploadButtonState(docId) {
-      const existingUploads = (window.__docsUploaded__?.[docId] || []).length;
+      const existingUploads = (ensureDocsUploadedStore()[docId] || []).length;
       setUploadButtonState(docId, existingUploads > 0 ? "Upload More" : "Choose File", false);
     }
 
@@ -1048,8 +1055,9 @@ const token = Astro.url.searchParams.get("token");
           });
           const data = parseJsonSafely(response.body) || {};
           if (response.status >= 200 && response.status < 300 && data.success) {
-            if (!window.__docsUploaded__[docId]) window.__docsUploaded__[docId] = [];
-            window.__docsUploaded__[docId].push({
+            const uploadedStore = ensureDocsUploadedStore();
+            if (!uploadedStore[docId]) uploadedStore[docId] = [];
+            uploadedStore[docId].push({
               fileId: data.fileId || "",
               filename: data.originalFilename || file.name,
               uploadedAt: data.uploadedAt || new Date().toISOString()
@@ -1097,7 +1105,8 @@ const token = Astro.url.searchParams.get("token");
           });
           const data = await res.json();
           if (data.success) {
-            window.__docsUploaded__[docType] = (window.__docsUploaded__[docType] || []).filter(f => f.fileId !== fileId);
+            const uploadedStore = ensureDocsUploadedStore();
+            uploadedStore[docType] = (uploadedStore[docType] || []).filter(f => f.fileId !== fileId);
             renderDocuments();
           } else {
             btn.textContent = "Delete";
@@ -1203,6 +1212,7 @@ const token = Astro.url.searchParams.get("token");
 
       const data = await res.json();
       if (data.success) {
+        ensureDocsUploadedStore();
         applicantId = data.applicantId;
         window.__applicantId__ = data.applicantId;
         const resumeLink = data.resumeLink || "";
@@ -1366,6 +1376,7 @@ const token = Astro.url.searchParams.get("token");
       }
     })();
   } else {
+    ensureDocsUploadedStore();
     document.getElementById("loading-overlay").classList.add("hidden");
     showStep(0);
     buildCompetencyGrid();
