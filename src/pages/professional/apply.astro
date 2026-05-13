@@ -478,6 +478,8 @@ const token = Astro.url.searchParams.get("token");
   const OPTIONAL_DOCS = [
     { id: "insurance", label: "Professional Indemnity Insurance", description: "Optional but recommended" },
   ];
+  const MAX_UPLOAD_SIZE_MB = 50;
+  const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
   const COMPETENCIES = [
     { label: "Effective Communication Skills", description: "Practice deep listening, open-ended questioning, and holding space for emotions without judgment." },
@@ -509,6 +511,13 @@ const token = Astro.url.searchParams.get("token");
   let experiences = [];
   let competencyStates = {};
   let stepCompletion = {};  // step index -> true if completed
+
+  function ensureDocsUploadedStore() {
+    if (!window.__docsUploaded__ || typeof window.__docsUploaded__ !== "object") {
+      window.__docsUploaded__ = {};
+    }
+    return window.__docsUploaded__;
+  }
 
   function markStepComplete(stepIdx) {
     // Token-based resume: step 0 is always "complete" since data was pre-filled server-side
@@ -876,7 +885,7 @@ const token = Astro.url.searchParams.get("token");
   function saveStepData(n) {}
 
   function renderDocuments() {
-    const uploaded = window.__docsUploaded__ || {};
+    const uploaded = ensureDocsUploadedStore();
     const allDocs = [...REQUIRED_DOCS, ...OPTIONAL_DOCS];
     const list = document.getElementById("document-list");
     list.innerHTML = "";
@@ -940,6 +949,67 @@ const token = Astro.url.searchParams.get("token");
   }
 
   function setupUploadHandlers() {
+    const statusText = document.getElementById("upload-status-text");
+
+    function setStatusMessage(message, isError = false) {
+      if (!statusText) return;
+      statusText.textContent = message;
+      statusText.className = isError
+        ? "m-0 text-sm text-red-700"
+        : "m-0 text-gray-600 text-sm";
+    }
+
+    function setUploadButtonState(docId, text, disabled) {
+      const uploadBtn = document.querySelector(`.upload-btn[data-doc="${docId}"]`);
+      if (!(uploadBtn instanceof HTMLButtonElement)) return;
+      uploadBtn.textContent = text;
+      uploadBtn.disabled = disabled;
+    }
+
+    function resetUploadButtonState(docId) {
+      const existingUploads = (ensureDocsUploadedStore()[docId] || []).length;
+      setUploadButtonState(docId, existingUploads > 0 ? "Upload More" : "Choose File", false);
+    }
+
+    function parseJsonSafely(raw) {
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    function uploadFileBinary({ uploadToken, docId, file, onProgress }) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/professional/upload-file");
+        xhr.responseType = "text";
+        xhr.timeout = 300000;
+
+        xhr.setRequestHeader("content-type", "application/octet-stream");
+        xhr.setRequestHeader("x-upload-token", uploadToken);
+        xhr.setRequestHeader("x-upload-doc-type", docId);
+        xhr.setRequestHeader("x-upload-filename", encodeURIComponent(file.name));
+        xhr.setRequestHeader("x-upload-mime-type", file.type || "application/octet-stream");
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable || typeof onProgress !== "function") return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        };
+
+        xhr.onerror = () => reject(new Error("Network error during upload."));
+        xhr.ontimeout = () => reject(new Error("Upload timed out. Please try again."));
+        xhr.onload = () =>
+          resolve({
+            status: xhr.status,
+            body: xhr.responseText || "",
+          });
+
+        xhr.send(file);
+      });
+    }
     document.querySelectorAll(".upload-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const docId = btn.dataset.doc;
@@ -951,47 +1021,67 @@ const token = Astro.url.searchParams.get("token");
       input.addEventListener("change", async (e) => {
         const fileInput = e.target;
         const docId = fileInput.id.replace("file-", "");
-        const file = fileInput.files[0];
+        const file = fileInput.files?.[0];
         if (!file) return;
-        if (file.size > 10 * 1024 * 1024) {
-          alert("File size exceeds 10MB limit.");
+        if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+          const message = `File size exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`;
+          setStatusMessage(message, true);
+          alert(message);
           fileInput.value = "";
           return;
         }
 
-        const btn = document.querySelector(`.upload-btn[data-doc="${docId}"]`);
-        btn.disabled = true;
-        btn.textContent = "Uploading...";
+        const uploadToken = window.__token__ || token || "";
+        if (!uploadToken) {
+          const message = "Missing upload session token. Refresh and try again.";
+          setStatusMessage(message, true);
+          alert(message);
+          fileInput.value = "";
+          return;
+        }
+
+        setUploadButtonState(docId, "Uploading... 0%", true);
+        setStatusMessage(`Uploading ${file.name}... 0%`, false);
 
         try {
-          const formData = new FormData();
-          formData.append("token", window.__token__ || token || "");
-          formData.append("docType", docId);
-          formData.append("file", file, file.name);
-
-          const res = await fetch("/api/professional/upload-file", {
-            method: "POST",
-            body: formData
+          const response = await uploadFileBinary({
+            uploadToken,
+            docId,
+            file,
+            onProgress: (percent) => {
+              setUploadButtonState(docId, `Uploading... ${percent}%`, true);
+              setStatusMessage(`Uploading ${file.name}... ${percent}%`, false);
+            },
           });
-          const data = await res.json().catch(() => ({}));
-          if (data.success) {
-            if (!window.__docsUploaded__[docId]) window.__docsUploaded__[docId] = [];
-            window.__docsUploaded__[docId].push({
+          const data = parseJsonSafely(response.body) || {};
+          if (response.status >= 200 && response.status < 300 && data.success) {
+            const uploadedStore = ensureDocsUploadedStore();
+            if (!uploadedStore[docId]) uploadedStore[docId] = [];
+            uploadedStore[docId].push({
               fileId: data.fileId || "",
               filename: data.originalFilename || file.name,
               uploadedAt: data.uploadedAt || new Date().toISOString()
             });
+            setStatusMessage(`Uploaded ${file.name} successfully.`, false);
             renderDocuments();
-          } else {
-            btn.disabled = false;
-            btn.textContent = "Upload More";
-            alert(data.error || "Upload failed");
+            return;
           }
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = "Upload More";
-          alert("Upload failed");
+
+          const serverError = data.error || `Upload failed with status ${response.status}.`;
+          const details = [];
+          if (data.code) details.push(`Code: ${data.code}`);
+          if (data.requestId) details.push(`Request ID: ${data.requestId}`);
+          const message = details.length
+            ? `${serverError} (${details.join(", ")})`
+            : serverError;
+          setStatusMessage(message, true);
+          alert(message);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Upload failed.";
+          setStatusMessage(message, true);
+          alert(message);
         } finally {
+          resetUploadButtonState(docId);
           fileInput.value = "";
         }
       });
@@ -1015,7 +1105,8 @@ const token = Astro.url.searchParams.get("token");
           });
           const data = await res.json();
           if (data.success) {
-            window.__docsUploaded__[docType] = (window.__docsUploaded__[docType] || []).filter(f => f.fileId !== fileId);
+            const uploadedStore = ensureDocsUploadedStore();
+            uploadedStore[docType] = (uploadedStore[docType] || []).filter(f => f.fileId !== fileId);
             renderDocuments();
           } else {
             btn.textContent = "Delete";
@@ -1121,6 +1212,7 @@ const token = Astro.url.searchParams.get("token");
 
       const data = await res.json();
       if (data.success) {
+        ensureDocsUploadedStore();
         applicantId = data.applicantId;
         window.__applicantId__ = data.applicantId;
         const resumeLink = data.resumeLink || "";
@@ -1284,6 +1376,7 @@ const token = Astro.url.searchParams.get("token");
       }
     })();
   } else {
+    ensureDocsUploadedStore();
     document.getElementById("loading-overlay").classList.add("hidden");
     showStep(0);
     buildCompetencyGrid();
