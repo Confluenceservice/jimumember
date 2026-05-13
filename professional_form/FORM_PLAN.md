@@ -182,7 +182,7 @@ F: deleted
 - Applicant Drive folder: `/applications/{applicant_id}/documents/{doc_type}/{file_id}.{ext}`
 
 **File limits:**
-- Max 10MB per file
+- Max 50MB per file by default (`PROFESSIONAL_UPLOAD_MAX_MB` can override)
 - Allowed types: PDF, JPEG, PNG, GIF, DOC, DOCX
 
 ---
@@ -198,12 +198,16 @@ Accepts: `{ firstName, lastName, email, phone, dateOfBirth, ethnicity, address, 
 Returns: `{ success, resumeLink, applicantId }` or `{ error }`
 
 ### `POST /api/professional/upload-file`
-Multipart: `token`, `docType`, `file`
-Returns: `{ success, fileId, filename }`
+Primary mode (used by the UI): `application/octet-stream` body with headers:
+`x-upload-token`, `x-upload-doc-type`, `x-upload-filename`, `x-upload-mime-type`.
+Compatibility modes: `application/json` (base64 payload) and `multipart/form-data`.
+Returns success payload including: `{ requestId, success, docType, fileId, originalFilename, uploadedAt }`
+Returns error payload including: `{ requestId, code, error }`
 
-### `DELETE /api/professional/upload-file?fileId=xxx&token=xxx`
+### `POST /api/professional/delete-file`
+JSON body: `{ fileId, token }`
 Soft-deletes file from Drive Files sheet, trashes Drive file.
-Returns: `{ success }`
+Returns: `{ success: true }` (or `{ error }` on failure)
 
 ### `POST /api/professional/upload-complete`
 Creates Stripe Checkout session if all requirements met.
