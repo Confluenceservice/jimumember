@@ -66,6 +66,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
+
 import { POST } from "./upload-file";
 
 function makeMultipartRequest(file: File, token = "token-123", docType = "training") {
@@ -76,6 +77,33 @@ function makeMultipartRequest(file: File, token = "token-123", docType = "traini
   return new Request("http://localhost/api/professional/upload-file", {
     method: "POST",
     body: formData,
+  });
+}
+
+function makeBinaryRequest(
+  bytes: Buffer,
+  {
+    token = "token-123",
+    docType = "training",
+    filename = "scan.pdf",
+    mimeType = "application/octet-stream",
+  }: {
+    token?: string;
+    docType?: string;
+    filename?: string;
+    mimeType?: string;
+  } = {}
+) {
+  return new Request("http://localhost/api/professional/upload-file", {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-upload-token": token,
+      "x-upload-doc-type": docType,
+      "x-upload-filename": encodeURIComponent(filename),
+      "x-upload-mime-type": mimeType,
+    },
+    body: new Uint8Array(bytes),
   });
 }
 
@@ -146,8 +174,10 @@ describe("POST /api/professional/upload-file", () => {
   it("accepts application/octet-stream when magic bytes detect a supported file type", async () => {
     seedSuccessfulDriveCalls("uploaded-drive-file-id");
     const pdfBytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
-    const file = new File([pdfBytes], "scan.pdf", { type: "application/octet-stream" });
-    const request = makeMultipartRequest(file);
+    const request = makeBinaryRequest(pdfBytes, {
+      filename: "scan.pdf",
+      mimeType: "application/octet-stream",
+    });
 
     const response = await POST({ request } as any);
     const json = await response.json();
@@ -175,8 +205,8 @@ describe("POST /api/professional/upload-file", () => {
     expect(mockAddDriveFile).not.toHaveBeenCalled();
   });
 
-  it("rejects files larger than 10MB", async () => {
-    const largePdfLikeBytes = Buffer.alloc(10 * 1024 * 1024 + 1);
+  it("rejects files larger than 50MB", async () => {
+    const largePdfLikeBytes = Buffer.alloc(50 * 1024 * 1024 + 1);
     largePdfLikeBytes[0] = 0x25;
     largePdfLikeBytes[1] = 0x50;
     largePdfLikeBytes[2] = 0x44;
@@ -188,7 +218,7 @@ describe("POST /api/professional/upload-file", () => {
     const json = await response.json();
 
     expect(response.status).toBe(400);
-    expect(json.error).toContain("10MB limit");
+    expect(json.error).toContain("50MB limit");
     expect(mockGetApplicantByToken).not.toHaveBeenCalled();
     expect(mockDriveFilesCreate).not.toHaveBeenCalled();
   });

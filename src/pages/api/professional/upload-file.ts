@@ -7,6 +7,65 @@ import { google } from "googleapis";
 import { logger } from "../../../lib/logger";
 import { Readable } from "node:stream";
 
+interface GoogleApiErrorDetail {
+  message?: string;
+  reason?: string;
+  domain?: string;
+  location?: string;
+  locationType?: string;
+}
+
+function tokenPrefix(token?: string): string | undefined {
+  if (!token) return undefined;
+  return token.substring(0, 8);
+}
+
+function extractErrorMeta(error: unknown): Record<string, unknown> {
+  const err = error as {
+    name?: string;
+    message?: string;
+    stack?: string;
+    code?: string | number;
+    errors?: GoogleApiErrorDetail[];
+    response?: {
+      status?: number;
+      data?: {
+        error?: {
+          code?: number;
+          message?: string;
+          status?: string;
+          errors?: GoogleApiErrorDetail[];
+        };
+      };
+    };
+    config?: {
+      method?: string;
+      url?: string;
+    };
+  };
+
+  const apiError = err?.response?.data?.error;
+  const firstApiError = apiError?.errors?.[0];
+  const firstTopLevelError = err?.errors?.[0];
+
+  return {
+    errorName: err?.name,
+    errorMessage: err?.message ?? String(error),
+    errorCode: err?.code,
+    errorStack: typeof err?.stack === "string" ? err.stack.split("\n")[0] : undefined,
+    httpStatus: err?.response?.status,
+    apiErrorCode: apiError?.code,
+    apiErrorMessage: apiError?.message,
+    apiErrorStatus: apiError?.status,
+    apiErrorReason: firstApiError?.reason ?? firstTopLevelError?.reason,
+    apiErrorDomain: firstApiError?.domain ?? firstTopLevelError?.domain,
+    apiErrorLocation: firstApiError?.location,
+    apiErrorLocationType: firstApiError?.locationType,
+    upstreamMethod: err?.config?.method,
+    upstreamUrl: err?.config?.url,
+  };
+}
+
 function getDriveClient() {
   const email = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
   const keyRaw = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY?.trim();
@@ -40,7 +99,12 @@ const GENERIC_MIME_TYPES = [
   "binary/octet-stream",
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_FILE_SIZE_MB = 50;
+const parsedMaxFileSizeMb = Number(process.env.PROFESSIONAL_UPLOAD_MAX_MB ?? DEFAULT_MAX_FILE_SIZE_MB);
+const MAX_FILE_SIZE_MB = Number.isFinite(parsedMaxFileSizeMb) && parsedMaxFileSizeMb > 0
+  ? parsedMaxFileSizeMb
+  : DEFAULT_MAX_FILE_SIZE_MB;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // Magic bytes for file type verification
 const MAGIC_BYTES: Record<string, number[]> = {
@@ -89,6 +153,15 @@ function detectMimeTypeFromBytes(buffer: Buffer): string | null {
   return null;
 }
 
+function decodeFilename(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 async function ensureFolderExists(
   drive: ReturnType<typeof google.drive>,
   parentId: string,
@@ -130,119 +203,261 @@ async function ensureFolderExists(
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  const uploadRequestId = crypto.randomUUID();
+  const requestLogger = typeof logger.child === "function"
+    ? logger.child({
+      route: "/api/professional/upload-file",
+      uploadRequestId,
+    })
+    : logger;
   const contentType = request.headers.get("content-type") || "";
-  let token: string;
-  let docType: string;
-  let filename: string;
-  let mimeType: string;
-  let buffer: Buffer;
+  const contentLength = request.headers.get("content-length");
+  let stage = "request_received";
+  let token = "";
+  let docType = "";
+  let filename = "";
+  let mimeType = "";
+  let buffer = Buffer.alloc(0);
+  const respond = (status: number, body: Record<string, unknown>) =>
+    Response.json({ requestId: uploadRequestId, ...body }, { status });
 
-  logger.info("upload_request_received", { contentType });
+  requestLogger.info("upload_request_received", { contentType, contentLength });
 
   if (contentType.includes("application/json")) {
-    // JSON mode: receive base64-encoded file data
+    stage = "parse_json_payload";
     let payload: Record<string, unknown>;
     try {
       payload = (await request.json()) as Record<string, unknown>;
     } catch {
-      return Response.json({ error: "Invalid JSON payload." }, { status: 400 });
+      requestLogger.warn("upload_invalid_json_payload", { stage });
+      return respond(400, { code: "INVALID_JSON_PAYLOAD", error: "Invalid JSON payload." });
     }
 
-    token = (payload.token as string)?.trim();
-    docType = (payload.docType as string)?.trim();
-    filename = (payload.filename as string)?.trim();
-    mimeType = (payload.mimeType as string)?.trim();
+    token = (payload.token as string)?.trim() || "";
+    docType = (payload.docType as string)?.trim() || "";
+    filename = (payload.filename as string)?.trim() || "";
+    mimeType = (payload.mimeType as string)?.trim() || "";
     const base64Data = payload.data as string;
 
-    let tmpBuffer: Buffer;
-    try {
-      tmpBuffer = Buffer.from(base64Data, "base64");
-    } catch {
-      return Response.json({ error: "Invalid base64 data." }, { status: 400 });
+    if (typeof base64Data !== "string" || base64Data.length === 0) {
+      requestLogger.warn("upload_missing_base64_data", {
+        stage,
+        tokenPrefix: tokenPrefix(token),
+        docType,
+      });
+      return respond(400, { code: "MISSING_FILE_DATA", error: "File data is required." });
     }
-    buffer = tmpBuffer;
 
-    logger.info("upload_payload_parsed", { token: token?.substring(0, 8), docType, filename, mimeType, bufferLen: buffer.length });
+    try {
+      buffer = Buffer.from(base64Data, "base64");
+    } catch {
+      requestLogger.warn("upload_invalid_base64_data", {
+        stage,
+        tokenPrefix: tokenPrefix(token),
+        docType,
+      });
+      return respond(400, { code: "INVALID_BASE64_DATA", error: "Invalid base64 data." });
+    }
+
+    requestLogger.info("upload_payload_parsed", {
+      stage,
+      mode: "json",
+      tokenPrefix: tokenPrefix(token),
+      docType,
+      filename,
+      mimeType,
+      bufferLen: buffer.length,
+    });
+  } else if (contentType.includes("application/octet-stream")) {
+    stage = "parse_binary_payload";
+    token = request.headers.get("x-upload-token")?.trim() ?? "";
+    docType = request.headers.get("x-upload-doc-type")?.trim() ?? "";
+    filename = decodeFilename(request.headers.get("x-upload-filename")?.trim() ?? "");
+    mimeType = request.headers.get("x-upload-mime-type")?.trim() || "application/octet-stream";
+    const arrayBuffer = await request.arrayBuffer();
+    buffer = Buffer.from(arrayBuffer);
+
+    requestLogger.info("upload_payload_parsed", {
+      stage,
+      mode: "binary",
+      tokenPrefix: tokenPrefix(token),
+      docType,
+      filename,
+      mimeType,
+      bufferLen: buffer.length,
+    });
   } else if (contentType.includes("multipart/form-data")) {
-    // Multipart mode: receive file directly (fallback for compatibility)
+    stage = "parse_multipart_payload";
     const formData = await request.formData();
-    token = formData.get("token") as string;
-    docType = formData.get("docType") as string;
+    token = (formData.get("token") as string)?.trim() ?? "";
+    docType = (formData.get("docType") as string)?.trim() ?? "";
     const file = formData.get("file") as File | null;
 
-    if (!token) return Response.json({ error: "Token is required." }, { status: 400 });
-    if (!docType) return Response.json({ error: "Document type is required." }, { status: 400 });
-    if (!file) return Response.json({ error: "File is required." }, { status: 400 });
+    if (!file) {
+      requestLogger.warn("upload_missing_file", {
+        stage,
+        mode: "multipart",
+        tokenPrefix: tokenPrefix(token),
+        docType,
+      });
+      return respond(400, { code: "MISSING_FILE", error: "File is required." });
+    }
 
     filename = file.name;
     mimeType = file.type;
     const arrayBuffer = await file.arrayBuffer();
     buffer = Buffer.from(arrayBuffer);
-    logger.info("upload_payload_parsed_multipart", { token: token?.substring(0, 8), docType, filename, mimeType, bufferLen: buffer.length });
+    requestLogger.info("upload_payload_parsed", {
+      stage,
+      mode: "multipart",
+      tokenPrefix: tokenPrefix(token),
+      docType,
+      filename,
+      mimeType,
+      bufferLen: buffer.length,
+    });
   } else {
-    return Response.json(
-      { error: "Content-Type must be application/json or multipart/form-data." },
-      { status: 400 }
-    );
+    requestLogger.warn("upload_bad_content_type", { stage, contentType });
+    return respond(400, {
+      code: "UNSUPPORTED_CONTENT_TYPE",
+      error: "Content-Type must be application/json, application/octet-stream, or multipart/form-data.",
+    });
+  }
+
+  stage = "validate_payload";
+  if (!token) {
+    requestLogger.warn("upload_missing_token", {
+      stage,
+      contentType,
+      docType,
+      filename,
+    });
+    return respond(400, { code: "MISSING_TOKEN", error: "Token is required." });
+  }
+  if (!docType) {
+    requestLogger.warn("upload_missing_doctype", {
+      stage,
+      tokenPrefix: tokenPrefix(token),
+      filename,
+    });
+    return respond(400, { code: "MISSING_DOC_TYPE", error: "Document type is required." });
+  }
+  if (!filename) {
+    requestLogger.warn("upload_missing_filename", {
+      stage,
+      tokenPrefix: tokenPrefix(token),
+      docType,
+    });
+    return respond(400, { code: "MISSING_FILENAME", error: "File name is required." });
   }
 
   const allDocTypes = [...REQUIRED_DOC_TYPES, "insurance"] as const;
   if (!allDocTypes.includes(docType as typeof allDocTypes[number])) {
-    logger.warn("upload_bad_doctype", { docType });
-    return Response.json({ error: "Valid document type is required." }, { status: 400 });
+    requestLogger.warn("upload_bad_doctype", {
+      stage,
+      tokenPrefix: tokenPrefix(token),
+      docType,
+      filename,
+    });
+    return respond(400, { code: "INVALID_DOC_TYPE", error: "Valid document type is required." });
   }
 
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
     const detectedType = detectMimeTypeFromBytes(buffer);
     if (detectedType && ALLOWED_MIME_TYPES.includes(detectedType) && GENERIC_MIME_TYPES.includes(mimeType)) {
-      logger.info("upload_mimetype_inferred", { providedMimeType: mimeType, detectedType });
+      requestLogger.info("upload_mimetype_inferred", {
+        stage,
+        tokenPrefix: tokenPrefix(token),
+        docType,
+        filename,
+        providedMimeType: mimeType,
+        detectedType,
+      });
       mimeType = detectedType;
     } else {
-      logger.warn("upload_bad_mimetype", { mimeType, detectedType });
-      return Response.json(
-        { error: "File type not allowed. Use PDF, JPEG, PNG, GIF, or Word documents." },
-        { status: 400 }
-      );
+      requestLogger.warn("upload_bad_mimetype", {
+        stage,
+        tokenPrefix: tokenPrefix(token),
+        docType,
+        filename,
+        mimeType,
+        detectedType,
+      });
+      return respond(400, {
+        code: "UNSUPPORTED_MIME_TYPE",
+        error: "File type not allowed. Use PDF, JPEG, PNG, GIF, or Word documents.",
+      });
     }
   }
 
   if (buffer.length > MAX_FILE_SIZE) {
-    logger.warn("upload_file_too_large", { bufferLen: buffer.length });
-    return Response.json(
-      { error: "File size exceeds 10MB limit." },
-      { status: 400 }
-    );
+    requestLogger.warn("upload_file_too_large", {
+      stage,
+      tokenPrefix: tokenPrefix(token),
+      docType,
+      filename,
+      bufferLen: buffer.length,
+      maxFileSizeMb: MAX_FILE_SIZE_MB,
+      maxFileSizeBytes: MAX_FILE_SIZE,
+    });
+    return respond(400, {
+      code: "FILE_TOO_LARGE",
+      error: `File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`,
+      maxFileSizeMb: MAX_FILE_SIZE_MB,
+      maxFileSizeBytes: MAX_FILE_SIZE,
+    });
   }
 
+  stage = "resolve_applicant";
   const applicant = await getApplicantByToken(token);
   if (!applicant) {
-    logger.warn("upload_token_not_found", { token: token?.substring(0, 8) });
-    return Response.json({ error: "Invalid or expired session." }, { status: 400 });
+    requestLogger.warn("upload_token_not_found", {
+      stage,
+      tokenPrefix: tokenPrefix(token),
+      docType,
+      filename,
+    });
+    return respond(400, { code: "INVALID_SESSION", error: "Invalid or expired session." });
   }
   if (String(applicant.paid ?? "").toUpperCase() === "TRUE") {
-    logger.warn("upload_paid_applicant", { token: token?.substring(0, 8), applicantId: applicant.id });
-    return Response.json({ error: "Application already completed." }, { status: 400 });
+    requestLogger.warn("upload_paid_applicant", {
+      stage,
+      tokenPrefix: tokenPrefix(token),
+      applicantId: applicant.id,
+      docType,
+      filename,
+    });
+    return respond(400, { code: "APPLICATION_COMPLETED", error: "Application already completed." });
   }
 
-  logger.info("upload_proceeding", {
+  requestLogger.info("upload_proceeding", {
+    stage,
     applicantId: applicant.id,
     docType,
-    token: token?.substring(0, 8),
+    tokenPrefix: tokenPrefix(token),
+    filename,
+    mimeType,
+    bufferSize: buffer.length,
   });
 
   try {
+    stage = "init_drive_client";
     const drive = getDriveClient();
+    stage = "load_drive_root_folder";
     const appsFolderId = process.env.GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID?.trim();
     if (!appsFolderId) throw new Error("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID not configured");
 
+    stage = "ensure_applicant_folder";
     const folderName = `${applicant.firstName}_${applicant.lastName}`.replace(/[^a-zA-Z0-9]/g, "_");
     const applicantFolderId = await ensureFolderExists(drive, appsFolderId, folderName);
+    stage = "ensure_doc_folder";
     const docFolderId = await ensureFolderExists(drive, applicantFolderId, docType);
 
     const ext = filename.split(".").pop() || "pdf";
     const randomFilename = `${crypto.randomUUID()}.${ext}`;
 
-    logger.info("upload_attempt", {
+    requestLogger.info("upload_attempt", {
+      stage: "ready_for_drive_upload",
       applicantId: applicant.id,
       docType,
       folderName,
@@ -253,58 +468,67 @@ export const POST: APIRoute = async ({ request }) => {
       bufferSize: buffer.length,
     });
 
+    stage = "verify_magic_bytes";
     if (!verifyMagicBytes(buffer, mimeType)) {
       const detectedType = detectMimeTypeFromBytes(buffer);
       if (!detectedType || !ALLOWED_MIME_TYPES.includes(detectedType)) {
-        logger.warn("file_type_mismatch", {
+        requestLogger.warn("upload_file_type_mismatch", {
+          stage,
           applicantId: applicant.id,
+          tokenPrefix: tokenPrefix(token),
+          docType,
+          filename,
           declared: mimeType,
           detected: detectedType,
           size: buffer.length,
         });
-        return Response.json(
-          { error: "File content does not match declared type. Only PDF, JPEG, PNG, GIF, or Word documents are allowed." },
-          { status: 400 }
-        );
+        return respond(400, {
+          code: "FILE_SIGNATURE_MISMATCH",
+          error: "File content does not match declared type. Only PDF, JPEG, PNG, GIF, or Word documents are allowed.",
+        });
       }
     }
 
-    let driveFileId: string;
-    try {
-      const created = await drive.files.create({
-        requestBody: { name: randomFilename, parents: [docFolderId] },
-        media: { mimeType, body: Readable.from(buffer) },
-        supportsAllDrives: true,
-        fields: "id",
-      });
-      const createdFileId = created.data.id;
-      if (!createdFileId) throw new Error("Drive API returned no file ID");
-      driveFileId = createdFileId;
-      logger.info("drive_file_created", { applicantId: applicant.id, docType, driveFileId, randomFilename });
-    } catch (driveError) {
-      logger.error("drive_upload_failed", {
-        applicantId: applicant.id,
-        docType,
-        error: driveError instanceof Error ? driveError.message : String(driveError),
-      });
-      throw driveError;
-    }
+    stage = "upload_to_drive";
+    const created = await drive.files.create({
+      requestBody: { name: randomFilename, parents: [docFolderId] },
+      media: { mimeType, body: Readable.from(buffer) },
+      supportsAllDrives: true,
+      fields: "id",
+    });
+    const createdFileId = created.data.id;
+    if (!createdFileId) throw new Error("Drive API returned no file ID");
+    const driveFileId = createdFileId;
+    requestLogger.info("drive_file_created", {
+      stage,
+      applicantId: applicant.id,
+      docType,
+      driveFileId,
+      randomFilename,
+    });
 
     const uploadedAt = new Date().toISOString();
+    stage = "persist_drive_file_record";
     await addDriveFile(applicant.id, docType, filename, randomFilename);
 
+    stage = "refresh_doc_counts";
     const counts = await getDriveFileCounts(applicant.id);
     const currentCount = counts[docType as DocType] || 1;
+    stage = "update_doc_count";
     await updateDocCount(applicant.id, docType, currentCount);
 
-    logger.info("document_uploaded", {
+    requestLogger.info("document_uploaded", {
+      stage: "completed",
       applicantId: applicant.id,
       docType,
       filename: randomFilename,
+      driveFileId,
       size: buffer.length,
+      uploadedAt,
+      currentCount,
     });
 
-    return Response.json({
+    return respond(200, {
       success: true,
       docType,
       fileId: randomFilename,
@@ -313,15 +537,33 @@ export const POST: APIRoute = async ({ request }) => {
       message: "Document uploaded successfully.",
     });
   } catch (error) {
-    Sentry.captureException(error, { extra: { applicantId: applicant.id, docType } });
-    logger.error("document_upload_failed", {
+    const errorMeta = extractErrorMeta(error);
+    Sentry.captureException(error, {
+      extra: {
+        uploadRequestId,
+        stage,
+        applicantId: applicant.id,
+        docType,
+        tokenPrefix: tokenPrefix(token),
+        filename,
+        mimeType,
+        bufferSize: buffer.length,
+        ...errorMeta,
+      },
+    });
+    requestLogger.error("document_upload_failed", {
+      stage,
       applicantId: applicant.id,
       docType,
-      error: error instanceof Error ? error.message : "Unknown",
+      tokenPrefix: tokenPrefix(token),
+      filename,
+      mimeType,
+      bufferSize: buffer.length,
+      ...errorMeta,
     });
-    return Response.json(
-      { error: "Failed to upload document. Please try again." },
-      { status: 500 }
-    );
+    return respond(500, {
+      code: "UPLOAD_INTERNAL_ERROR",
+      error: "Failed to upload document. Please try again.",
+    });
   }
 };

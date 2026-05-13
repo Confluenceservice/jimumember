@@ -1,5 +1,6 @@
 # Gmail OAuth token rotation and Fly secret rollout
 Use this when resume-link emails fail, sender identity is wrong, or you need to rotate Gmail OAuth credentials.
+Use GCP project `stripe-billing-491503` for both staging and production OAuth credentials.
 
 ## 1) Load OAuth desktop client values
 ```sh
