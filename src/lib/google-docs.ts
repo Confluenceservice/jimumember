@@ -19,6 +19,161 @@ function getDriveClient() {
   return google.drive({ version: "v3", auth });
 }
 
+// ---------------------------------------------------------------------------
+// Associate Application (single-page form)
+// ---------------------------------------------------------------------------
+
+type AssociateApplicationData = {
+  applicationId: string;
+  submittedAt: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  fullAddress: string;
+  postalAddress: string;
+  businessName: string;
+  interestJoining: string;
+  trainingDetails: string;
+  listOnPage: string;
+  listingDetails: string;
+  signature: string;
+  applicationDate: string;
+  checkoutStatus: string;
+};
+
+function buildAssociateContent(data: AssociateApplicationData) {
+  const requests: object[] = [];
+  let index = 1;
+
+  function insert(text: string) {
+    requests.push({ insertText: { text, location: { index } } });
+    index += text.length;
+  }
+
+  function setStyle(startIndex: number, endIndex: number, bold: boolean, fontSize: number) {
+    if (endIndex <= startIndex) return;
+    requests.push({
+      updateTextStyle: {
+        range: { startIndex, endIndex },
+        textStyle: { bold, fontSize: { magnitude: fontSize, unit: "PT" } },
+        fields: "bold,fontSize",
+      },
+    });
+  }
+
+  function h1(text: string) {
+    const start = index;
+    insert(text + "\n");
+    setStyle(start, start + text.length, true, 20);
+  }
+
+  function h2(text: string) {
+    const start = index;
+    insert(text + "\n");
+    setStyle(start, start + text.length, true, 14);
+  }
+
+  function p(text: string) {
+    insert(text + "\n");
+  }
+
+  function bullet(text: string) {
+    insert("• " + text + "\n");
+  }
+
+  function gap() {
+    insert("\n");
+  }
+
+  h1("ELDAA Associate Membership Application");
+  gap();
+
+  h2("Applicant Details");
+  p(`Name: ${data.firstName} ${data.lastName}`);
+  p(`Email: ${data.email}`);
+  p(`Phone: ${data.phone}`);
+  p(`Business Name: ${data.businessName || "—"}`);
+  gap();
+
+  h2("Address");
+  p(`Full Address: ${data.fullAddress}`);
+  p(`Postal Address: ${data.postalAddress || "—"}`);
+  gap();
+
+  h2("Additional Information");
+  p(`Interest in Joining ELDAA: ${data.interestJoining}`);
+  p(`Training Details: ${data.trainingDetails}`);
+  p(`List on Associate Members Page: ${data.listOnPage === "yes" ? "Yes" : data.listOnPage === "no" ? "No" : "—"}`);
+  if (data.listOnPage === "yes" && data.listingDetails) {
+    p(`Listing Details: ${data.listingDetails}`);
+  }
+  gap();
+
+  h2("Declaration");
+  p(`Signature: ${data.signature || "—"}`);
+  p(`Application Date: ${data.applicationDate || "—"}`);
+  p(`Checkout Status: ${data.checkoutStatus}`);
+
+  return requests;
+}
+
+export async function createAssociateApplicationReviewDoc(
+  application: AssociateApplicationData,
+): Promise<string> {
+  const docs = getDocsClient();
+  const folderId =
+    process.env.GOOGLE_DRIVE_REVIEW_DOCS_FOLDER_ID?.trim() ||
+    process.env.GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID?.trim() ||
+    "";
+
+  const docTitle = `Associate Application — ${application.firstName} ${application.lastName} (${application.email})`;
+
+  let docId: string | undefined;
+
+  if (folderId) {
+    const drive = getDriveClient();
+    const created = await drive.files.create({
+      requestBody: {
+        name: docTitle,
+        mimeType: "application/vnd.google-apps.document",
+        parents: [folderId],
+      },
+      fields: "id",
+      supportsAllDrives: true,
+    });
+    docId = created.data.id ?? undefined;
+  } else {
+    const doc = await docs.documents.create({
+      requestBody: { title: docTitle },
+    });
+    docId = doc.data.documentId ?? undefined;
+  }
+  if (!docId) throw new Error("Failed to create Associate Google Doc");
+
+  const requests = buildAssociateContent(application);
+  if (requests.length > 0) {
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: { requests: requests as never[] },
+    });
+  }
+
+  const docUrl = `https://docs.google.com/document/d/${docId}`;
+  logger.info("associate_review_doc_created", {
+    applicationId: application.applicationId,
+    docId,
+    docUrl,
+    folderId: folderId || null,
+  });
+
+  return docUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Professional Application (8-step wizard)
+// ---------------------------------------------------------------------------
+
 function buildContent(applicant: ApplicantInfo) {
   const requests: object[] = [];
   // Google Docs insertText locations are 1-based in a newly created doc.
