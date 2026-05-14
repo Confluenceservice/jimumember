@@ -12,7 +12,7 @@ import {
 import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
-import { createApplicationReviewDoc } from "../../lib/google-docs";
+import { createApplicationReviewDoc, createAssociateApplicationReviewDoc } from "../../lib/google-docs";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -218,6 +218,36 @@ async function handleCheckoutCompleted(
         });
       }
     }
+  }
+
+  // Create a Google Doc review document for associate applications
+  const associateApplicationId = session.metadata?.associate_application_id;
+  if (plan === "associate" && associateApplicationId) {
+    createAssociateApplicationReviewDoc({
+      applicationId: associateApplicationId,
+      submittedAt: "",
+      firstName: session.metadata?.first_name ?? "",
+      lastName: session.metadata?.last_name ?? "",
+      email: session.customer_email ?? "",
+      phone: session.metadata?.phone ?? "",
+      fullAddress: "",
+      postalAddress: "",
+      businessName: "",
+      interestJoining: "",
+      trainingDetails: "",
+      listOnPage: "",
+      listingDetails: "",
+      signature: "",
+      applicationDate: "",
+      checkoutStatus: "paid",
+    }).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("checkout_completed.associate_review_doc_failed", {
+        associateApplicationId,
+        sessionId: session.id,
+        error: msg,
+      });
+    });
   }
 }
 
