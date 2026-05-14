@@ -1,8 +1,8 @@
 # Professional Membership — Phase 2: Digital Form + Multi-File Upload
 
 **Date:** 2026-04-19
-**Last Updated:** 2026-05-01
-**Status:** Active (production reliability fixes applied)
+**Last Updated:** 2026-05-13
+**Status:** Active
 
 ---
 
@@ -19,9 +19,8 @@ Professional Membership applicants complete a structured digital form (8-step wi
 - Autosave now persists identity fields (`firstName`, `lastName`, `phone`, `email`) together with form data.
 - `GET /api/professional/apply?token=...` now returns `applicantId` for reliable resume hydration.
 - Flag parsing is case-insensitive for reads: `true` and `TRUE` are both treated as true for completion/payment/declaration checks.
-- Validation status:
-  - `npm run test` passes (37/37).
-  - `npm run check` still reports pre-existing unrelated type errors in other files.
+- `npm run test` passes (42/42).
+- `npm run check` reports pre-existing unrelated type errors in other files.
 
 ---
 
@@ -191,7 +190,24 @@ F: deleted ("TRUE"/"FALSE")
 ## Backwards Compatibility
 
 Existing applicants (pre-Phase 2) have blank new columns — acceptable.
-Resume links continue to work.
+Resume links continue to work. Resume-link emails are sent on first save if email is provided.
+
+---
+
+## Post-Payment Side Effects
+
+### Email Resumption (`src/lib/email-sender.ts`)
+- `sendEmail(params)` — sends a plain-text email via Gmail OAuth or service account
+- `sendResumeLink(toEmail, fullName, resumeLink)` — sends a templated resume-link email to applicants
+
+### Google Docs Generation (`src/lib/google-docs.ts`)
+- `createApplicationReviewDoc(applicant)` — creates a Google Doc in a configured Drive folder summarizing the application (personal details, training, experience, further requirements, core competencies, referees, documents uploaded, declarations)
+- Doc URL is logged; folder is configured via `GOOGLE_DRIVE_REVIEW_DOCS_FOLDER_ID` or falls back to `GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID`
+
+### Structured Logging (`src/lib/logger.ts`)
+- Pino-based logger with JSON output
+- Levels: `info`, `warn`, `error`, `debug`
+- Child loggers via `logger.child(meta)` for request-scoped context
 
 ---
 
