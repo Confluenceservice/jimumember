@@ -200,7 +200,7 @@ export const POST: APIRoute = async ({ request }) => {
     mode: "payment",
     success_url:
       plan === "associate"
-        ? `https://www.eldaa.org.nz/associate-membership?session_id={CHECKOUT_SESSION_ID}`
+        ? `${siteBaseUrl}/associate-membership?session_id={CHECKOUT_SESSION_ID}`
         : `${siteBaseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${siteBaseUrl}/cancel`,
     line_items: [
