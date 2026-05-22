@@ -62,7 +62,7 @@ async function getGmailClient() {
   return google.gmail({ version: "v1", auth: googleAuth });
 }
 
-function createMessage(params: EmailParams, senderEmail: string): string {
+export function createMessage(params: EmailParams, senderEmail: string): string {
   const headers = [
     `To: ${params.to}`,
     `From: ${senderEmail}`,
