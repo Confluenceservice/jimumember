@@ -84,3 +84,9 @@ export function isCheckoutDryRunEnabled(): boolean {
   const value = process.env.CHECKOUT_DRY_RUN?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes" || value === "on";
 }
+
+export function isStripeRetryableError(error: unknown): boolean {
+  if (error instanceof Error && error.name === "StripeConnectionError") return true;
+  if (error instanceof Error && error.name === "StripeAPIError") return true;
+  return false;
+}

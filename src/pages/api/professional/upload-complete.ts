@@ -7,13 +7,22 @@ import {
   isCheckoutDryRunEnabled,
   getNextJulyAnchorEpoch,
   getSiteBaseUrl,
+  isStripeRetryableError,
 } from "../../../lib/stripe-checkout";
 import { getApplicantByToken } from "../../../lib/upload-sheet";
 import { validateCompletion } from "../../../lib/upload-sheet";
 import { logger } from "../../../lib/logger";
 
-function badRequest(message: string): Response {
-  return Response.json({ error: message }, { status: 400 });
+type ErrorCode =
+  | "BAD_REQUEST"
+  | "INVALID_TOKEN"
+  | "ALREADY_COMPLETED"
+  | "INCOMPLETE"
+  | "MISSING_CONFIG"
+  | "CHECKOUT_ERROR";
+
+function badRequest(message: string, code: ErrorCode = "BAD_REQUEST"): Response {
+  return Response.json({ error: message, code }, { status: 400 });
 }
 
 export const POST: APIRoute = async ({ request, url }) => {
@@ -28,18 +37,18 @@ export const POST: APIRoute = async ({ request, url }) => {
   const token = payload.token?.trim();
 
   if (!token) {
-    return badRequest("Token is required.");
+    return badRequest("Token is required.", "INVALID_TOKEN");
   }
 
   // Get applicant
   const applicant = await getApplicantByToken(token);
 
   if (!applicant) {
-    return badRequest("Invalid or expired session.");
+    return badRequest("Invalid or expired session.", "INVALID_TOKEN");
   }
 
   if (String(applicant.paid ?? "").toUpperCase() === "TRUE") {
-    return badRequest("Application already completed.");
+    return badRequest("Application already completed.", "ALREADY_COMPLETED");
   }
 
   // Validate completion (form fields + doc uploads)
@@ -47,7 +56,8 @@ export const POST: APIRoute = async ({ request, url }) => {
 
   if (!isComplete) {
     return badRequest(
-      "Please complete all form sections and upload all required documents before proceeding."
+      "Please complete all form sections and upload all required documents before proceeding.",
+      "INCOMPLETE"
     );
   }
 
@@ -55,7 +65,7 @@ export const POST: APIRoute = async ({ request, url }) => {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
     return Response.json(
-      { error: "Server is missing STRIPE_SECRET_KEY." },
+      { error: "Server is missing STRIPE_SECRET_KEY.", code: "MISSING_CONFIG" },
       { status: 500 }
     );
   }
@@ -69,14 +79,14 @@ export const POST: APIRoute = async ({ request, url }) => {
 
   if (!recurringPriceId) {
     return Response.json(
-      { error: "Server is missing STRIPE_PRICE_PROFESSIONAL." },
+      { error: "Server is missing STRIPE_PRICE_PROFESSIONAL.", code: "MISSING_CONFIG" },
       { status: 500 }
     );
   }
 
   if (dryRun && !webhookSecret) {
     return Response.json(
-      { error: "Server is missing STRIPE_WEBHOOK_SECRET required for dry-run validation." },
+      { error: "Server is missing STRIPE_WEBHOOK_SECRET required for dry-run validation.", code: "MISSING_CONFIG" },
       { status: 500 }
     );
   }
@@ -85,7 +95,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     const recurringPrice = await stripe.prices.retrieve(recurringPriceId);
     if (recurringPrice.currency !== "nzd" || !recurringPrice.unit_amount) {
       return Response.json(
-        { error: "Recurring price must be a fixed NZD amount." },
+        { error: "Recurring price must be a fixed NZD amount.", code: "CHECKOUT_ERROR" },
         { status: 500 }
       );
     }
@@ -184,12 +194,14 @@ export const POST: APIRoute = async ({ request, url }) => {
       proratedFirstTerm,
     });
   } catch (error) {
-    Sentry.captureException(error, { extra: { applicantId: applicant.id } });
+    const retryable = isStripeRetryableError(error);
+    Sentry.captureException(error, { extra: { applicantId: applicant.id, retryable } });
     logger.error("checkout_session.create_failed", {
       error: error instanceof Error ? error.message : "Unknown",
+      retryable,
     });
     return Response.json(
-      { error: "Failed to create checkout session." },
+      { error: "Failed to create checkout session.", code: "CHECKOUT_ERROR", retryable },
       { status: 500 }
     );
   }

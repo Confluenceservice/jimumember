@@ -70,7 +70,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   <section class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
     <h2 class="m-0">Associate membership</h2>
-    <p class="text-gray-600 m-0">Then NZ$50.00 per year starting 1 July.</p>
+    <p class="text-gray-600 m-0">Then <span id="associate-price">loading…</span> per year starting 1 July.</p>
     <button id="checkout-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg mt-4 w-full sm:w-auto sm:max-w-sm flex items-center justify-center gap-2" data-plan="associate">
       Continue with Associate
     </button>
@@ -109,6 +109,19 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       checkoutBtn instanceof HTMLButtonElement && (checkoutBtn.disabled = isLoading);
       if (checkoutBtn) checkoutBtn.textContent = isLoading ? "Redirecting to Checkout..." : "Continue with Associate";
     };
+
+    // Fetch price from Stripe and update display
+    const priceEl = document.querySelector("#associate-price");
+    fetch("/api/get-prices")
+      .then(r => r.json())
+      .then(data => {
+        if (data.associate?.formatted && priceEl) {
+          priceEl.textContent = data.associate.formatted;
+        }
+      })
+      .catch(() => {
+        if (priceEl) priceEl.textContent = "NZ$75.00 (unavailable)";
+      });
 
     const getVal = (el: Element | null) => el instanceof HTMLInputElement ? el.value.trim() : "";
 

@@ -78,7 +78,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   <section class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
     <h2 class="m-0">Professional membership</h2>
-    <p class="text-gray-600 m-0">Then NZ$120.00 per year starting 1 July.</p>
+    <p class="text-gray-600 m-0">Then <span id="professional-price">loading…</span> per year starting 1 July.</p>
     <button id="checkout-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg mt-4 w-full sm:w-auto sm:max-w-sm flex items-center justify-center gap-2" data-plan="professional">
       Continue with Professional
     </button>
@@ -117,6 +117,19 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       checkoutBtn instanceof HTMLButtonElement && (checkoutBtn.disabled = isLoading);
       if (checkoutBtn) checkoutBtn.textContent = isLoading ? "Redirecting to Checkout..." : "Continue with Professional";
     };
+
+    // Fetch price from Stripe and update display
+    const priceEl = document.querySelector("#professional-price");
+    fetch("/api/get-prices")
+      .then(r => r.json())
+      .then(data => {
+        if (data.professional?.formatted && priceEl) {
+          priceEl.textContent = data.professional.formatted;
+        }
+      })
+      .catch(() => {
+        if (priceEl) priceEl.textContent = "NZ$150.00 (unavailable)";
+      });
 
     const getVal = (el: Element | null) => el instanceof HTMLInputElement ? el.value.trim() : "";
 

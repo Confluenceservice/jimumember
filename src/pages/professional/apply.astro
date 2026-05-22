@@ -429,6 +429,7 @@ const token = Astro.url.searchParams.get("token");
       <button id="proceed-payment-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg w-full" disabled>
         Complete all sections to continue
       </button>
+      <p id="payment-error-msg" class="hidden text-red-700 text-sm mt-2"></p>
     </div>
 
     <div class="mt-6 flex gap-3 justify-start">
@@ -1124,35 +1125,75 @@ const token = Astro.url.searchParams.get("token");
 
   async function goToPayment() {
     const btn = document.getElementById("proceed-payment-btn");
-    btn.disabled = true;
-    btn.textContent = "Loading...";
+    const errEl = document.getElementById("payment-error-msg");
 
-    try {
-      const res = await fetch("/api/professional/upload-complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: window.__token__ || token })
-      });
-
-      const data = await res.json();
-      if (data.dryRun) {
-        btn.disabled = false;
-        btn.textContent = "Proceed to Payment";
-        alert(data.message || "Dry run passed. Stripe configuration validated.");
-        return;
-      }
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        btn.disabled = false;
-        btn.textContent = "Proceed to Payment";
-        alert(data.error || "Failed to create payment session");
-      }
-    } catch (err) {
-      btn.disabled = false;
-      btn.textContent = "Proceed to Payment";
-      alert("Failed to create payment session");
+    function setPaymentError(msg) {
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove("hidden"); }
     }
+    function clearPaymentError() {
+      if (errEl) { errEl.textContent = ""; errEl.classList.add("hidden"); }
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Connecting to payment...";
+    clearPaymentError();
+
+    const maxAttempts = 3;
+    const backoffMs = [1000, 2000, 4000];
+    let lastError = "Failed to create payment session. Please try again.";
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const res = await fetch("/api/professional/upload-complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: window.__token__ || token })
+        });
+
+        const data = await res.json();
+
+        if (res.status === 429) {
+          const retryAfter = res.headers.get("Retry-After");
+          const waitSec = retryAfter ? parseInt(retryAfter, 10) : 60;
+          lastError = `Too many requests. Please wait ${waitSec} seconds and try again.`;
+          break;
+        }
+
+        if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504)) {
+          lastError = "Payment service temporarily unavailable. Retrying...";
+          if (attempt < maxAttempts - 1) {
+            await new Promise(r => setTimeout(r, backoffMs[attempt]));
+            continue;
+          }
+          break;
+        }
+
+        if (data.dryRun) {
+          btn.disabled = false;
+          btn.textContent = "Proceed to Payment";
+          alert(data.message || "Dry run passed. Stripe configuration validated.");
+          return;
+        }
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+        // non-retryable server error
+        lastError = data.error || "Failed to create payment session. Please try again.";
+        break;
+      } catch (err) {
+        lastError = "Network error. Check your connection and try again.";
+        if (attempt < maxAttempts - 1) {
+          await new Promise(r => setTimeout(r, backoffMs[attempt]));
+          continue;
+        }
+        break;
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Proceed to Payment";
+    setPaymentError(lastError);
   }
 
   document.getElementById("register-btn").addEventListener("click", async () => {
