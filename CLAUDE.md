@@ -8,7 +8,7 @@ This project uses OpenWolf for context management. Read and follow .wolf/OPENWOL
 # Professional Membership — Phase 2: Digital Form + Multi-File Upload
 
 **Date:** 2026-04-19
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-05-22
 **Status:** Active
 
 ---
@@ -92,7 +92,7 @@ Returns: `{ success }`
 
 ### `POST /api/professional/upload-complete`
 Creates Stripe Checkout session if all requirements met.
-Returns: `{ url }` or `{ error }`
+Returns: `{ url }` or `{ error, code, retryable? }`
 
 ### `POST /api/stripe-webhook`
 Receives Stripe events for checkout completion, subscription setup, and post-payment side effects.
@@ -228,6 +228,18 @@ Resume links continue to work. Resume-link emails are sent on first save if emai
 - [ ] Y/N questions all answered → declaration section allows submission
 - [ ] Stripe payment → webhook fires → Sheet1 logged
 - [ ] Existing applicant resume link still works
+
+---
+
+## Checkout Flow Resilience (2026-05-22)
+
+The "Proceed to Payment" flow (`goToPayment()` in `apply.astro`) is hardened against transient failures:
+
+- **Retry with exponential backoff:** 3 attempts (1s, 2s, 4s delays) for network errors and 502/503/504 responses. Not retried: 400, 429, 500+ with JSON body.
+- **Rate limit handling:** Reads `Retry-After` header on 429 and shows a user-friendly wait message.
+- **Typed error responses:** All `upload-complete` errors include a `code` field (`INVALID_TOKEN`, `ALREADY_COMPLETED`, `INCOMPLETE`, `MISSING_CONFIG`, `CHECKOUT_ERROR`). Stripe catch block returns `retryable: true/false`.
+- **Inline error banner:** Errors display in-page (not a dismissable `alert`), so users can retry without losing form state.
+- **Token persistence:** `window.__token__` survives across retries — applicant record is hit again with no re-filling needed.
 - [ ] With `CHECKOUT_DRY_RUN=true`, "Proceed to Payment" returns `{ dryRun: true, stripeKeysValidated: true }` and does not create a Stripe Checkout Session
 
 ---
