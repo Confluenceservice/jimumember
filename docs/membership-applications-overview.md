@@ -109,7 +109,7 @@ Every "Continue" or "Back" button press triggers an autosave:
 
 ### File Rules
 
-- **Max 10 MB per file**
+- **Max 50 MB per file**
 - Allowed types: PDF, JPEG, PNG, GIF, DOC, DOCX
 - Multiple files per category are allowed
 - Files are validated by magic bytes (file signature), not just extension
