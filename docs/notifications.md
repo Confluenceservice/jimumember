@@ -50,14 +50,39 @@ The following notifications are described in the UI but **not yet implemented**:
 | Subscription renewal reminder | — | — | Not implemented |
 | Application review completion | — | — | Not implemented |
 
-### Stripe Receipt Emails
+### 2. Payment Confirmation (Professional Membership)
 
-When a Checkout Session is created, ELDAA passes `receipt_email` (the applicant's email) in the API call. This **overrides** the Dashboard automatic receipt settings:
+**Trigger:** `checkout.session.completed` webhook event for professional membership
+
+**Conditions:**
+- `plan === "professional"` and `applicant_id` present in session metadata
+- Applicant has an email address in the sheet
+
+**Template:** `sendProfessionalConfirmation(toEmail, fullName)` in `src/lib/email-sender.ts`
+
+```
+Subject: Your ELDAA Professional Membership Application
+
+Dear {fullName},
+
+Thank you for your application to become a Professional Member of ELDAA. We will process your application and get back to you as soon as we can.
+
+We look forward to seeing you soon.
+
+Kia ora,
+ELDAA Committee
+```
+
+**Delivery:** Non-blocking — failures are logged but do not fail webhook processing.
+
+---
+
+### 3. Payment Receipt
+
+**Trigger:** Stripe Checkout — ELDAA passes `receipt_email` in the Checkout Session API call, which overrides Dashboard automatic receipt settings. Stripe sends its own branded receipt directly to the applicant.
 
 - **With `receipt_email` in the API call:** Stripe sends a receipt to that specific address regardless of Dashboard settings
 - **Without `receipt_email`:** Stripe uses the Dashboard setting (automatic receipts on/off)
-
-Stripe's own branded receipt is sent directly to the applicant — no ELDAA-branded receipt is needed.
 
 ---
 

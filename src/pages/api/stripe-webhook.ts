@@ -13,6 +13,7 @@ import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { createApplicationReviewDoc, createAssociateApplicationReviewDoc } from "../../lib/google-docs";
+import { sendProfessionalConfirmation } from "../../lib/email-sender";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -164,12 +165,34 @@ async function handleCheckoutCompleted(
 
   // Mark professional applicant paid/complete in the application sheet.
   const applicantId = session.metadata?.applicant_id;
+  let professionalApplicant = null;
   if (plan === "professional" && applicantId) {
     await markApplicantPaid(applicantId, session.id);
     log.info("checkout_completed.applicant_marked_paid", {
       applicantId,
       sessionId: session.id,
     });
+
+    // Send confirmation email to the applicant (non-blocking)
+    professionalApplicant = await getApplicantById(applicantId);
+    if (professionalApplicant?.email && professionalApplicant?.firstName) {
+      sendProfessionalConfirmation(
+        professionalApplicant.email,
+        professionalApplicant.firstName
+      ).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("checkout_completed.confirmation_email_failed", {
+          applicantId,
+          sessionId: session.id,
+          error: msg,
+        });
+      });
+    } else {
+      log.warn("checkout_completed.missing_applicant_email_for_confirmation", {
+        applicantId,
+        sessionId: session.id,
+      });
+    }
   }
 
   // Log to Google Sheets (async — don't fail the webhook if this errors)
@@ -199,25 +222,20 @@ async function handleCheckoutCompleted(
   });
 
   // Create a Google Doc review document for professional applications
-  if (plan === "professional") {
-    if (applicantId) {
-      const applicant = await getApplicantById(applicantId);
-      if (applicant) {
-        createApplicationReviewDoc(applicant).catch((err) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          log.error("checkout_completed.review_doc_failed", {
-            applicantId: applicant.id,
-            sessionId: session.id,
-            error: msg,
-          });
-        });
-      } else {
-        log.warn("checkout_completed.applicant_not_found_for_review_doc", {
-          applicantId,
-          sessionId: session.id,
-        });
-      }
-    }
+  if (plan === "professional" && applicantId && professionalApplicant) {
+    createApplicationReviewDoc(professionalApplicant).catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error("checkout_completed.review_doc_failed", {
+        applicantId,
+        sessionId: session.id,
+        error: msg,
+      });
+    });
+  } else if (plan === "professional" && applicantId) {
+    log.warn("checkout_completed.applicant_not_found_for_review_doc", {
+      applicantId,
+      sessionId: session.id,
+    });
   }
 
   // Create a Google Doc review document for associate applications

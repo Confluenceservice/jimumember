@@ -88,6 +88,28 @@ export async function sendEmail(params: EmailParams): Promise<void> {
   });
 }
 
+export async function sendProfessionalConfirmation(
+  toEmail: string,
+  fullName: string
+): Promise<void> {
+  const subject = "Your ELDAA Professional Membership Application";
+
+  const body = `Dear ${fullName},
+
+Thank you for your application to become a Professional Member of ELDAA. We will process your application and get back to you as soon as we can.
+
+We look forward to seeing you soon.
+
+Kia ora,
+ELDAA Committee`;
+
+  await sendEmail({
+    to: toEmail,
+    subject,
+    body,
+  });
+}
+
 export async function sendResumeLink(
   toEmail: string,
   fullName: string,
