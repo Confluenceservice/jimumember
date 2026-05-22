@@ -228,3 +228,21 @@ Resume links continue to work. Resume-link emails are sent on first save if emai
 - [ ] Y/N questions all answered → declaration section allows submission
 - [ ] Stripe payment → webhook fires → Sheet1 logged
 - [ ] Existing applicant resume link still works
+- [ ] With `CHECKOUT_DRY_RUN=true`, "Proceed to Payment" returns `{ dryRun: true, stripeKeysValidated: true }` and does not create a Stripe Checkout Session
+
+---
+
+## Stripe Dry Run Mode
+
+When `CHECKOUT_DRY_RUN=true`, checkout endpoints validate Stripe configuration (secret key, webhook secret, price IDs) without creating a real Checkout Session. Useful for testing the integration without charging real customers or validating Stripe keys in a new environment before going live.
+
+**Enable:** set `CHECKOUT_DRY_RUN=true` in your `.env` file (accepted values: `true`, `1`, `yes`, `on`).
+
+**Disable:** set `CHECKOUT_DRY_RUN=false` (or remove the variable entirely — defaults to `false`).
+
+**Behavior:**
+- `POST /api/professional/upload-complete` — returns `{ dryRun: true, stripeKeysValidated: true }` instead of creating a session
+- `POST /api/create-checkout-session` — same, does not hit Stripe
+- `POST /api/create-professional-checkout` — same, does not hit Stripe
+
+**Requires:** `STRIPE_WEBHOOK_SECRET` must be set (endpoints return error if missing during dry-run).
