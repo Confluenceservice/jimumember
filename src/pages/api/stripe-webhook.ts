@@ -13,7 +13,7 @@ import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { createApplicationReviewDoc, createAssociateApplicationReviewDoc } from "../../lib/google-docs";
-import { sendProfessionalConfirmation, sendProfessionalApplicationNotification } from "../../lib/email-sender";
+import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation } from "../../lib/email-sender";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -251,24 +251,40 @@ async function handleCheckoutCompleted(
 
   // Create a Google Doc review document for associate applications
   const associateApplicationId = session.metadata?.associate_application_id;
+  const associateListOnPage = session.metadata?.list_on_page ?? "";
   if (plan === "associate" && associateApplicationId) {
-    createAssociateApplicationReviewDoc({
+    const associateDocData = {
       applicationId: associateApplicationId,
       submittedAt: "",
       firstName: session.metadata?.first_name ?? "",
       lastName: session.metadata?.last_name ?? "",
       email: session.customer_email ?? "",
       phone: session.metadata?.phone ?? "",
-      fullAddress: "",
-      postalAddress: "",
-      businessName: "",
-      interestJoining: "",
-      trainingDetails: "",
-      listOnPage: "",
-      listingDetails: "",
+      fullAddress: session.metadata?.full_address ?? "",
+      postalAddress: session.metadata?.postal_address ?? "",
+      businessName: session.metadata?.business_name ?? "",
+      interestJoining: session.metadata?.interest_joining ?? "",
+      trainingDetails: session.metadata?.training_details ?? "",
+      listOnPage: associateListOnPage,
+      listingDetails: session.metadata?.listing_details ?? "",
       signature: "",
       applicationDate: "",
       checkoutStatus: "paid",
+    };
+    createAssociateApplicationReviewDoc(associateDocData).then((docUrl) => {
+      const fullName = `${associateDocData.firstName} ${associateDocData.lastName}`;
+      sendAssociateConfirmation(
+        associateDocData.email,
+        fullName,
+        associateListOnPage === "yes"
+      ).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("checkout_completed.associate_confirmation_failed", {
+          associateApplicationId,
+          sessionId: session.id,
+          error: msg,
+        });
+      });
     }).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("checkout_completed.associate_review_doc_failed", {

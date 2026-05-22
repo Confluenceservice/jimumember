@@ -238,6 +238,7 @@ export const POST: APIRoute = async ({ request }) => {
       ...params.metadata,
       application_source: "apply",
       associate_application_id: associateApplicationId,
+      list_on_page: listOnPage ?? "",
     };
   }
 

@@ -100,7 +100,48 @@ ELDAA
 
 ---
 
-### 4. Stripe Payment Receipt
+### 4. Associate Membership Confirmation (Applicant Email)
+
+**Trigger:** After `createAssociateApplicationReviewDoc()` completes for associate membership
+
+**To:** Applicant's email address
+
+**Reply-To:** `membership@eldaa.org.nz`
+
+**Template:** `sendAssociateConfirmation(toEmail, fullName, listOnPage)` in `src/lib/email-sender.ts`
+
+```
+Subject: Welcome to ELDAA — Associate Membership Confirmed
+
+Welcome to ELDAA ☺
+
+Dear {fullName},
+
+We would like to officially welcome you on board the End of Life Doula Alliance
+of Aotearoa as an Associate Member. We are delighted you are joining us in this
+role, and look forward to supporting you in your mahi.
+
+{listOnPage ? "You have requested to be listed on our Associate Member list on
+our website — we will process that shortly." : "You have not requested to be
+listed at this time. If you would like to be added in future, please email us
+at membership@eldaa.org.nz."}
+
+[Resources, Meetings, Networking sections...]
+
+Questions? Email us at membership@eldaa.org.nz — we would love your feedback
+and any ideas you have to support you in your mahi.
+
+Again, welcome on board ☺
+
+Kia ora,
+ELDAA Committee
+```
+
+**Delivery:** Non-blocking — fires after Google Doc creation succeeds.
+
+---
+
+### 5. Stripe Payment Receipt
 
 **Trigger:** Stripe Checkout — ELDAA passes `receipt_email` in the Checkout Session API call, which overrides Dashboard automatic receipt settings. Stripe sends its own branded receipt directly to the applicant.
 
