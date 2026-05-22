@@ -153,6 +153,8 @@ ELDAA Committee`;
     replyTo: "membership@eldaa.org.nz",
   });
 }
+
+export async function sendProfessionalApplicationNotification(
   toEmail: string,
   applicantName: string,
   docUrl: string
