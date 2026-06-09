@@ -1,0 +1,185 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Renew Professional Membership"
+  description="Starting from 1 July."
+>
+  <section class="bg-white border border-gray-200 rounded-xl p-4">
+    <h1 class="text-2xl sm:text-4xl font-bold mb-1">Professional Membership</h1>
+    <p class="text-gray-600 m-0">
+      Pay today, then annual billing starts on 1 July.
+    </p>
+    <p class="mt-4 mb-0 font-semibold text-gray-700">
+      First-time subscribers receive a prorated discount based on weeks remaining until 1 July.
+    </p>
+  </section>
+
+  <section class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
+    <p class="m-0 mb-4 font-semibold">Personal details</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="firstName" class="block font-semibold mb-1.5">
+          First name
+        </label>
+        <input
+          id="firstName"
+          name="firstName"
+          type="text"
+          placeholder="Jane"
+          autocomplete="given-name"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
+        />
+      </div>
+      <div>
+        <label for="lastName" class="block font-semibold mb-1.5">
+          Last name
+        </label>
+        <input
+          id="lastName"
+          name="lastName"
+          type="text"
+          placeholder="Doe"
+          autocomplete="family-name"
+          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
+        />
+      </div>
+    </div>
+    <div class="mt-3">
+      <label for="phone" class="block font-semibold mb-1.5">
+        Phone number
+      </label>
+      <input
+        id="phone"
+        name="phone"
+        type="tel"
+        placeholder="+64 21 123 4567"
+        autocomplete="tel"
+        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
+      />
+    </div>
+    <div class="mt-3">
+      <label for="email" class="block font-semibold mb-1.5">
+        Email address
+      </label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        placeholder="you@example.com"
+        autocomplete="email"
+        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
+      />
+    </div>
+    <p class="text-gray-600 mt-2 mb-0 text-sm">
+      First-time subscribers receive a prorated discount based on weeks remaining until 1 July.
+    </p>
+  </section>
+
+  <section class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
+    <h2 class="m-0">Professional membership</h2>
+    <p class="text-gray-600 m-0">Then <span id="professional-price">loading…</span> per year starting 1 July.</p>
+    <button id="checkout-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg mt-4 w-full sm:w-auto sm:max-w-sm flex items-center justify-center gap-2" data-plan="professional">
+      Continue with Professional
+    </button>
+  </section>
+
+  <p id="status" class="mt-4 min-h-6 text-amber-800" aria-live="polite"></p>
+
+  <script>
+    // @ts-nocheck
+    // Pre-fill from URL params (e.g. /renew/pro?firstName=Jane&lastName=Doe&phone=...&email=...)
+    const params = new URLSearchParams(window.location.search);
+    const prefill = (id, key) => {
+      const el = document.querySelector(id);
+      if (el instanceof HTMLInputElement && params.has(key)) {
+        el.value = params.get(key) ?? "";
+      }
+    };
+    prefill("#firstName", "firstName");
+    prefill("#lastName", "lastName");
+    prefill("#phone", "phone");
+    prefill("#email", "email");
+
+    const statusEl = document.querySelector("#status");
+    const firstNameInput = document.querySelector("#firstName");
+    const lastNameInput = document.querySelector("#lastName");
+    const phoneInput = document.querySelector("#phone");
+    const emailInput = document.querySelector("#email");
+    const checkoutBtn = document.querySelector("#checkout-btn");
+
+    const setStatus = (message, type = "info") => {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.className = type === "error" ? "mt-4 min-h-6 text-amber-800" : type === "ok" ? "mt-4 min-h-6 text-emerald-700" : "mt-4 min-h-6";
+    };
+
+    const setLoading = (isLoading) => {
+      if (!checkoutBtn) return;
+      checkoutBtn instanceof HTMLButtonElement && (checkoutBtn.disabled = isLoading);
+      if (checkoutBtn) checkoutBtn.textContent = isLoading ? "Redirecting to Checkout..." : "Continue with Professional";
+    };
+
+    // Fetch price from Stripe and update display
+    const priceEl = document.querySelector("#professional-price");
+    fetch("/api/get-prices")
+      .then(r => r.json())
+      .then(data => {
+        if (data.professional?.formatted && priceEl) {
+          priceEl.textContent = data.professional.formatted;
+        }
+      })
+      .catch(() => {
+        if (priceEl) priceEl.textContent = "NZ$150.00 (unavailable)";
+      });
+
+    const getVal = (el) => el instanceof HTMLInputElement ? el.value.trim() : "";
+
+    const validate = () => {
+      if (!getVal(firstNameInput)) { setStatus("Enter your first name.", "error"); return false; }
+      if (!getVal(lastNameInput)) { setStatus("Enter your last name.", "error"); return false; }
+      if (!getVal(emailInput)) { setStatus("Enter an email address.", "error"); return false; }
+      return true;
+    };
+
+    checkoutBtn?.addEventListener("click", async () => {
+      if (!validate()) return;
+
+      const payload = {
+        plan: checkoutBtn instanceof HTMLButtonElement ? checkoutBtn.dataset?.plan : undefined,
+        firstName: getVal(firstNameInput),
+        lastName: getVal(lastNameInput),
+        phone: getVal(phoneInput),
+        email: getVal(emailInput),
+      };
+
+      setLoading(true);
+      setStatus("Creating your secure checkout session...");
+
+      try {
+        const response = await fetch("/api/create-professional-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+        if (data.dryRun) {
+          setLoading(false);
+          setStatus(data.message || "Dry run passed. Stripe configuration validated.", "ok");
+          return;
+        }
+
+        if (!response.ok || !data.url) {
+          throw new Error(data.error || "Checkout session creation failed.");
+        }
+
+        window.location.assign(data.url);
+      } catch (error) {
+        setLoading(false);
+        setStatus(error instanceof Error ? error.message : "Checkout error.", "error");
+      }
+    });
+  </script>
+</BaseLayout>
