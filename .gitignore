@@ -10,3 +10,8 @@ dist
 .wolf/
 .claude/
 coverage/
+
+# Local runtime + secrets in .run/
+.mcp.json
+.run/gmail-oauth-env.sh
+

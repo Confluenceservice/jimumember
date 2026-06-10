@@ -21,8 +21,11 @@ primary_region = 'syd'
   processes = ['app']
 
 [[http_service.checks]]
-  interval = "30s"
+  interval = "5m"
   timeout = "15s"
+  grace_period = "1m"
+  method = "GET"
+  path = "/api/health"
 
 [[vm]]
   memory = '256mb'
