@@ -1,9 +1,8 @@
 // eldaa-health-alert (module worker)
 // Triggered by GitHub Actions cron (every 5 min) via POST /check with bearer auth.
-// Pings both staging and prod /api/health endpoints, posts to Slack on failure.
+// Pings the production /api/health endpoint, posts to Slack on failure.
 
 const TARGETS = [
-  { name: "staging", url: "https://eldaa.fly.dev/api/health" },
   { name: "production", url: "https://subscribe.eldaa.org.nz/api/health" },
 ];
 

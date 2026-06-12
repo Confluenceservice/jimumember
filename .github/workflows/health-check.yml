@@ -1,7 +1,8 @@
 name: Health check
 
 # Triggers the Cloudflare Worker (eldaa-health-alert) every 5 minutes.
-# The Worker probes /api/health on both Fly apps and posts to Slack on failure.
+# The Worker probes /api/health on the production Fly app and posts to Slack
+# on failure.
 # Worker URL is public; the CHECK_TOKEN is verified by the Worker.
 
 on:

@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import crypto from "node:crypto";
 import { logger } from "./logger";
+import { getServiceAccountJwtAuth } from "./google-auth";
 
 export const REQUIRED_DOC_TYPES = [
   "training",
@@ -31,21 +32,7 @@ export interface UploadStatus {
 }
 
 function getSheetsClient() {
-  const email = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
-  const keyRaw = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY?.trim();
-
-  if (!email || !keyRaw) {
-    throw new Error("Missing GOOGLE_SHEETS service account config.");
-  }
-
-  const key = keyRaw.replace(/\\n/g, "\n");
-
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
+  const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   return google.sheets({ version: "v4", auth });
 }
 

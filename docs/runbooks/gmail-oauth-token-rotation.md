@@ -20,6 +20,7 @@ OAuth refresh tokens for Google don't expire on a schedule — they last until r
 - `no-reply@eldaa.org.nz` password or MFA change
 - Someone removes the app from that account's Authorized Apps
 - The OAuth client or GCP project is deleted
+- OAuth consent requests Google Cloud scopes (for example `cloud-platform`) and the Workspace admin has a Cloud session-length policy; this often surfaces as `invalid_grant` / `invalid_rapt` about every 24h
 
 Detection is automated: `src/pages/api/health.ts` exercises the refresh token on every call, and the `eldaa-health-alert` Cloudflare Worker pings it on a cron and posts to Slack on failure. If Slack pings you about `gmail: disconnected`, run this runbook.
 
@@ -58,7 +59,7 @@ params = {
   "client_id": os.environ["GMAIL_OAUTH_CLIENT_ID"],
   "redirect_uri": "http://localhost",
   "response_type": "code",
-  "scope": "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/gmail.send",
+  "scope": "https://www.googleapis.com/auth/gmail.send",
   "access_type": "offline",
   "prompt": "consent",
   "include_granted_scopes": "true",
@@ -66,6 +67,7 @@ params = {
 print("https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params))
 PY
 ```
+Do not add `https://www.googleapis.com/auth/cloud-platform` unless you truly need Google Cloud APIs in this same token. That scope makes the token subject to Google Cloud session-control reauth and can cause recurring `invalid_rapt` failures.
 Open the printed URL, sign in as `no-reply@eldaa.org.nz`, approve access, and copy the full callback URL (`http://localhost/?code=...`).
 
 ## 3) Exchange auth code for refresh token

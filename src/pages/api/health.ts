@@ -44,6 +44,7 @@ async function checkGmail(): Promise<SubsystemResult> {
     oauth.setCredentials({ refresh_token: refreshToken });
     // refreshAccessToken round-trips to Google's token endpoint. A dead
     // refresh token (invalid_grant / invalid_rapt) throws within ~300ms.
+    // This call does not revoke or rotate the stored refresh token.
     await oauth.refreshAccessToken();
     return { status: "connected" };
   } catch (err) {

@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly STRIPE_PRICE_ASSOCIATE: string;
   readonly STRIPE_PRICE_PROFESSIONAL: string;
   readonly PUBLIC_SITE_URL?: string;
+  readonly GOOGLE_WORKSPACE_IMPERSONATE_USER?: string;
 }
 
 interface ImportMeta {

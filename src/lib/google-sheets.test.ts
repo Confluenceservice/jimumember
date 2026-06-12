@@ -145,7 +145,7 @@ describe("google-sheets", () => {
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
-      })).rejects.toThrow("Missing GOOGLE_SHEETS service account config.");
+      })).rejects.toThrow("Missing GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL");
     });
 
     it("throws when GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY is missing", async () => {
@@ -162,7 +162,7 @@ describe("google-sheets", () => {
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
-      })).rejects.toThrow("Missing GOOGLE_SHEETS service account config.");
+      })).rejects.toThrow("Missing GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL");
     });
 
     it("succeeds with zero amountPaid", async () => {

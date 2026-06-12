@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { getServiceAccountJwtAuth } from "./google-auth";
 
 type CheckoutLogEntry = {
   timestamp: string;
@@ -52,22 +53,7 @@ const ASSOCIATE_APPLICATIONS_HEADERS = [
 ] as const;
 
 function getSheetsClient() {
-  const email = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
-  const keyRaw = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY?.trim();
-
-  if (!email || !keyRaw) {
-    throw new Error("Missing GOOGLE_SHEETS service account config.");
-  }
-
-  // The key may contain \n escape sequences from env var formatting
-  const key = keyRaw.replace(/\\n/g, "\n");
-
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
+  const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   return google.sheets({ version: "v4", auth });
 }
 

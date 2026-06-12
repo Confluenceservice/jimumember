@@ -36,7 +36,9 @@ params = {
     "client_id": sys.argv[1],
     "redirect_uri": "http://localhost",
     "response_type": "code",
-    "scope": "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/gmail.send",
+    # Request only the scope used by this app. Including cloud-platform can
+    # trigger Workspace reauthentication policies (invalid_rapt every ~24h).
+    "scope": "https://www.googleapis.com/auth/gmail.send",
     "access_type": "offline",
     "prompt": "consent",
     "include_granted_scopes": "true",

@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import type { DocType } from "./upload-sheet";
+import { getServiceAccountJwtAuth } from "./google-auth";
 
 const DRIVE_FILES_SHEET = "Drive Files";
 
@@ -13,40 +14,12 @@ const DRIVE_FILES_HEADERS = [
 ];
 
 function getSheetsClient() {
-  const email = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
-  const keyRaw = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY?.trim();
-
-  if (!email || !keyRaw) {
-    throw new Error("Missing GOOGLE_SHEETS service account config.");
-  }
-
-  const key = keyRaw.replace(/\\n/g, "\n");
-
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
+  const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   return google.sheets({ version: "v4", auth });
 }
 
 function getDriveClient() {
-  const email = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL?.trim();
-  const keyRaw = process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY?.trim();
-
-  if (!email || !keyRaw) {
-    throw new Error("Missing GOOGLE_SHEETS service account config.");
-  }
-
-  const key = keyRaw.replace(/\\n/g, "\n");
-
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
-
+  const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/drive"]);
   return google.drive({ version: "v3", auth });
 }
 
