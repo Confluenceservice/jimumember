@@ -18,7 +18,19 @@ jobs:
     steps:
       - name: Trigger eldaa-health-alert Worker
         run: |
-          curl -sS -X POST \
+          set -euo pipefail
+          # Capture body + HTTP status. Don't use -f: we want to print the body
+          # on errors, then fail the step ourselves on any non-2xx so a broken
+          # token or undelivered Slack alert (worker 502) turns the run red.
+          response=$(curl -sS -X POST \
             "https://eldaa-health-alert.thomas-b02.workers.dev/check" \
             -H "Authorization: Bearer ${{ secrets.ELDAA_HEALTH_CHECK_TOKEN }}" \
-            -w "\n---\nHTTP %{http_code}\n"
+            -w $'\n%{http_code}')
+          http_code=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+          echo "$body"
+          echo "--- HTTP $http_code"
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "::error::health-alert worker returned HTTP $http_code"
+            exit 1
+          fi

@@ -60,6 +60,9 @@ async function postSlack(webhook, results) {
   const failed = results.filter((r) => !r.ok);
   if (failed.length === 0) return { sent: false, reason: "all_ok" };
 
+  // An alert is needed but we can't deliver it — the monitor itself is broken.
+  if (!webhook) return { sent: false, reason: "no_webhook" };
+
   const headerText = `🚨 ELDAA health: ${failed.length}/${results.length} failing`;
   const blocks = [
     { type: "header", text: { type: "plain_text", text: headerText } },
@@ -77,17 +80,22 @@ async function postSlack(webhook, results) {
     { type: "context", elements: [{ type: "mrkdwn", text: `Checked at ${new Date().toISOString()}` }] },
   ];
 
-  const res = await fetch(webhook, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: headerText, blocks }),
-  });
+  try {
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: headerText, blocks }),
+      signal: AbortSignal.timeout(10_000),
+    });
 
-  const respText = await res.text();
-  if (!res.ok) {
-    return { sent: false, reason: "slack_error", httpStatus: res.status, slackResponse: respText };
+    const respText = await res.text();
+    if (!res.ok) {
+      return { sent: false, reason: "slack_error", httpStatus: res.status, slackResponse: respText };
+    }
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: "slack_exception", error: String(err && err.message ? err.message : err) };
   }
-  return { sent: true };
 }
 
 export default {
@@ -112,6 +120,12 @@ export default {
     const results = await Promise.all(TARGETS.map(check));
     const slack = await postSlack(env.SLACK_WEBHOOK_URL, results);
 
+    // Return 502 when an alert was needed but couldn't be delivered, so the
+    // GitHub Actions cron fails loudly instead of going green on a broken
+    // monitor. "all_ok" (nothing to send) stays 200.
+    const alertUndelivered = slack.sent === false && slack.reason !== "all_ok";
+    const status = alertUndelivered ? 502 : 200;
+
     return new Response(
       JSON.stringify(
         {
@@ -123,7 +137,7 @@ export default {
         null,
         2,
       ),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+      { status, headers: { "Content-Type": "application/json" } },
     );
   },
 };
