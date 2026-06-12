@@ -121,8 +121,9 @@ function makeRow(overrides: Record<string, string | number> = {}): string[] {
     43: "FALSE",
     44: "2024-05-01T00:00:00Z",
     45: "",
+    46: "TRUE", // email_verified
   };
-  const row: string[] = new Array(46).fill("");
+  const row: string[] = new Array(47).fill("");
   for (const [key, val] of Object.entries(defaults)) {
     row[parseInt(key)] = String(val);
   }
@@ -459,6 +460,83 @@ describe("upload-sheet", () => {
       const result = await getApplicantById("app_by_id");
       expect(result).not.toBeNull();
       expect(result!.firstName).toBe("By");
+    });
+  });
+
+  describe("email_verified (column AU)", () => {
+    it("getApplicantByToken returns emailVerified TRUE when AU is TRUE", async () => {
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_v", 46: "TRUE" })]);
+      const { getApplicantByToken } = await import("./upload-sheet");
+      const result = await getApplicantByToken("tok_abc123");
+      expect(result!.emailVerified).toBe("TRUE");
+    });
+
+    it("getApplicantByToken returns emailVerified FALSE when AU is FALSE", async () => {
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_v_false", 46: "FALSE" })]);
+      const { getApplicantByToken } = await import("./upload-sheet");
+      const result = await getApplicantByToken("tok_abc123");
+      expect(result!.emailVerified).toBe("FALSE");
+    });
+
+    it("getApplicantByToken treats legacy blank AU as verified (TRUE)", async () => {
+      // Pass "" to override the default "TRUE" set by makeRow, simulating a
+      // pre-AU row that was never written by the new code path.
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_legacy", 46: "" })]);
+      const { getApplicantByToken } = await import("./upload-sheet");
+      const result = await getApplicantByToken("tok_abc123");
+      expect(result!.emailVerified).toBe("TRUE");
+    });
+
+    it("getApplicantByEmail reads emailVerified the same way", async () => {
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_ev", 46: "FALSE" })]);
+      const { getApplicantByEmail } = await import("./upload-sheet");
+      const result = await getApplicantByEmail("jane@example.com");
+      expect(result!.emailVerified).toBe("FALSE");
+    });
+
+    it("getApplicantById reads emailVerified the same way", async () => {
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_id_ev", 46: "FALSE" })]);
+      const { getApplicantById } = await import("./upload-sheet");
+      const result = await getApplicantById("app_id_ev");
+      expect(result!.emailVerified).toBe("FALSE");
+    });
+
+    it("createApplicantRow writes FALSE to AU by default (new rows unverified)", async () => {
+      const mocks = getMocks();
+      mocks.mockSpreadsheetsValuesGet.mockResolvedValue({
+        data: { values: [["applicant_id"]] },
+      });
+      mocks.mockSpreadsheetsValuesAppend.mockResolvedValue({});
+      mocks.mockSpreadsheetsGet.mockResolvedValue({
+        data: { sheets: [{ properties: { title: "Professional Applications", sheetId: "0" } }] },
+      });
+
+      const { createApplicantRow } = await import("./upload-sheet");
+      await createApplicantRow("app_new", "Jane", "Doe", "0271234567", "jane@example.com", "tok_new");
+
+      const row = mocks.mockSpreadsheetsValuesAppend.mock.calls[0][0].requestBody.values[0];
+      expect(row[46]).toBe("FALSE");
+    });
+
+    it("markEmailVerified writes TRUE to column AU{rowIndex}", async () => {
+      const mocks = getMocks();
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_mark", 46: "FALSE" })]);
+      mocks.mockSpreadsheetsValuesUpdate.mockResolvedValue({});
+
+      const { markEmailVerified } = await import("./upload-sheet");
+      await markEmailVerified("app_mark");
+
+      expect(mocks.mockSpreadsheetsValuesUpdate).toHaveBeenCalled();
+      const call = mocks.mockSpreadsheetsValuesUpdate.mock.calls[0][0];
+      expect(call.range).toContain("AU2");
+      expect(call.requestBody.values).toEqual([["TRUE"]]);
+    });
+
+    it("markEmailVerified throws when applicant not found", async () => {
+      resetSheetData([HEADER_ROW, makeRow({ 0: "app_other" })]);
+      const { markEmailVerified } = await import("./upload-sheet");
+      await expect(markEmailVerified("app_missing"))
+        .rejects.toThrow("Applicant not found: app_missing");
     });
   });
 

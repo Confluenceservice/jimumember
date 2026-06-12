@@ -99,7 +99,7 @@ const SHEET_HEADERS = [
   "paid",           // AR
   "created_at",     // AS
   "paid_at",        // AT
-  // AU is spare/reserved
+  "email_verified", // AU  (blank = legacy, treated as verified)
 ];
 
 async function ensureSheetExists(sheets: ReturnType<typeof google.sheets>): Promise<string> {
@@ -151,6 +151,15 @@ function hashEmail(email: string): string {
   return crypto.createHash("sha256").update(email.toLowerCase().trim()).digest("hex");
 }
 
+// Column AU (index 46). Blank = legacy row, treated as verified so existing
+// applicants are not locked out. New rows write "FALSE" and flip to "TRUE"
+// when the applicant clicks the emailed resume link.
+function parseEmailVerified(raw: unknown): string {
+  const v = String(raw ?? "").trim().toUpperCase();
+  if (v === "") return "TRUE";
+  return v === "TRUE" ? "TRUE" : "FALSE";
+}
+
 export async function createApplicantRow(
   applicantId: string,
   firstName: string,
@@ -185,7 +194,8 @@ export async function createApplicantRow(
   declarationProfessionalDev = "",
   declarationCriminalCheck = "",
   declarationMeetings = "",
-  declarationSignedAt = ""
+  declarationSignedAt = "",
+  emailVerified = "FALSE"
 ): Promise<void> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
   if (!spreadsheetId) {
@@ -244,7 +254,7 @@ export async function createApplicantRow(
     "FALSE", // paid      // AR
     new Date().toISOString(), // created_at // AS
     "", // paid_at         // AT
-    // AU spare
+    emailVerified, // AU   (default "FALSE" — verified by clicking emailed link)
   ];
 
   await sheets.spreadsheets.values.append({
@@ -517,6 +527,45 @@ export async function markPaid(applicantId: string): Promise<void> {
   });
 }
 
+export async function markEmailVerified(applicantId: string): Promise<void> {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+  if (!spreadsheetId) {
+    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");
+  }
+
+  const sheets = getSheetsClient();
+
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${SHEET_NAME}!A:A`,
+  });
+
+  const rows = result.data.values || [];
+  let rowIndex = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === applicantId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  if (rowIndex === -1) {
+    throw new Error(`Applicant not found: ${applicantId}`);
+  }
+
+  // Column AU = email_verified. Best-effort write: callers (e.g. GET on token
+  // load) should not fail the user-visible response if this write fails.
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${SHEET_NAME}!AU${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [["TRUE"]],
+    },
+  });
+}
+
 export interface ApplicantInfo {
   id: string;
   email: string;
@@ -564,6 +613,7 @@ export interface ApplicantInfo {
   paid: string;
   createdAt: string;
   paidAt: string;
+  emailVerified: string;
 }
 
 export async function getApplicantByToken(
@@ -644,6 +694,7 @@ export async function getApplicantByToken(
         paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
+        emailVerified: parseEmailVerified(row[46]),
       };
     }
   }
@@ -720,6 +771,7 @@ export async function getApplicantByEmail(
         paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
+        emailVerified: parseEmailVerified(row[46]),
       };
     }
   }
@@ -912,6 +964,7 @@ export async function getApplicantById(applicantId: string): Promise<ApplicantIn
         paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
+        emailVerified: parseEmailVerified(row[46]),
       };
     }
   }

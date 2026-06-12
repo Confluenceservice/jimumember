@@ -7,6 +7,7 @@ import {
   getApplicantByEmail,
   updateApplicantFormData,
   validateCompletion,
+  markEmailVerified,
 } from "../../../lib/upload-sheet";
 import { sendResumeLink } from "../../../lib/email-sender";
 import { logger } from "../../../lib/logger";
@@ -26,6 +27,16 @@ async function queueApplicantSave(applicantId: string, operation: () => Promise<
     });
   applicantSaveQueues.set(applicantId, current);
   return current;
+}
+
+// Reject empty, CR/LF, and obviously malformed addresses. The CR/LF guard
+// closes the email-header-injection path in src/lib/email-sender.ts (the To:
+// line is interpolated into raw RFC822 headers).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isValidEmail(value: string): boolean {
+  if (!value) return false;
+  if (/[\r\n]/.test(value)) return false;
+  return EMAIL_RE.test(value);
 }
 
 export const GET: APIRoute = async ({ url }) => {
@@ -48,6 +59,17 @@ export const GET: APIRoute = async ({ url }) => {
         firstName: applicant.firstName,
         lastName: applicant.lastName,
       });
+    }
+
+    // The token came from a magic-link email the applicant controls. Flip
+    // email_verified to TRUE on load (best-effort — don't block the response).
+    if (applicant.emailVerified !== "TRUE") {
+      try {
+        await markEmailVerified(applicant.id);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.warn("markEmailVerified_failed", { applicantId: applicant.id, error: msg });
+      }
     }
 
     // Get file list from Drive Files (sheet may not exist yet for new applicants)
@@ -151,7 +173,7 @@ export const POST: APIRoute = async ({ request, url }) => {
   const email = emailRaw.toLowerCase();
   const fullName = `${firstName} ${lastName}`.trim();
 
-  if (email && (!email.includes("@") || !email.includes("."))) {
+  if (email && !isValidEmail(email)) {
     return Response.json({ error: "Valid email is required." }, { status: 400 });
   }
 
@@ -185,17 +207,15 @@ export const POST: APIRoute = async ({ request, url }) => {
   const declarationSignedAt = (payload.declarationSignedAt as string) || "";
 
   try {
-    let existingApplicant = null;
+    // Token branch: applicant presented a magic link they got via email. This
+    // is the verified path. Keep the existing update behavior and return the
+    // resume link so the client can stay in sync.
     if (resumeToken) {
-      existingApplicant = await getApplicantByToken(resumeToken);
+      const existingApplicant = await getApplicantByToken(resumeToken);
       if (!existingApplicant) {
         return Response.json({ error: "Invalid or expired link." }, { status: 404 });
       }
-    } else if (email) {
-      existingApplicant = await getApplicantByEmail(email);
-    }
-    if (existingApplicant) {
-      // Update existing applicant with form data
+
       await queueApplicantSave(existingApplicant.id, async () => {
         await updateApplicantFormData(existingApplicant.id, {
           firstName: firstName || existingApplicant.firstName,
@@ -230,6 +250,21 @@ export const POST: APIRoute = async ({ request, url }) => {
           declarationMeetings,
           declarationSignedAt: declarationSignedAt || new Date().toISOString(),
         });
+
+        // Best-effort flip to verified on first token-bearing write — the
+        // GET path already does this, but if the applicant lands here first
+        // (e.g. GET was blocked), make sure the row is consistent.
+        if (existingApplicant.emailVerified !== "TRUE") {
+          try {
+            await markEmailVerified(existingApplicant.id);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.warn("markEmailVerified_on_post_failed", {
+              applicantId: existingApplicant.id,
+              error: msg,
+            });
+          }
+        }
       });
 
       const siteBaseUrl = getSiteBaseUrl(url.href);
@@ -243,59 +278,105 @@ export const POST: APIRoute = async ({ request, url }) => {
       });
     }
 
-    if (!firstName) {
-      return Response.json({ error: "First name is required." }, { status: 400 });
+    // No-token branch: caller has not proven control of any email. Find or
+    // create a row, send the resume link, return requiresVerification with
+    // no token in the body. The client must not advance the form until the
+    // user clicks the emailed link.
+    if (email) {
+      const existingApplicant = await getApplicantByEmail(email);
+      const siteBaseUrl = getSiteBaseUrl(url.href);
+
+      let emailSent = false;
+      if (existingApplicant) {
+        // Resend the existing resume link. Do NOT mutate the row — the
+        // submitter has not proven they control this email.
+        const resumeLink = `${siteBaseUrl}/professional/apply?token=${existingApplicant.resumeToken}`;
+        const existingFullName = `${existingApplicant.firstName} ${existingApplicant.lastName}`.trim();
+        try {
+          await sendResumeLink(
+            existingApplicant.email,
+            existingFullName,
+            resumeLink,
+            existingApplicant.id
+          );
+          emailSent = true;
+          logger.info("resume_email_resent_existing", {
+            applicantId: existingApplicant.id,
+            email: existingApplicant.email,
+          });
+        } catch (emailError) {
+          const msg = emailError instanceof Error ? emailError.message : "Unknown";
+          logger.error("resume_email_resend_failed", {
+            applicantId: existingApplicant.id,
+            email: existingApplicant.email,
+            error: msg,
+          });
+          Sentry.captureMessage("Failed to resend resume email", {
+            extra: { applicantId: existingApplicant.id, email: existingApplicant.email },
+          });
+        }
+        return Response.json({
+          success: true,
+          requiresVerification: true,
+          emailSent,
+        });
+      }
+
+      // New applicant. Required-field checks happen here only — the
+      // existing-email resend path above does not need them.
+      if (!firstName) {
+        return Response.json({ error: "First name is required." }, { status: 400 });
+      }
+      if (!lastName) {
+        return Response.json({ error: "Last name is required." }, { status: 400 });
+      }
+
+      const applicantId = crypto.randomUUID();
+      const newResumeToken = crypto.randomUUID();
+
+      // emailVerified defaults to "FALSE" in createApplicantRow — verification
+      // happens when the user clicks the emailed link (the GET handler flips
+      // it to TRUE).
+      await createApplicantRow(
+        applicantId, firstName, lastName, phone, email, newResumeToken,
+        dateOfBirth, ethnicity, address, postalAddress, businessName, website,
+        qualifications, experience, furtherRequirements, coreCompetencies,
+        referee1Name, referee1Role, referee1Email, referee1Phone,
+        referee2Name, referee2Role, referee2Email, referee2Phone,
+        declarationAccuracy, declarationEthics, declarationScope,
+        declarationDoulaServices, declarationInterview, declarationProfessionalDev,
+        declarationCriminalCheck, declarationMeetings,
+        declarationSignedAt || new Date().toISOString()
+      );
+
+      const resumeLink = `${siteBaseUrl}/professional/apply?token=${newResumeToken}`;
+      try {
+        await sendResumeLink(email, fullName, resumeLink, applicantId);
+        emailSent = true;
+        logger.info("resume_email_sent", { applicantId, email });
+      } catch (emailError) {
+        const msg = emailError instanceof Error ? emailError.message : "Unknown";
+        logger.error("resume_email_failed", {
+          applicantId,
+          email,
+          error: msg,
+        });
+        Sentry.captureMessage("Failed to send resume email", {
+          extra: { applicantId, email },
+        });
+      }
+
+      return Response.json({
+        success: true,
+        requiresVerification: true,
+        emailSent,
+      });
     }
 
-    if (!lastName) {
-      return Response.json({ error: "Last name is required." }, { status: 400 });
-    }
-
-    if (!email) {
-      return Response.json({ error: "Email is required." }, { status: 400 });
-    }
-
-    const applicantId = crypto.randomUUID();
-    const newResumeToken = crypto.randomUUID();
-
-    // Create new row with all form data
-    await createApplicantRow(
-      applicantId, firstName, lastName, phone, email, newResumeToken,
-      dateOfBirth, ethnicity, address, postalAddress, businessName, website,
-      qualifications, experience, furtherRequirements, coreCompetencies,
-      referee1Name, referee1Role, referee1Email, referee1Phone,
-      referee2Name, referee2Role, referee2Email, referee2Phone,
-      declarationAccuracy, declarationEthics, declarationScope,
-      declarationDoulaServices, declarationInterview, declarationProfessionalDev,
-      declarationCriminalCheck, declarationMeetings,
-      declarationSignedAt || new Date().toISOString()
+    return Response.json(
+      { error: "Email is required to start an application." },
+      { status: 400 }
     );
-
-    const siteBaseUrl = getSiteBaseUrl(url.href);
-    const resumeLink = `${siteBaseUrl}/professional/apply?token=${newResumeToken}`;
-    let emailSent = false;
-
-    try {
-      await sendResumeLink(email, fullName, resumeLink, applicantId);
-      emailSent = true;
-      logger.info("resume_email_sent", { applicantId, email });
-    } catch (emailError) {
-      logger.error("resume_email_failed", {
-        applicantId,
-        email,
-        error: emailError instanceof Error ? emailError.message : "Unknown",
-      });
-      Sentry.captureMessage("Failed to send resume email", {
-        extra: { applicantId, email },
-      });
-    }
-
-    return Response.json({
-      success: true,
-      resumeLink,
-      applicantId,
-      emailSent,
-    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     Sentry.captureException(error, { extra: { email, fullName } });
