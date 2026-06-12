@@ -28,7 +28,8 @@ async function checkStripe(): Promise<SubsystemResult> {
 
 // Probes the Gmail OAuth refresh token by performing an access-token refresh.
 // Does NOT call the Gmail API — no side effects, no Sent-folder entries.
-// Fails fast on invalid_grant / invalid_rapt / 401, returning a 503 from GET.
+// Fails fast on invalid_grant / invalid_rapt / 401; surfaced as gmail:
+// "disconnected" and an overall "degraded" status in the GET response body.
 async function checkGmail(): Promise<SubsystemResult> {
   const clientId = process.env.GMAIL_OAUTH_CLIENT_ID?.trim();
   const clientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET?.trim();
@@ -65,10 +66,16 @@ export const GET: APIRoute = async () => {
   if (gmail.status === "disconnected") {
     logger.error("health.gmail_check_failed", { error: gmail.error });
   }
+  if (gmail.status === "not_configured") {
+    logger.warn("health.check", { reason: "GMAIL_OAUTH_* not configured" });
+  }
 
-  const degraded = stripe.status === "disconnected" || gmail.status === "disconnected";
+  // A subsystem is healthy only when fully connected. "not_configured" counts
+  // as unhealthy: in deployed envs these credentials are mandatory, and a
+  // silently missing token is exactly the failure this endpoint must catch.
+  const healthy = stripe.status === "connected" && gmail.status === "connected";
   const body: Record<string, unknown> = {
-    status: degraded ? "degraded" : "ok",
+    status: healthy ? "ok" : "degraded",
     stripe: stripe.status,
     gmail: gmail.status,
   };
@@ -79,5 +86,10 @@ export const GET: APIRoute = async () => {
     };
   }
 
-  return Response.json(body, { status: degraded ? 503 : 200 });
+  // Always 200: this path backs the Fly HTTP liveness check on a single-machine
+  // app. Returning 503 here would make Fly pull the only VM out of rotation and
+  // take the public site down when only a background subsystem (e.g. email) is
+  // degraded. Consumers read `body.status` for readiness; the Slack worker
+  // alerts whenever status !== "ok".
+  return Response.json(body);
 };

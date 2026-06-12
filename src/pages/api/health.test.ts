@@ -78,7 +78,7 @@ describe("/api/health", () => {
   });
 
   describe("Stripe", () => {
-    it("returns not_configured when STRIPE_SECRET_KEY is absent", async () => {
+    it("reports not_configured as degraded when STRIPE_SECRET_KEY is absent", async () => {
       process.env.GMAIL_OAUTH_CLIENT_ID = "cid";
       process.env.GMAIL_OAUTH_CLIENT_SECRET = "csec";
       process.env.GMAIL_OAUTH_REFRESH_TOKEN = "rt";
@@ -86,13 +86,15 @@ describe("/api/health", () => {
       const GET = await getHandler();
       const res = await GET({} as never);
 
+      // 200 keeps the Fly liveness check green; body.status carries readiness.
       expect(res.status).toBe(200);
       const body = await res.json();
+      expect(body.status).toBe("degraded");
       expect(body.stripe).toBe("not_configured");
       expect(body.gmail).toBe("connected");
     });
 
-    it("returns disconnected and 503 when products.list throws", async () => {
+    it("reports disconnected and degraded (still 200) when products.list throws", async () => {
       process.env.STRIPE_SECRET_KEY = "sk_test_bad";
       process.env.GMAIL_OAUTH_CLIENT_ID = "cid";
       process.env.GMAIL_OAUTH_CLIENT_SECRET = "csec";
@@ -103,7 +105,7 @@ describe("/api/health", () => {
       const GET = await getHandler();
       const res = await GET({} as never);
 
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe("degraded");
       expect(body.stripe).toBe("disconnected");
@@ -113,7 +115,7 @@ describe("/api/health", () => {
   });
 
   describe("Gmail OAuth", () => {
-    it("returns not_configured when any GMAIL_OAUTH_* env is missing", async () => {
+    it("reports not_configured as degraded when any GMAIL_OAUTH_* env is missing", async () => {
       process.env.STRIPE_SECRET_KEY = "sk_test_ok";
       // GMAIL_OAUTH_* envs deliberately omitted.
 
@@ -122,6 +124,7 @@ describe("/api/health", () => {
 
       expect(res.status).toBe(200);
       const body = await res.json();
+      expect(body.status).toBe("degraded");
       expect(body.gmail).toBe("not_configured");
       expect(OAuth2Ctor).not.toHaveBeenCalled();
     });
@@ -143,7 +146,7 @@ describe("/api/health", () => {
       expect(mockRefreshAccessToken).toHaveBeenCalledOnce();
     });
 
-    it("returns disconnected and 503 on invalid_grant (dead refresh token)", async () => {
+    it("reports disconnected and degraded (still 200) on invalid_grant (dead refresh token)", async () => {
       process.env.STRIPE_SECRET_KEY = "sk_test_ok";
       process.env.GMAIL_OAUTH_CLIENT_ID = "cid";
       process.env.GMAIL_OAUTH_CLIENT_SECRET = "csec";
@@ -156,7 +159,8 @@ describe("/api/health", () => {
       const GET = await getHandler();
       const res = await GET({} as never);
 
-      expect(res.status).toBe(503);
+      // Dead token must NOT 503 — that would take the whole Fly app offline.
+      expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe("degraded");
       expect(body.gmail).toBe("disconnected");
@@ -164,7 +168,7 @@ describe("/api/health", () => {
       expect(body.errors.gmail).toContain("invalid_grant");
     });
 
-    it("returns 503 when both subsystems are degraded", async () => {
+    it("reports both subsystems degraded (still 200)", async () => {
       process.env.STRIPE_SECRET_KEY = "sk_test_bad";
       process.env.GMAIL_OAUTH_CLIENT_ID = "cid";
       process.env.GMAIL_OAUTH_CLIENT_SECRET = "csec";
@@ -176,8 +180,9 @@ describe("/api/health", () => {
       const GET = await getHandler();
       const res = await GET({} as never);
 
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(200);
       const body = await res.json();
+      expect(body.status).toBe("degraded");
       expect(body.stripe).toBe("disconnected");
       expect(body.gmail).toBe("disconnected");
       expect(body.errors.stripe).toContain("Stripe down");
