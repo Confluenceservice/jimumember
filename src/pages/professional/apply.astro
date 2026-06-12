@@ -41,6 +41,21 @@ const token = Astro.url.searchParams.get("token");
     </p>
   </div>
 
+  <!-- Email verification pending panel — shown after registration when the
+       server has emailed a resume link. The user must click the link to
+       prove they control the email address; only then does the form load. -->
+  <div
+    id="verify-email-panel"
+    class="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4 hidden"
+  >
+    <h2 class="m-0 mb-2 text-base text-blue-900 font-semibold">Check your email</h2>
+    <p class="m-0 text-sm text-blue-900">
+      We've sent a link to <span id="verify-email-address" class="font-mono"></span>.
+      Click the link in that email to continue your application.
+    </p>
+    <p id="verify-email-resend-status" class="m-0 mt-2 text-sm hidden"></p>
+  </div>
+
   <!-- Access link panel — visible once an applicant/token is known so they
        can always grab the resume URL without checking email. -->
   <div
@@ -595,6 +610,26 @@ const token = Astro.url.searchParams.get("token");
     link.setAttribute("href", resumeLink);
     link.textContent = resumeLink;
     warning.classList.remove("hidden");
+  }
+
+  function showVerifyEmailPanel(email, emailSent) {
+    const panel = document.getElementById("verify-email-panel");
+    const addr = document.getElementById("verify-email-address");
+    const resend = document.getElementById("verify-email-resend-status");
+    if (!panel || !addr) return;
+
+    addr.textContent = email || "";
+    panel.classList.remove("hidden");
+
+    if (resend) {
+      if (emailSent === false) {
+        resend.textContent = "We couldn't send the email just now. Please try again in a minute, or contact membership@eldaa.org.nz.";
+        resend.classList.remove("hidden");
+      } else {
+        resend.classList.add("hidden");
+        resend.textContent = "";
+      }
+    }
   }
 
   function buildResumeLinkFromToken(resumeToken) {
@@ -1453,6 +1488,21 @@ const token = Astro.url.searchParams.get("token");
 
       const data = await res.json();
       if (data.success) {
+        if (data.requiresVerification) {
+          // No-token registration path: server emailed a resume link. Hide
+          // the registration form, show the "check your email" panel, and
+          // do NOT advance the form or set any token. The user must click
+          // the emailed link (the GET path) to continue.
+          document.getElementById("section-register").classList.add("hidden");
+          setResumeLinkWarning("");
+          showVerifyEmailPanel(email, data.emailSent);
+          btn.disabled = false;
+          btn.textContent = "Start Application";
+          return;
+        }
+
+        // Token-bearing path (or future paths): the user already proved
+        // email control. Carry on as before.
         ensureDocsUploadedStore();
         applicantId = data.applicantId;
         window.__applicantId__ = data.applicantId;

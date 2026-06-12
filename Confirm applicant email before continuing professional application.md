@@ -1,0 +1,18 @@
+# Problem
+Professional applicants currently enter the form before proving the email address works. A typo can lock them out because the resume link goes to the wrong inbox, and the resume-by-email path can return an existing applicant's token to someone who only knows their email address.
+# Current state
+`src/pages/professional/apply.astro` posts registration details to `POST /api/professional/apply`, receives a `resumeLink`, extracts the token, writes it into the URL, shows the access-link panel, and advances directly into step 1. The emailed link is a convenience, not a gate.
+`src/pages/api/professional/apply.ts` handles two no-token cases: a new email creates a row and returns the link, while an existing email updates that row and returns the existing link. The token then drives all resume, upload, delete, autosave, and payment actions.
+`src/lib/upload-sheet.ts` stores application rows in Google Sheets. Column AU is intentionally spare, so an `email_verified` flag can be added without shifting existing columns.
+# Recommended approach
+Use the existing resume link as a magic-link email verification gate. Registration should create or find the applicant row, send the link to the entered address, and return only a verification-required response. The client stays on step 0 and tells the applicant to check their email. Clicking the emailed link is the proof that the address exists and is controlled by the applicant, then the existing `?token=` load path can continue into the form.
+This is simpler and safer than adding an on-page OTP code because it reuses the current resume-link model and avoids storing verification codes, expiries, attempt counters, and another endpoint.
+# Proposed changes
+In `src/lib/upload-sheet.ts`, add an `emailVerified` field backed by spare column AU. New rows write `FALSE`; legacy blank rows are treated as verified so existing applicants are not locked out. Add a setter that marks a row verified when a valid token is loaded.
+In `src/pages/api/professional/apply.ts`, validate email format with a stricter helper and reject CR/LF. For no-token registration, never return a token or `resumeLink`. For a new email, create the row, send the resume link, and return `{ success: true, requiresVerification: true }`. For an existing email, resend the stored resume link to that stored email and return the same verification-required response without updating application fields. Token-bearing requests keep the current update behavior.
+In `src/pages/professional/apply.astro`, change the registration handler so a verification-required response shows a clear “check your email to continue” message and does not advance the user or set `window.__token__`. Keep the existing token-load path for people who arrive from the email link.
+Update `docs/bug-scan-report.md` to mark finding #1 as addressed by email verification once implemented.
+# Alternative
+An on-page OTP code keeps applicants on the same page and avoids an email-link click before form entry, but it adds more moving parts and risk: code storage, expiry, resend, attempt limiting, and a verify endpoint. I do not recommend it for this app unless you strongly prefer that UX.
+# Validation
+Add focused tests for `POST /api/professional/apply`: new registration sends an email and returns no token; existing-email registration resends the link without mutating applicant data or leaking the token; invalid email is rejected; token-bearing autosave still updates. Then run `npx astro check` and `npx vitest run`.
