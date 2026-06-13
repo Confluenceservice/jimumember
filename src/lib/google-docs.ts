@@ -3,6 +3,7 @@ import { logger } from "./logger";
 import type { ApplicantInfo } from "./upload-sheet";
 import { listDriveFiles } from "./drive-files";
 import { getServiceAccountJwtAuth } from "./google-auth";
+import { getStagingPrefix } from "./staging";
 
 function getDocsClient() {
   const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/documents"]);
@@ -156,7 +157,7 @@ export async function createAssociateApplicationReviewDoc(
   let applicantFolderId = "";
 
   if (rootFolderId) {
-    const amFolderId = await ensureDriveFolderExists(drive, rootFolderId, "AM Applications");
+    const amFolderId = await ensureDriveFolderExists(drive, rootFolderId, `${getStagingPrefix()}AM Applications`);
     applicantFolderId = await ensureDriveFolderExists(
       drive,
       amFolderId,
@@ -427,7 +428,7 @@ export async function createApplicationReviewDoc(
 
   if (rootFolderId) {
     // Ensure PM Applications subfolder exists, then create doc inside it
-    const pmFolderId = await ensureDriveFolderExists(drive, rootFolderId, "PM Applications");
+    const pmFolderId = await ensureDriveFolderExists(drive, rootFolderId, `${getStagingPrefix()}PM Applications`);
     applicantFolderId = await ensureDriveFolderExists(
       drive,
       pmFolderId,
@@ -620,9 +621,9 @@ export async function refreshPmIndexDoc(): Promise<void> {
   const drive = getDriveClient();
   const docs = getDocsClient();
 
-  const pmFolderId = await ensureDriveFolderExists(drive, rootFolderId, "PM Applications");
+  const pmFolderId = await ensureDriveFolderExists(drive, rootFolderId, `${getStagingPrefix()}PM Applications`);
   const { docId, docUrl } = await getOrCreateIndexDoc(
-    drive, docs, rootFolderId, pmFolderId, "PM Applications — Index"
+    drive, docs, rootFolderId, pmFolderId, `${getStagingPrefix()}PM Applications — Index`
   );
 
   const subfolders = await listApplicantFolders(drive, pmFolderId);
@@ -647,7 +648,7 @@ export async function refreshPmIndexDoc(): Promise<void> {
   }
 
   entries.sort((a, b) => a.name.localeCompare(b.name));
-  await updateIndexDoc(docs, docId, "PM Applications — Index", entries);
+  await updateIndexDoc(docs, docId, `${getStagingPrefix()}PM Applications — Index`, entries);
   logger.info("pm_index_doc_refreshed", { docUrl, entryCount: entries.length });
 }
 
@@ -658,9 +659,9 @@ export async function refreshAmIndexDoc(): Promise<void> {
   const drive = getDriveClient();
   const docs = getDocsClient();
 
-  const amFolderId = await ensureDriveFolderExists(drive, rootFolderId, "AM Applications");
+  const amFolderId = await ensureDriveFolderExists(drive, rootFolderId, `${getStagingPrefix()}AM Applications`);
   const { docId, docUrl } = await getOrCreateIndexDoc(
-    drive, docs, rootFolderId, amFolderId, "AM Applications — Index"
+    drive, docs, rootFolderId, amFolderId, `${getStagingPrefix()}AM Applications — Index`
   );
 
   const subfolders = await listApplicantFolders(drive, amFolderId);
@@ -685,6 +686,6 @@ export async function refreshAmIndexDoc(): Promise<void> {
   }
 
   entries.sort((a, b) => a.name.localeCompare(b.name));
-  await updateIndexDoc(docs, docId, "AM Applications — Index", entries);
+  await updateIndexDoc(docs, docId, `${getStagingPrefix()}AM Applications — Index`, entries);
   logger.info("am_index_doc_refreshed", { docUrl, entryCount: entries.length });
 }
