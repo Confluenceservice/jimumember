@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-06-13T09:15:49.165Z",
+      "error_message": "Incorrect value in code",
+      "file": "src/pages/api/professional/upload-file.ts",
+      "root_cause": "Had \"node:stream\"",
+      "fix": "Changed to \"../../../lib/staging\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-06-13T09:15:51.007Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-06-13T09:15:59.439Z",
+      "error_message": "Incorrect value in code",
+      "file": "src/lib/google-docs.ts",
+      "root_cause": "Had \"AM Applications\"",
+      "fix": "Changed to `${getStagingPrefix()}AM Applications`",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-06-13T09:16:28.359Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-06-13T20:28:46.920Z",
+      "error_message": "Incorrect value in code",
+      "file": ".run/probe-find-pm-folder.mjs",
+      "root_cause": "Had \"https://www.googleapis.com/auth/drive.readonly\"",
+      "fix": "Changed to \"https://www.googleapis.com/auth/drive\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-06-13T20:29:18.961Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-06-13T20:33:31.096Z",
+      "error_message": "Incorrect value in code",
+      "file": ".run/smoke-upload-staging.mjs",
+      "root_cause": "Had \"Sheet1!A1:AU50\"",
+      "fix": "Changed to \"Professional Applications!A1:AU50\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "mjs"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-13T20:33:31.096Z"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-06-13T20:34:18.892Z",
+      "error_message": "Incorrect value in code",
+      "file": "docs/runbooks/google-workspace-domain-wide-delegation.md",
+      "root_cause": "Had \"no-reply@eldaa.org.nz\"",
+      "fix": "Changed to \"it-admin@eldaa.org.nz\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-13T20:34:18.892Z"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-06-14T08:35:00.000Z",
+      "error_message": "Failed to upload document. Please try again. (Code: UPLOAD_INTERNAL_ERROR, Request ID: 87ca340c-c5a7-4f84-b69e-87d6b2bf4e17)",
+      "file": "src/pages/api/professional/upload-file.ts",
+      "root_cause": "DWD impersonation was off (GOOGLE_WORKSPACE_IMPERSONATE_USER unset on both Fly apps). The Workspace account no-reply@eldaa.org.nz was disabled when transactional email moved to Mailgun (2026-06-13), so re-pointing DWD at it would have failed. Without DWD, the SA acts as itself and Drive uploads 403 storageQuotaExceeded — caught by the generic try/catch and surfaced as 500 UPLOAD_INTERNAL_ERROR. Secondary cause: PM Applications folder is now nested under IT projects (16XHm2qW3tdCFr7X52wplYGc2W-Lo3g1U) in the shared drive, not a direct child. The cerebrum entry from 2026-06-13 said it was a direct child of the shared drive, but the restructure moved it again.",
+      "fix": "Set GOOGLE_WORKSPACE_IMPERSONATE_USER=it-admin@eldaa.org.nz on both Fly apps (staging + prod). Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID=16XHm2qW3tdCFr7X52wplYGc2W-Lo3g1U (IT projects parent) on both apps so ensureFolderExists reuses the existing PM/AM Applications leaves. Verified end-to-end via .run/smoke-upload-staging.mjs — returned 200 success with real fileId. Updated runbook google-workspace-domain-wide-delegation.md to point at it-admin@eldaa.org.nz.",
+      "tags": [
+        "upload",
+        "dwd",
+        "impersonation",
+        "fly-secrets",
+        "drive",
+        "storageQuotaExceeded"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-14T08:35:00.000Z"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-06-14T08:50:00.000Z",
+      "error_message": "checkout.session.completed errored: The price specified is inactive. This field only accepts active prices. (sessionId=cs_test_a1ZhPu9Met93Zm8nVUSrDiyZ2aiV0aPQMjbDitrzrfFwsG3zpQ7s43CAnk)",
+      "file": "src/pages/api/stripe-webhook.ts",
+      "root_cause": "STRIPE_PRICE_PROFESSIONAL and STRIPE_PRICE_ASSOCIATE on staging pointed at price IDs that had been archived in Stripe (price change from $120→$150/yr and $50→$75/yr). The checkout session was created and the customer was charged, but the recurring subscription create step in the webhook used the archived price → 400 from Stripe → thrown error → markApplicantPaid, createApplicationReviewDoc, and confirmation email all skipped. Production had already been updated to new active prices; staging was stale.",
+      "fix": "Set STRIPE_PRICE_PROFESSIONAL=price_1TZlOkCqKoUYavpqr1DuOgNU and STRIPE_PRICE_ASSOCIATE=price_1TZlQ7CqKoUYavpqttgoDYJH on staging (the active recurring annual prices for the same products). Production was already correct — verified via direct Stripe API call with the live key. Failed session must be replayed in Stripe dashboard to recover the paid marker + review doc for applicant 09de612d-aa84-4a62-be56-971aaeb6db56.",
+      "tags": [
+        "stripe",
+        "webhook",
+        "pricing",
+        "inactive-price",
+        "fly-secrets"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-14T08:50:00.000Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-06-13T21:23:49.270Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/lib/email-sender.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-13T21:23:49.270Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-06-13T21:24:16.094Z",
+      "error_message": "Type error",
+      "file": "src/lib/email-sender.test.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-13T21:24:16.094Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-06-13T23:33:34.955Z",
+      "error_message": "Wrong reference: wolf should be claude",
+      "file": ".gitignore",
+      "root_cause": "Used \"wolf\" instead of \"claude\"",
+      "fix": "Changed wolf → claude",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "unknown"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-13T23:33:34.955Z"
+    }
+  ]
+}
