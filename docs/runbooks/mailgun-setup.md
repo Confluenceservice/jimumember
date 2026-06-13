@@ -105,7 +105,53 @@ test recipient in Mailgun first. For real applicant traffic, the
 sandbox is not viable — promote the account to a verified custom
 domain before rolling to production.
 
-## 7) Rollback
+## 7) Deliverability — first sends go to Junk
+
+For a brand-new sending domain (`mg.eldaa.org.nz` on day 1), even
+with **DKIM + SPF + DMARC all passing**, the first handful of sends
+to any recipient are likely to land in Junk. This is not a config
+issue — authentication headers and DNS records are independent of
+sender reputation.
+
+Symptoms to look for in the message headers:
+
+```
+X-Apple-MoveToFolder: Junk
+X-ICL-Score: 4.33              # iCloud spam score (over ~3 = junk)
+X-Spam-Flag: yes
+Authentication-Results: ...; dkim=pass spf=pass dmarc=pass
+```
+
+All three authentication checks can say `pass` and the message still
+goes to Junk. The classifier is weighing content + sender reputation,
+not DNS.
+
+Mitigations (in order of leverage):
+
+1. **Sender reputation** — the only durable fix. Volume of legitimate
+   sends + recipient "Not Junk" + add to contacts builds the
+   domain's reputation over days/weeks. No way to shortcut this.
+2. **From name** — use a recognisable brand ("ELDAA Membership
+   Notifications"), not "No Reply" or "noreply". Generic names are
+   penalised by content classifiers.
+3. **List-Unsubscribe header** — RFC 8058. Optional for transactional
+   but a positive signal for Gmail and Apple. Drop-in for
+   `email-sender.ts`:
+   ```ts
+   "h:List-Unsubscribe": "<mailto:unsubscribe@mg.eldaa.org.nz>",
+   "h:List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+   ```
+4. **Recipient training** — first time an applicant receives an
+   ELDAA email, ask them to mark "Not Junk" + add
+   `no-reply@mg.eldaa.org.nz` to contacts. This is a one-time ask
+   that unblocks the rest of their journey.
+
+Magic-link auth messages are inherently shape-matched to phishing
+("click here to continue" + token in URL). Sender reputation is the
+main lever — there is no header or template change that will fully
+defeat this on a new domain.
+
+## 8) Rollback
 
 ```sh
 # 1) Roll Gmail env vars back on

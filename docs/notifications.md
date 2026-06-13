@@ -169,8 +169,15 @@ ELDAA Committee
 ```env
 MAILGUN_API_KEY=key-...
 MAILGUN_DOMAIN=mg.eldaa.org.nz
-MAILGUN_FROM=ELDAA <no-reply@mg.eldaa.org.nz>
+MAILGUN_FROM=ELDAA Membership Notifications <no-reply@mg.eldaa.org.nz>
 ```
+
+`MAILGUN_FROM` should be a recognisable brand name, not "No Reply" or
+"noreply" — generic From names are penalised by iCloud/Apple spam
+classifiers and the message lands in Junk even with DKIM/SPF/DMARC
+all passing. See `docs/runbooks/mailgun-setup.md` §7 for the full
+deliverability note (first-send reputation, `List-Unsubscribe`
+header, recipient training).
 
 ### Audit Logging
 
