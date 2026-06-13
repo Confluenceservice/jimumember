@@ -6,6 +6,7 @@ import { addDriveFile, getDriveFileCounts } from "../../../lib/drive-files";
 import { google } from "googleapis";
 import { logger } from "../../../lib/logger";
 import { getServiceAccountJwtAuth } from "../../../lib/google-auth";
+import { getStagingPrefix } from "../../../lib/staging";
 import { Readable } from "node:stream";
 
 interface GoogleApiErrorDetail {
@@ -467,7 +468,7 @@ export const POST: APIRoute = async ({ request }) => {
       if (!appsFolderId) throw new Error("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID not configured");
 
       stage = "ensure_pm_applications_folder";
-      const pmFolderId = await ensureFolderExists(drive, appsFolderId, "PM Applications");
+      const pmFolderId = await ensureFolderExists(drive, appsFolderId, `${getStagingPrefix()}PM Applications`);
 
       stage = "ensure_applicant_folder";
       const folderName = `${applicant.firstName}_${applicant.lastName}`.replace(/[^a-zA-Z0-9]/g, "_");
