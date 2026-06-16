@@ -70,7 +70,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     );
   }
 
-  const stripe = new Stripe(secretKey);
+  const stripe = new Stripe(secretKey, { apiVersion: "2026-02-25.clover" });
   const dryRun = isCheckoutDryRunEnabled();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   const recurringPriceId = process.env.STRIPE_PRICE_PROFESSIONAL?.trim();
@@ -160,6 +160,7 @@ export const POST: APIRoute = async ({ request, url }) => {
         first_name: applicant.firstName,
         last_name: applicant.lastName,
       },
+      client_reference_id: applicant.id,
       custom_text: {
         submit: {
           message: renewalMessage,
@@ -175,7 +176,9 @@ export const POST: APIRoute = async ({ request, url }) => {
     params.customer_creation = "always";
     params.customer_email = applicant.email;
 
-    const session = await stripe.checkout.sessions.create(params);
+    const session = await stripe.checkout.sessions.create(params, {
+      idempotencyKey: `upload-complete:${applicant.id}`,
+    });
 
     logger.info("checkout_session.created_from_upload", {
       plan: "professional",
