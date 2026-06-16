@@ -16,3 +16,10 @@ coverage/
 .run/health-alert-worker/.wrangler/
 .run/health-alert-worker/dev/
 
+# OpenWolf runtime artifacts (not cross-machine state). The .md/.json memory
+# files (memory.md, cerebrum.md, buglog.json, anatomy.md) ARE tracked — the
+# daemon, log, and session files below are local-machine ephemeral state.
+.wolf/daemon.log
+.wolf/cron-state.json
+.wolf/token-ledger.json
+.wolf/hooks/_session.json

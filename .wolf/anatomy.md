@@ -1,7 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-13T23:33:34.934Z
-> Files: 130 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-16T07:14:52.573Z
+> Files: 131 tracked | Anatomy hits: 0 | Misses: 0
+
+## ../.claude/
+
+- `settings.json` (~798 tok)
 
 ## ../.claude/plans/
 
@@ -13,7 +17,7 @@
 
 - `.dockerignore` — Docker ignore rules (~37 tok)
 - `.DS_Store` (~2732 tok)
-- `.gitignore` — Git ignore rules (~63 tok)
+- `.gitignore` — Git ignore rules (~147 tok)
 - `.mcp.json` (~25 tok)
 - `astro.config.mjs` — Astro configuration (~85 tok)
 - `CLAUDE.md` — OpenWolf (~2593 tok)
@@ -180,8 +184,8 @@
 
 ## src/pages/api/
 
-- `create-checkout-session.ts` — Option C: mode=payment (one-time charge) (~2757 tok)
-- `create-professional-checkout.ts` — Exports POST (~1764 tok)
+- `create-checkout-session.ts` — Option C: mode=payment (one-time charge) (~2794 tok)
+- `create-professional-checkout.ts` — Exports POST (~1800 tok)
 - `debug-env.ts` — Exports GET (~172 tok)
 - `get-prices.ts` — Exports GET (~417 tok)
 - `health.test.ts` — Mock Stripe — control products.list behaviour per test. (~1486 tok)
@@ -197,7 +201,7 @@
 - `delete-file.ts` — Exports POST (~577 tok)
 - `resend-link.test.ts` — Declares makeRequest (~1426 tok)
 - `resend-link.ts` — Resends the resume-link email to the applicant identified by resume token. (~849 tok)
-- `upload-complete.ts` — Exports POST (~1789 tok)
+- `upload-complete.ts` — Exports POST (~1830 tok)
 - `upload-file.test.ts` — makeMultipartRequest: makeBinaryRequest, seedSuccessfulDriveCalls, seedFolderCreationCalls (~2221 tok)
 - `upload-file.ts` — API routes: GET (9 endpoints) (~5466 tok)
 

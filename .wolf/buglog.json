@@ -165,6 +165,87 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-06-13T23:33:34.955Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-06-13T23:37:46.000Z",
+      "error_message": "Committed .wolf/ tracking without staging .gitignore change — first commit d68e0cc only staged files under .wolf/, not the .gitignore line deletion",
+      "file": ".gitignore",
+      "root_cause": "Ran `git add .wolf/` (scoped to directory) before `git add .gitignore`. The .gitignore edit was never staged, so commit included only the new .wolf/ files. Working tree showed `.gitignore` as unstaged M after commit.",
+      "fix": "git add .gitignore && git commit --amend --no-edit. New commit 73c63a9 includes the .gitignore deletion as a 1-line change in the same commit.",
+      "tags": [
+        "git",
+        "staging",
+        "amend",
+        "self-caught"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-13T23:37:46.000Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-06-16T07:00:19.098Z",
+      "error_message": "Type error",
+      "file": "src/pages/api/professional/upload-complete.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation | Also: const session = await stripe.checkout.sessions.create(params; idempotencyKey: `upload-complete:${applicant.id}`,",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-06-16T07:00:19.445Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-06-16T07:01:05.992Z",
+      "error_message": "Incorrect value in code",
+      "file": "src/pages/api/professional/upload-complete.ts",
+      "root_cause": "Had \"2025-09-30.clover\"",
+      "fix": "Changed to \"2026-02-25.clover\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-16T07:01:05.992Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-06-16T07:04:35.499Z",
+      "error_message": "Type error",
+      "file": "src/pages/api/create-professional-checkout.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation | Also: const session = await stripe.checkout.sessions.create(params; idempotencyKey: `checkout:prof:${email}`,",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-06-16T07:04:38.338Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-06-16T07:06:22.721Z",
+      "error_message": "Type error",
+      "file": "src/pages/api/create-checkout-session.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation | Also: const session = await stripe.checkout.sessions.create(params; idempotencyKey: `checkout:${plan}:${email}`,",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-06-16T07:06:26.426Z"
     }
   ]
 }
