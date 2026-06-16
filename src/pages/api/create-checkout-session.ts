@@ -129,7 +129,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
-  const stripe = new Stripe(secretKey);
+  const stripe = new Stripe(secretKey, { apiVersion: "2026-02-25.clover" });
   const dryRun = isCheckoutDryRunEnabled();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   const recurringPriceId = getPriceForPlan(plan);
@@ -227,6 +227,7 @@ export const POST: APIRoute = async ({ request }) => {
       last_name: lastName,
       phone: phone ?? "",
     },
+    client_reference_id: email,
     custom_text: {
       submit: {
         message: renewalMessage,
@@ -276,7 +277,9 @@ export const POST: APIRoute = async ({ request }) => {
         checkoutStatus: "checkout_requested",
       });
     }
-    const session = await stripe.checkout.sessions.create(params);
+    const session = await stripe.checkout.sessions.create(params, {
+      idempotencyKey: `checkout:${plan}:${email}`,
+    });
 
     logger.info("checkout_session.created", {
       plan,
