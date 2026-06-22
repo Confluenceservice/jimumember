@@ -17,7 +17,7 @@ function getStripe(): Stripe {
   if (!stripeInstance) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error("MISSING_CONFIG: STRIPE_SECRET_KEY");
-    stripeInstance = new Stripe(key, { apiVersion: "2025-09-30.clover" as Stripe.LatestApiVersion });
+    stripeInstance = new Stripe(key, { apiVersion: "2026-02-25.clover" as Stripe.LatestApiVersion });
   }
   return stripeInstance;
 }
@@ -55,10 +55,10 @@ export async function resolveRenewalPrice(
 
   const price = prices.data[0];
   if (price.currency !== "nzd") {
-    throw new Error(`Invalid price currency for ${lookupKey}: ${price.currency} (expected nzd)`);
+    throw new Error(`INVALID_CURRENCY: price for ${lookupKey} returned currency=${price.currency}, expected nzd`);
   }
   if (price.unit_amount === null || price.unit_amount === undefined) {
-    throw new Error(`Invalid unit_amount for ${lookupKey}: null`);
+    throw new Error(`INVALID_UNIT_AMOUNT: price for ${lookupKey} returned unit_amount=${price.unit_amount}`);
   }
 
   priceCache.set(lookupKey, {

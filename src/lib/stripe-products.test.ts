@@ -46,7 +46,7 @@ describe("resolveRenewalPrice", () => {
     mockPricesList.mockResolvedValueOnce({
       data: [{ id: "price_pm_150", currency: "usd", unit_amount: 15000, active: true, lookup_keys: ["pm_renewal_nzd"] }],
     });
-    await expect(resolveRenewalPrice("pm_renewal_nzd")).rejects.toThrow(/currency/);
+    await expect(resolveRenewalPrice("pm_renewal_nzd")).rejects.toThrow(/INVALID_CURRENCY/);
   });
 
   it("throws when unit_amount is null", async () => {
@@ -54,7 +54,7 @@ describe("resolveRenewalPrice", () => {
     mockPricesList.mockResolvedValueOnce({
       data: [{ id: "price_pm_150", currency: "nzd", unit_amount: null, active: true, lookup_keys: ["pm_renewal_nzd"] }],
     });
-    await expect(resolveRenewalPrice("pm_renewal_nzd")).rejects.toThrow(/unit_amount/);
+    await expect(resolveRenewalPrice("pm_renewal_nzd")).rejects.toThrow(/INVALID_UNIT_AMOUNT/);
   });
 
   it("caches the resolved price for subsequent calls within TTL", async () => {
