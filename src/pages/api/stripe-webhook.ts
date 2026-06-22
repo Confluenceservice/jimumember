@@ -37,18 +37,18 @@ async function handleCheckoutCompleted(
 ): Promise<void> {
   // Renewal flow: one-time payment, no subscription
   if (session.metadata?.flow === "renewal") {
-    const renewalId = session.metadata.renewal_id as string | undefined;
+    const renewalId = session.metadata?.renewal_id ?? undefined;
     if (!renewalId) {
-      logger.warn({ sessionId: session.id }, "renewal_missing_id");
+      log.warn("renewal_missing_id", { sessionId: session.id });
       return;
     }
     const renewal = await getRenewalBySession(session.id);
     if (!renewal) {
-      logger.warn({ sessionId: session.id, renewalId }, "renewal_not_found");
+      log.warn("renewal_not_found", { sessionId: session.id, renewalId });
       return;
     }
     if (renewal.paymentStatus === "paid") {
-      logger.info({ sessionId: session.id, renewalId }, "renewal_skip_already_paid");
+      log.info("renewal_skip_already_paid", { sessionId: session.id, renewalId });
       return;
     }
     const paidAt = new Date().toISOString();
@@ -67,10 +67,10 @@ async function handleCheckoutCompleted(
       customerId: sessionCustomerId,
     }).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error({ err: msg, renewalId }, "renewal_checkout_log_failed");
+      log.error("renewal_checkout_log_failed", { err: msg, renewalId });
     });
 
-    logger.info({ renewalId, sessionId: session.id, tier: renewal.tier }, "renewal_marked_paid");
+    log.info("renewal_marked_paid", { renewalId, sessionId: session.id, tier: renewal.tier });
     return;
   }
 
