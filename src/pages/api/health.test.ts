@@ -18,6 +18,13 @@ vi.mock("../../lib/logger", () => ({
   },
 }));
 
+const mockResolveRenewalPrice = vi.fn();
+const mockInvalidateRenewalPriceCache = vi.fn();
+vi.mock("../../lib/stripe-products", () => ({
+  resolveRenewalPrice: mockResolveRenewalPrice,
+  invalidateRenewalPriceCache: mockInvalidateRenewalPriceCache,
+}));
+
 async function getHandler() {
   const mod = await import("./health");
   return mod.GET;
@@ -27,6 +34,10 @@ describe("/api/health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockProductsList.mockResolvedValue({ data: [] });
+    mockResolveRenewalPrice.mockImplementation(async (key: string) => {
+      if (key === "pm_renewal_nzd") return { priceId: "price_pm_150", currency: "nzd", unitAmount: 15000 };
+      return { priceId: "price_am_75", currency: "nzd", unitAmount: 7500 };
+    });
   });
 
   afterEach(() => {
@@ -48,7 +59,15 @@ describe("/api/health", () => {
 
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual({ status: "ok", stripe: "connected", email: "connected" });
+      expect(body).toEqual({
+        status: "ok",
+        stripe: "connected",
+        email: "connected",
+        renewal_prices: {
+          pm: { ok: true, priceId: "price_pm_150", currency: "nzd", unitAmount: 15000 },
+          am: { ok: true, priceId: "price_am_75", currency: "nzd", unitAmount: 7500 },
+        },
+      });
     });
   });
 
@@ -148,6 +167,72 @@ describe("/api/health", () => {
       expect(body.stripe).toBe("disconnected");
       expect(body.email).toBe("connected");
       expect(body.errors.stripe).toContain("Stripe down");
+    });
+  });
+
+  describe("renewal_prices", () => {
+    it("includes renewal_prices field with both tiers when prices resolve", async () => {
+      process.env.STRIPE_SECRET_KEY = "sk_test_ok";
+      process.env.MAILGUN_API_KEY = "key-test";
+      process.env.MAILGUN_DOMAIN = "mg.eldaa.org.nz";
+      process.env.MAILGUN_FROM = "ELDAA <no-reply@mg.eldaa.org.nz>";
+
+      const GET = await getHandler();
+      const res = await GET({} as never);
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.renewal_prices).toBeDefined();
+      expect(body.renewal_prices.pm).toEqual({
+        ok: true,
+        priceId: "price_pm_150",
+        currency: "nzd",
+        unitAmount: 15000,
+      });
+      expect(body.renewal_prices.am).toEqual({
+        ok: true,
+        priceId: "price_am_75",
+        currency: "nzd",
+        unitAmount: 7500,
+      });
+    });
+
+    it("reports degraded when PM tier fails to resolve and ok=false for that tier", async () => {
+      process.env.STRIPE_SECRET_KEY = "sk_test_ok";
+      process.env.MAILGUN_API_KEY = "key-test";
+      process.env.MAILGUN_DOMAIN = "mg.eldaa.org.nz";
+      process.env.MAILGUN_FROM = "ELDAA <no-reply@mg.eldaa.org.nz>";
+
+      mockResolveRenewalPrice.mockImplementation(async (key: string) => {
+        if (key === "pm_renewal_nzd") throw new Error("PRICE_INACTIVE: no active price");
+        return { priceId: "price_am_75", currency: "nzd", unitAmount: 7500 };
+      });
+
+      const GET = await getHandler();
+      const res = await GET({} as never);
+
+      const body = await res.json();
+      expect(body.renewal_prices.pm.ok).toBe(false);
+      expect(body.renewal_prices.pm.error).toMatch(/PRICE_INACTIVE/);
+      expect(body.renewal_prices.am.ok).toBe(true);
+      expect(body.status).toBe("degraded");
+    });
+
+    it("reports degraded when both tiers fail to resolve", async () => {
+      process.env.STRIPE_SECRET_KEY = "sk_test_ok";
+      process.env.MAILGUN_API_KEY = "key-test";
+      process.env.MAILGUN_DOMAIN = "mg.eldaa.org.nz";
+      process.env.MAILGUN_FROM = "ELDAA <no-reply@mg.eldaa.org.nz>";
+
+      mockResolveRenewalPrice.mockRejectedValue(new Error("MISSING_CONFIG: STRIPE_PRODUCT_PM_RENEWAL not set"));
+
+      const GET = await getHandler();
+      const res = await GET({} as never);
+
+      const body = await res.json();
+      expect(body.renewal_prices.pm.ok).toBe(false);
+      expect(body.renewal_prices.am.ok).toBe(false);
+      expect(body.status).toBe("degraded");
     });
   });
 });

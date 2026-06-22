@@ -1,12 +1,34 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
 import { logger } from "../../lib/logger";
+import { resolveRenewalPrice } from "../../lib/stripe-products";
 
 type SubsystemStatus = "connected" | "disconnected" | "not_configured";
 
 interface SubsystemResult {
   status: SubsystemStatus;
   error?: string;
+}
+
+type RenewalTierResult =
+  | { ok: true; priceId: string; currency: string; unitAmount: number }
+  | { ok: false; error: string };
+
+async function safeResolveRenewalPrice(
+  key: "pm_renewal_nzd" | "am_renewal_nzd"
+): Promise<RenewalTierResult> {
+  try {
+    const price = await resolveRenewalPrice(key);
+    return {
+      ok: true,
+      priceId: price.priceId,
+      currency: price.currency,
+      unitAmount: price.unitAmount,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return { ok: false, error: msg };
+  }
 }
 
 async function checkStripe(): Promise<SubsystemResult> {
@@ -44,7 +66,12 @@ async function checkMailgun(): Promise<SubsystemResult> {
 }
 
 export const GET: APIRoute = async () => {
-  const [stripe, email] = await Promise.all([checkStripe(), checkMailgun()]);
+  const [stripe, email, pmRenewal, amRenewal] = await Promise.all([
+    checkStripe(),
+    checkMailgun(),
+    safeResolveRenewalPrice("pm_renewal_nzd"),
+    safeResolveRenewalPrice("am_renewal_nzd"),
+  ]);
 
   if (stripe.status === "disconnected") {
     logger.error("health.stripe_check_failed", { error: stripe.error });
@@ -60,20 +87,45 @@ export const GET: APIRoute = async () => {
       reason: "MAILGUN_API_KEY or MAILGUN_DOMAIN not configured",
     });
   }
+  if (!pmRenewal.ok) {
+    logger.error("health.renewal_price_check_failed", {
+      tier: "pm",
+      error: pmRenewal.error,
+    });
+  }
+  if (!amRenewal.ok) {
+    logger.error("health.renewal_price_check_failed", {
+      tier: "am",
+      error: amRenewal.error,
+    });
+  }
 
   // A subsystem is healthy only when fully connected. "not_configured" counts
   // as unhealthy: in deployed envs these credentials are mandatory, and a
   // silently missing key is exactly the failure this endpoint must catch.
-  const healthy = stripe.status === "connected" && email.status === "connected";
+  // Renewal price resolution is also required for the renew/ checkout endpoints
+  // to function — a silently stale or missing price must surface as degraded
+  // so the Slack health alerter fires.
+  const healthy =
+    stripe.status === "connected" &&
+    email.status === "connected" &&
+    pmRenewal.ok &&
+    amRenewal.ok;
   const body: Record<string, unknown> = {
     status: healthy ? "ok" : "degraded",
     stripe: stripe.status,
     email: email.status,
+    renewal_prices: {
+      pm: pmRenewal,
+      am: amRenewal,
+    },
   };
-  if (stripe.error || email.error) {
+  if (stripe.error || email.error || !pmRenewal.ok || !amRenewal.ok) {
     body.errors = {
       ...(stripe.error ? { stripe: stripe.error } : {}),
       ...(email.error ? { email: email.error } : {}),
+      ...(!pmRenewal.ok ? { "renewal_prices.pm": pmRenewal.error } : {}),
+      ...(!amRenewal.ok ? { "renewal_prices.am": amRenewal.error } : {}),
     };
   }
 
