@@ -1,202 +1,224 @@
 ---
-// DEPRECATED for renewals: this page is superseded by Stripe Payment Link
-// https://buy.stripe.com/5kQ7sKfOtaty397aVuak002
-// (renewals don't need proration; the Payment Link handles it server-side).
-// Kept in place as a no-proration payment fallback. Prefer the Payment Link
-// for renewals.
 import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const url = Astro.url;
+const firstNameParam = url.searchParams.get("firstName") ?? "";
+const lastNameParam = url.searchParams.get("lastName") ?? "";
+const emailParam = url.searchParams.get("email") ?? "";
+const phoneParam = url.searchParams.get("phone") ?? "";
+const yearParam = url.searchParams.get("year") ?? String(new Date().getFullYear());
+const yearNum = Number.parseInt(yearParam, 10);
+const yearDisplay = Number.isFinite(yearNum) && yearNum >= 2024 && yearNum <= 2100 ? yearNum : new Date().getFullYear();
 ---
+<BaseLayout title={`Professional Membership Renewal — ${yearDisplay}`}>
+  <div class="max-w-3xl mx-auto p-4 sm:p-8">
+    <header class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">Professional Membership Renewal</h1>
+      <p class="text-gray-600">
+        Complete the form below to renew your Professional Membership for {yearDisplay}.
+      </p>
+    </header>
 
-<BaseLayout
-  title="Renew Professional Membership"
-  description="Starting from 1 July."
->
-  <section class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-    <p class="m-0 text-sm text-amber-900">
-      <strong>Renewal notice:</strong> for renewing existing Professional
-      members, use the Stripe Payment Link
-      <a
-        href="https://buy.stripe.com/5kQ7sKfOtaty397aVuak002"
-        class="underline font-semibold"
-        >buy.stripe.com/5kQ7sKfOtaty397aVuak002</a
-      >
-      instead — it skips the application form and proration.
-    </p>
-  </section>
-
-  <section class="bg-white border border-gray-200 rounded-xl p-4">
-    <h1 class="text-2xl sm:text-4xl font-bold mb-1">Professional Membership</h1>
-    <p class="text-gray-600 m-0">
-      Pay today, then annual billing starts on 1 July.
-    </p>
-    <p class="mt-4 mb-0 font-semibold text-gray-700">
-      First-time subscribers receive a prorated discount based on weeks remaining until 1 July.
-    </p>
-  </section>
-
-  <section class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
-    <p class="m-0 mb-4 font-semibold">Personal details</p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div>
-        <label for="firstName" class="block font-semibold mb-1.5">
-          First name
+    <section class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4">Your details</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-sm font-medium text-gray-700">First name</span>
+          <input id="firstName" name="firstName" type="text" value={firstNameParam}
+                 class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
         </label>
-        <input
-          id="firstName"
-          name="firstName"
-          type="text"
-          placeholder="Jane"
-          autocomplete="given-name"
-          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
-        />
-      </div>
-      <div>
-        <label for="lastName" class="block font-semibold mb-1.5">
-          Last name
+        <label class="block">
+          <span class="text-sm font-medium text-gray-700">Last name</span>
+          <input id="lastName" name="lastName" type="text" value={lastNameParam}
+                 class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
         </label>
-        <input
-          id="lastName"
-          name="lastName"
-          type="text"
-          placeholder="Doe"
-          autocomplete="family-name"
-          class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
-        />
+        <label class="block">
+          <span class="text-sm font-medium text-gray-700">Email</span>
+          <input id="email" name="email" type="email" value={emailParam}
+                 class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium text-gray-700">Phone</span>
+          <input id="phone" name="phone" type="tel" value={phoneParam}
+                 class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+        </label>
       </div>
-    </div>
-    <div class="mt-3">
-      <label for="phone" class="block font-semibold mb-1.5">
-        Phone number
-      </label>
-      <input
-        id="phone"
-        name="phone"
-        type="tel"
-        placeholder="+64 21 123 4567"
-        autocomplete="tel"
-        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
-      />
-    </div>
-    <div class="mt-3">
-      <label for="email" class="block font-semibold mb-1.5">
-        Email address
-      </label>
-      <input
-        id="email"
-        name="email"
-        type="email"
-        placeholder="you@example.com"
-        autocomplete="email"
-        class="w-full px-4 py-3 border border-gray-200 rounded-xl text-lg"
-      />
-    </div>
-    <p class="text-gray-600 mt-2 mb-0 text-sm">
-      First-time subscribers receive a prorated discount based on weeks remaining until 1 July.
-    </p>
-  </section>
+      <p class="text-xs text-gray-500 mt-2">
+        Renewal year: <span id="year-display" class="font-semibold">{yearDisplay}</span>
+        (read-only — included in your renewal record)
+      </p>
+    </section>
 
-  <section class="bg-white border border-gray-200 rounded-xl p-4 mt-4">
-    <h2 class="m-0">Professional membership</h2>
-    <p class="text-gray-600 m-0">Then <span id="professional-price">loading…</span> per year starting 1 July.</p>
-    <button id="checkout-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg mt-4 w-full sm:w-auto sm:max-w-sm flex items-center justify-center gap-2" data-plan="professional">
-      Continue with Professional
+    <section class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4">Professional Development: Record of Learning</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Record at least one professional development activity from the past year.
+      </p>
+      <div id="pd-entries" class="space-y-4">
+        <div class="pd-row border border-gray-200 rounded-xl p-4" data-row-index="0">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="font-medium">Activity 1</h3>
+            <button type="button" class="remove-row-btn hidden px-2 py-1 border border-amber-700 text-amber-800 rounded text-xs font-medium bg-white">Remove</button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-sm font-medium text-gray-700">Date completed</span>
+              <input type="date" name="dateCompleted"
+                     class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-gray-700">Activity</span>
+              <input type="text" name="activity" placeholder="e.g. course, webinar, book, PD event"
+                     class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-gray-700">Total Hours</span>
+              <input type="number" name="totalHours" min="0.5" step="0.5"
+                     class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium text-gray-700">Provider (if applicable)</span>
+              <input type="text" name="provider"
+                     class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" />
+            </label>
+          </div>
+        </div>
+      </div>
+      <button id="add-row-btn" type="button"
+              class="mt-4 px-4 py-2 border border-blue-600 text-blue-600 rounded-md bg-white text-sm font-medium hover:bg-blue-50">
+        + Add another activity
+      </button>
+    </section>
+
+    <div id="error-banner" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+      <p id="error-message" class="text-amber-800"></p>
+    </div>
+
+    <button id="proceed-btn" type="button"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2">
+      <span id="proceed-spinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+      <span id="proceed-btn-label">Proceed to Payment — NZ$150</span>
     </button>
-  </section>
-
-  <p id="status" class="mt-4 min-h-6 text-amber-800" aria-live="polite"></p>
+  </div>
 
   <script>
-    // @ts-nocheck
-    // Pre-fill from URL params (e.g. /renew/pro?firstName=Jane&lastName=Doe&phone=...&email=...)
-    const params = new URLSearchParams(window.location.search);
-    const prefill = (id, key) => {
-      const el = document.querySelector(id);
-      if (el instanceof HTMLInputElement && params.has(key)) {
-        el.value = params.get(key) ?? "";
-      }
-    };
-    prefill("#firstName", "firstName");
-    prefill("#lastName", "lastName");
-    prefill("#phone", "phone");
-    prefill("#email", "email");
+    const pdEntriesContainer = document.getElementById("pd-entries")!;
+    const addRowBtn = document.getElementById("add-row-btn")!;
+    const proceedBtn = document.getElementById("proceed-btn") as HTMLButtonElement;
+    const proceedSpinner = document.getElementById("proceed-spinner")!;
+    const proceedLabel = document.getElementById("proceed-btn-label")!;
+    const errorBanner = document.getElementById("error-banner")!;
+    const errorMessage = document.getElementById("error-message")!;
 
-    const statusEl = document.querySelector("#status");
-    const firstNameInput = document.querySelector("#firstName");
-    const lastNameInput = document.querySelector("#lastName");
-    const phoneInput = document.querySelector("#phone");
-    const emailInput = document.querySelector("#email");
-    const checkoutBtn = document.querySelector("#checkout-btn");
-
-    const setStatus = (message, type = "info") => {
-      if (!statusEl) return;
-      statusEl.textContent = message;
-      statusEl.className = type === "error" ? "mt-4 min-h-6 text-amber-800" : type === "ok" ? "mt-4 min-h-6 text-emerald-700" : "mt-4 min-h-6";
-    };
-
-    const setLoading = (isLoading) => {
-      if (!checkoutBtn) return;
-      checkoutBtn instanceof HTMLButtonElement && (checkoutBtn.disabled = isLoading);
-      if (checkoutBtn) checkoutBtn.textContent = isLoading ? "Redirecting to Checkout..." : "Continue with Professional";
-    };
-
-    // Fetch price from Stripe and update display
-    const priceEl = document.querySelector("#professional-price");
-    fetch("/api/get-prices")
-      .then(r => r.json())
-      .then(data => {
-        if (data.professional?.formatted && priceEl) {
-          priceEl.textContent = data.professional.formatted;
+    function refreshRemoveButtons() {
+      const rows = pdEntriesContainer.querySelectorAll(".pd-row");
+      rows.forEach((row) => {
+        const btn = row.querySelector(".remove-row-btn") as HTMLButtonElement;
+        if (rows.length === 1) {
+          btn.classList.add("hidden");
+        } else {
+          btn.classList.remove("hidden");
         }
-      })
-      .catch(() => {
-        if (priceEl) priceEl.textContent = "NZ$150.00 (unavailable)";
       });
+      pdEntriesContainer.querySelectorAll(".pd-row h3").forEach((h, i) => {
+        h.textContent = `Activity ${i + 1}`;
+      });
+    }
 
-    const getVal = (el) => el instanceof HTMLInputElement ? el.value.trim() : "";
+    addRowBtn.addEventListener("click", () => {
+      const firstRow = pdEntriesContainer.querySelector(".pd-row")!;
+      const clone = firstRow.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("input").forEach((inp) => { (inp as HTMLInputElement).value = ""; });
+      const rowIndex = pdEntriesContainer.querySelectorAll(".pd-row").length;
+      clone.setAttribute("data-row-index", String(rowIndex));
+      clone.querySelector(".remove-row-btn")!.addEventListener("click", () => {
+        clone.remove();
+        refreshRemoveButtons();
+      });
+      pdEntriesContainer.appendChild(clone);
+      refreshRemoveButtons();
+    });
 
-    const validate = () => {
-      if (!getVal(firstNameInput)) { setStatus("Enter your first name.", "error"); return false; }
-      if (!getVal(lastNameInput)) { setStatus("Enter your last name.", "error"); return false; }
-      if (!getVal(emailInput)) { setStatus("Enter an email address.", "error"); return false; }
-      return true;
-    };
+    pdEntriesContainer.querySelector(".remove-row-btn")!.addEventListener("click", (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const row = btn.closest(".pd-row")!;
+      row.remove();
+      refreshRemoveButtons();
+    });
 
-    checkoutBtn?.addEventListener("click", async () => {
-      if (!validate()) return;
-
-      const payload = {
-        plan: checkoutBtn instanceof HTMLButtonElement ? checkoutBtn.dataset?.plan : undefined,
-        firstName: getVal(firstNameInput),
-        lastName: getVal(lastNameInput),
-        phone: getVal(phoneInput),
-        email: getVal(emailInput),
-      };
-
-      setLoading(true);
-      setStatus("Creating your secure checkout session...");
-
-      try {
-        const response = await fetch("/api/create-professional-checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+    function collectFormData() {
+      const rows = pdEntriesContainer.querySelectorAll(".pd-row");
+      const pdEntries: any[] = [];
+      rows.forEach((row) => {
+        pdEntries.push({
+          dateCompleted: (row.querySelector('input[name="dateCompleted"]') as HTMLInputElement).value,
+          activity: (row.querySelector('input[name="activity"]') as HTMLInputElement).value,
+          totalHours: Number((row.querySelector('input[name="totalHours"]') as HTMLInputElement).value),
+          provider: (row.querySelector('input[name="provider"]') as HTMLInputElement).value,
         });
+      });
+      return {
+        firstName: (document.getElementById("firstName") as HTMLInputElement).value.trim(),
+        lastName: (document.getElementById("lastName") as HTMLInputElement).value.trim(),
+        email: (document.getElementById("email") as HTMLInputElement).value.trim(),
+        phone: (document.getElementById("phone") as HTMLInputElement).value.trim(),
+        year: Number((document.getElementById("year-display") as HTMLElement).textContent),
+        pdEntries,
+      };
+    }
 
-        const data = await response.json();
-        if (data.dryRun) {
+    function showError(msg: string) {
+      errorMessage.textContent = msg;
+      errorBanner.classList.remove("hidden");
+      errorBanner.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function setLoading(loading: boolean) {
+      if (loading) {
+        proceedBtn.disabled = true;
+        proceedBtn.classList.add("opacity-70", "cursor-not-allowed");
+        proceedSpinner.classList.remove("hidden");
+        proceedLabel.textContent = "Loading…";
+      } else {
+        proceedBtn.disabled = false;
+        proceedBtn.classList.remove("opacity-70", "cursor-not-allowed");
+        proceedSpinner.classList.add("hidden");
+        proceedLabel.textContent = "Proceed to Payment — NZ$150";
+      }
+    }
+
+    proceedBtn.addEventListener("click", async () => {
+      errorBanner.classList.add("hidden");
+      const data = collectFormData();
+      if (data.pdEntries.length === 0) { showError("Add at least one activity."); return; }
+      for (const entry of data.pdEntries) {
+        if (!entry.dateCompleted || !entry.activity || !entry.totalHours || entry.totalHours <= 0) {
+          showError("Fill in all activity fields (date, activity, hours)."); return;
+        }
+      }
+      if (!data.firstName || !data.lastName || !data.email) { showError("First name, last name, and email required."); return; }
+      setLoading(true);
+      try {
+        const res = await fetch("/api/renew/checkout-pm", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          showError(json.error ?? `Error ${res.status}`);
           setLoading(false);
-          setStatus(data.message || "Dry run passed. Stripe configuration validated.", "ok");
           return;
         }
-
-        if (!response.ok || !data.url) {
-          throw new Error(data.error || "Checkout session creation failed.");
+        if (json.dryRun) {
+          showError(`Dry-run mode: price validated (${json.priceId}). Stripe session NOT created.`);
+          setLoading(false);
+          return;
         }
-
-        window.location.assign(data.url);
-      } catch (error) {
+        window.location.assign(json.url);
+      } catch (err) {
+        showError("Network error. Please try again.");
         setLoading(false);
-        setStatus(error instanceof Error ? error.message : "Checkout error.", "error");
       }
     });
   </script>
