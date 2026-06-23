@@ -345,6 +345,22 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-06-23T05:05:00.000Z"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-06-23T20:26:57.761Z",
+      "error_message": "Significant refactor of ",
+      "file": "src/pages/renew/success.astro",
+      "root_cause": "10 lines replaced/restructured",
+      "fix": "Rewrote 18→12 lines (10 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "astro"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-23T20:26:57.761Z"
     }
   ]
 }

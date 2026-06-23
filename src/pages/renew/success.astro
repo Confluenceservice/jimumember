@@ -19,23 +19,17 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
     const successMessage = document.getElementById("success-message")!;
 
+    const msg = "Thanks for renewing your membership to the End of Life Doula Alliance Aotearoa.";
     if (!sessionId) {
-      successMessage.textContent = "Thank you. Your renewal payment was received.";
+      successMessage.textContent = msg;
     } else {
       fetch(`/api/renew/session-info?session_id=${encodeURIComponent(sessionId)}`)
         .then((r) => r.ok ? r.json() : null)
         .then((data) => {
-          if (!data) {
-            successMessage.textContent = "Thank you. Your renewal payment was received.";
-            return;
-          }
-          const tierLabel = data.tier === "pm" ? "Professional" : "Associate";
-          const amount = (data.amountPaidCents / 100).toFixed(2);
-          successMessage.textContent =
-            `Your ${tierLabel} membership is renewed for ${data.renewalYear}. Amount paid: NZ$${amount}.`;
+          successMessage.textContent = msg;
         })
         .catch(() => {
-          successMessage.textContent = "Thank you. Your renewal payment was received.";
+          successMessage.textContent = msg;
         });
     }
   </script>

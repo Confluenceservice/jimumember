@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-23T03:11:28.048Z
-> Files: 134 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-23T20:26:57.729Z
+> Files: 135 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -72,8 +72,10 @@
 ## .gstack/
 
 - `.DS_Store` (~1640 tok)
-- `browse-console.log` (~451 tok)
-- `browse-network.log` (~16773 tok)
+- `browse-audit.jsonl` — Declares fillField (~9398 tok)
+- `browse-console.log` (~137 tok)
+- `browse-network.log` (~10187 tok)
+- `claude-available.json` (~52 tok)
 
 ## .gstack/qa-reports/
 
@@ -81,17 +83,17 @@
 - `qa-report-eldaa-fly-dev-2026-04-19.md` — QA Report — eldaa.fly.dev/professional/apply (~903 tok)
 - `qa-report-eldaa-fly-dev-2026-04-27.md` — QA Report — eldaa.fly.dev — 2026-04-27 (~462 tok)
 - `qa-report-eldaa-fly-dev-2026-05-14.md` — QA Report — eldaa.fly.dev (Staging) (~798 tok)
+- `qa-report-eldaa-fly-dev-2026-06-23.md` — QA Report — eldaa.fly.dev — 2026-06-23 (~1148 tok)
 - `qa-report-localhost-2026-03-22.md` — QA Report — eldaa (localhost:4321) (~578 tok)
 - `qa-report-localhost-2026-06-09.md` — QA Report: eldaa — /renew/* checkout pages (~1357 tok)
 
 ## .run/
 
-- `dev.log` (~90 tok)
+- `dev.log` (~972 tok)
 - `dev.pid` (~2 tok)
 - `find-spreadsheets.mjs` — One-off: find spreadsheets and remaining ELDAA items. (~646 tok)
 - `inspect-applicant-completeness.mjs` — Diagnose why applicant b68936c3-2acf-45c4-b103-24108d1d23f7 is reported as incomplete. (~1312 tok)
 - `inspect-checkout.mjs` — Look up a Stripe session in the checkout log to find the matching applicant. (~986 tok)
-- `inspect-email-log.mjs` — Check the Email Log sheet for the test applicant's notifications (~343 tok)
 - `list-parent-children.mjs` — One-off: list children of the new shared-drive parent and the lowercase (~574 tok)
 - `probe-drive-ids.mjs` — One-off: probe Drive as service account (no DWD impersonation). (~1777 tok)
 - `probe-dwd-impersonation.mjs` — One-off: verify DWD impersonation under it-admin@eldaa.org.nz (~808 tok)
@@ -99,7 +101,6 @@
 - `probe-folder-meta.mjs` — One-off: probe metadata on candidate folders to see parents + driveId (~1103 tok)
 - `probe-perms.mjs` — Declares SA_EMAIL (~318 tok)
 - `probe-review.mjs` — Declares SA_EMAIL (~191 tok)
-- `qa-dev.log` (~563 tok)
 - `smoke-upload-staging.mjs` — Smoke test: read the staging sheet, find a recent applicant, use their (~792 tok)
 - `stripe-listen.log` (~5408 tok)
 - `stripe-listen.pid` (~2 tok)
@@ -146,15 +147,15 @@
 - `drive-files.ts` — Exports DriveFileRecord, addDriveFile, softDeleteDriveFile, listDriveFiles + 2 more (~1414 tok)
 - `email-sender.test.ts` — Hoisted mocks — must come before the module under test imports them. (~2846 tok)
 - `email-sender.ts` — Exports EmailTemplate, sendEmail, sendProfessionalConfirmation, sendAssociateConfirmation + 3 more (~2274 tok)
-- `google-auth.ts` — Service-account impersonation. When set, the service account JWT carries a (~840 tok)
+- `google-auth.ts` — Service-account impersonation. When set, the service account JWT carries a (~1075 tok)
 - `google-docs.ts` — Exports createAssociateApplicationReviewDoc (~6274 tok)
 - `google-sheets.test.ts` — Mock googleapis before importing the module under test (~3375 tok)
 - `google-sheets.ts` — Exports appendCheckoutLog, appendEmailLog, appendAssociateApplication (~1410 tok)
 - `logger.ts` — Global base logger — always JSON, always structured (~311 tok)
 - `memberships.test.ts` — Test the logic in isolation by re-implementing the store operations locally (~2001 tok)
 - `memberships.ts` — Exports MembershipStatus, MembershipRecord, getMembership, setAwaitingSubscription + 4 more (~639 tok)
-- `renewal-sheet.test.ts` — call: makeTransientError (~2563 tok)
-- `renewal-sheet.ts` — Exports PdEntry, RenewalInput, RenewalRow, appendRenewal + 2 more (~2058 tok)
+- `renewal-sheet.test.ts` — call: makeTransientError (~3603 tok)
+- `renewal-sheet.ts` — Exports PdEntry, RenewalInput, RenewalRow, _resetSheetsClientCacheForTesting + 3 more (~2894 tok)
 - `staging.ts` — Returns the staging folder-name prefix for the current environment. (~206 tok)
 - `stripe-checkout.test.ts` — NZ: dt (~1414 tok)
 - `stripe-checkout.ts` — Calculate first-term amount using proration from now until next July 1. (~828 tok)
@@ -181,7 +182,7 @@
 - `health.test.ts` — Mock Stripe — control products.list behaviour per test. (~2417 tok)
 - `health.ts` — Exports GET (~1331 tok)
 - `session-info.ts` — API routes: GET (1 endpoints) (~342 tok)
-- `stripe-webhook.test.ts` — Mock external dependencies (~5897 tok)
+- `stripe-webhook.test.ts` — Mock external dependencies (~5887 tok)
 - `stripe-webhook.ts` — Option C (mode=payment): (~5076 tok)
 
 ## src/pages/api/professional/
@@ -197,10 +198,10 @@
 
 ## src/pages/api/renew/
 
-- `checkout-am.test.ts` — VALID_BODY: call (~1315 tok)
-- `checkout-am.ts` — Exports POST (~1207 tok)
-- `checkout-pm.test.ts` — VALID_BODY: call (~1963 tok)
-- `checkout-pm.ts` — Exports POST (~1490 tok)
+- `checkout-am.test.ts` — VALID_BODY: call (~1444 tok)
+- `checkout-am.ts` — Exports POST (~1326 tok)
+- `checkout-pm.test.ts` — VALID_BODY: call (~2126 tok)
+- `checkout-pm.ts` — Exports POST (~1610 tok)
 - `session-info.test.ts` — mockStripeSessionsRetrieve: call (~539 tok)
 - `session-info.ts` — API routes: GET (1 endpoints) (~414 tok)
 
@@ -213,9 +214,9 @@
 
 ## src/pages/renew/
 
-- `associate.astro` — Astro: associate (~1337 tok)
-- `pro.astro` — Astro: pro (~2841 tok)
-- `success.astro` — Astro: success (~462 tok)
+- `associate.astro` — Astro: associate (~1643 tok)
+- `pro.astro` — Astro: pro (~3208 tok)
+- `success.astro` — Astro: success (~360 tok)
 
 ## src/styles/
 
