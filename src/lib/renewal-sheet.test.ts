@@ -32,7 +32,7 @@ vi.mock("googleapis", () => ({
 
 process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "sheet_test_id";
 
-import { appendRenewal, getRenewalBySession, markRenewalPaid, _resetSheetsClientCacheForTesting } from "./renewal-sheet";
+import { appendRenewal, getRenewalById, markRenewalPaid, _resetSheetsClientCacheForTesting } from "./renewal-sheet";
 
 describe("appendRenewal", () => {
   beforeEach(() => {
@@ -42,7 +42,9 @@ describe("appendRenewal", () => {
     mockAuth.mockImplementation(() => ({ authorize: mockAuthorize }));
     mockAuthorize.mockResolvedValue({});
     mockAppend.mockResolvedValue({});
-    mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals" } }] } });
+    mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals", sheetId: 123 } }] } });
+    // header check (A1:A1) sees header present → heal path skipped
+    mockGet.mockResolvedValue({ data: { values: [["renewal_id"]] } });
   });
 
   afterEach(() => {
@@ -91,7 +93,7 @@ describe("appendRenewal", () => {
   });
 
   it("does not re-create the Renewals tab on subsequent writes", async () => {
-    mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals" } }] } });
+    mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals", sheetId: 123 } }] } });
 
     await appendRenewal({
       renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
@@ -101,6 +103,31 @@ describe("appendRenewal", () => {
     });
 
     expect(mockBatchUpdate).not.toHaveBeenCalled();
+    expect(mockAppend).toHaveBeenCalledTimes(1);
+  });
+
+  it("self-heals a missing header row: inserts a row at top and writes headers", async () => {
+    mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals", sheetId: 123 } }] } });
+    // header check (A1:A1) returns a DATA row, not the header
+    mockGet.mockResolvedValue({ data: { values: [["ad28eb82-data-row-id"]] } });
+
+    await appendRenewal({
+      renewalId: "r2", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
+      currency: "nzd", stripeSession: "", paymentStatus: "pending",
+      createdAt: "2026-06-23T10:00:00.000Z",
+    });
+
+    // insertDimension at row 0
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    const insertCall = mockBatchUpdate.mock.calls[0][0];
+    expect(insertCall.requestBody.requests[0].insertDimension.range).toMatchObject({
+      sheetId: 123, dimension: "ROWS", startIndex: 0, endIndex: 1,
+    });
+    // header backfill to A1:N1, plus the appended data row → 2 update calls
+    const headerWrite = mockUpdate.mock.calls.find((c) => c[0].range === "'Renewals'!A1:N1");
+    expect(headerWrite).toBeTruthy();
+    expect(headerWrite![0].requestBody.values[0][0]).toBe("renewal_id");
     expect(mockAppend).toHaveBeenCalledTimes(1);
   });
 });
@@ -115,22 +142,22 @@ describe("markRenewalPaid", () => {
     mockUpdate.mockResolvedValue({});
   });
 
-  it("linear-scans column A for renewal_id then updates columns K and N", async () => {
+  it("linear-scans column A for renewal_id then updates columns K and N, backfilling stripe_session", async () => {
     mockGet.mockResolvedValueOnce({
       data: {
         values: [
           ["renewal_id", "tier", "renewal_year", "first_name", "last_name", "email", "phone", "pd_entries", "amount_paid_cents", "currency", "payment_status", "stripe_session", "created_at", "paid_at"],
-          ["r1", "pm", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "cs_1", "2026-06-23T10:00:00Z", ""],
+          ["r1", "pm", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "", "2026-06-23T10:00:00Z", ""],
         ],
       },
     });
 
-    await markRenewalPaid("r1", "2026-06-23T11:00:00.000Z");
+    await markRenewalPaid("r1", "cs_live_1", "2026-06-23T11:00:00.000Z");
 
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     const call = mockUpdate.mock.calls[0][0];
     expect(call.range).toBe("'Renewals'!K2:N2");
-    expect(call.requestBody.values[0]).toEqual(["paid", "cs_1", "2026-06-23T10:00:00Z", "2026-06-23T11:00:00.000Z"]);
+    expect(call.requestBody.values[0]).toEqual(["paid", "cs_live_1", "2026-06-23T10:00:00Z", "2026-06-23T11:00:00.000Z"]);
   });
 
   it("does nothing when renewal_id is not found", async () => {
@@ -138,12 +165,12 @@ describe("markRenewalPaid", () => {
       data: { values: [["renewal_id"], ["other"]] },
     });
 
-    await markRenewalPaid("missing", "2026-06-23T11:00:00.000Z");
+    await markRenewalPaid("missing", "cs_x", "2026-06-23T11:00:00.000Z");
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
 
-describe("getRenewalBySession", () => {
+describe("getRenewalById", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _resetSheetsClientCacheForTesting();
@@ -152,19 +179,19 @@ describe("getRenewalBySession", () => {
     mockAuthorize.mockResolvedValue({});
   });
 
-  it("returns the row matching stripe_session", async () => {
+  it("returns the row matching renewal_id (col A)", async () => {
     mockGet.mockResolvedValueOnce({
       data: {
         values: [
           ["renewal_id", "tier", "renewal_year", "first_name", "last_name", "email", "phone", "pd_entries", "amount_paid_cents", "currency", "payment_status", "stripe_session", "created_at", "paid_at"],
-          ["r1", "pm", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "paid", "cs_target", "2026-06-23T10:00:00Z", "2026-06-23T11:00:00Z"],
+          ["r1", "pm", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "", "2026-06-23T10:00:00Z", ""],
         ],
       },
     });
 
-    const result = await getRenewalBySession("cs_target");
+    const result = await getRenewalById("r1");
     expect(result?.renewalId).toBe("r1");
-    expect(result?.paymentStatus).toBe("paid");
+    expect(result?.paymentStatus).toBe("pending");
     expect(result?.amountPaidCents).toBe(15000);
   });
 
@@ -173,7 +200,7 @@ describe("getRenewalBySession", () => {
       data: { values: [["renewal_id"], ["r1"]] },
     });
 
-    const result = await getRenewalBySession("cs_missing");
+    const result = await getRenewalById("missing");
     expect(result).toBeNull();
   });
 });

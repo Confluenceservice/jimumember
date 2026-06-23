@@ -24,7 +24,7 @@ vi.mock("../../../lib/stripe-products", () => ({
 vi.mock("../../../lib/renewal-sheet", () => ({
   appendRenewal: mockAppendRenewal,
   markRenewalPaid: vi.fn(),
-  getRenewalBySession: vi.fn(),
+  getRenewalById: vi.fn(),
 }));
 
 vi.mock("../../../lib/stripe-checkout", () => ({
