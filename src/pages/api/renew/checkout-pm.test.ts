@@ -183,4 +183,16 @@ describe("checkout-pm", () => {
     expect(mockAppendRenewal).not.toHaveBeenCalled();
     expect(mockStripeSessionsCreate).not.toHaveBeenCalled();
   });
+
+  it("returns 500 with code SHEET_WRITE_FAILED when appendRenewal throws", async () => {
+    process.env.STRIPE_PRODUCT_PM_RENEWAL = "prod_pm";
+    mockAppendRenewal.mockRejectedValueOnce(new Error("OAuth token fetch failed"));
+
+    const response = await call(VALID_BODY);
+    expect(response.status).toBe(500);
+    const json = await response.json();
+    expect(json.code).toBe("SHEET_WRITE_FAILED");
+    expect(json.error).toMatch(/Failed to write renewal row/);
+    expect(mockStripeSessionsCreate).not.toHaveBeenCalled();
+  });
 });

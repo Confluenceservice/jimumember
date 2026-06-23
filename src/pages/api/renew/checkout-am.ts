@@ -67,11 +67,16 @@ export const POST: APIRoute = async ({ request }) => {
   const siteBaseUrl = getSiteBaseUrl(request.url);
   const createdAt = new Date().toISOString();
 
-  await appendRenewal({
-    renewalId, tier: "am", year, firstName, lastName, email, phone: "",
-    pdEntries: [], amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
-    stripeSession: "", paymentStatus: "pending", createdAt,
-  });
+  try {
+    await appendRenewal({
+      renewalId, tier: "am", year, firstName, lastName, email, phone: "",
+      pdEntries: [], amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
+      stripeSession: "", paymentStatus: "pending", createdAt,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return serverError("SHEET_WRITE_FAILED", `Failed to write renewal row: ${msg}`);
+  }
 
   let session;
   try {

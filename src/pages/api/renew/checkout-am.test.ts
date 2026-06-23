@@ -114,4 +114,14 @@ describe("checkout-am", () => {
     const json = await response.json();
     expect(json.code).toBe("CHECKOUT_ERROR");
   });
+
+  it("returns 500 with code SHEET_WRITE_FAILED when appendRenewal throws", async () => {
+    mockAppendRenewal.mockRejectedValueOnce(new Error("OAuth token fetch failed"));
+
+    const response = await call(VALID_BODY);
+    expect(response.status).toBe(500);
+    const json = await response.json();
+    expect(json.code).toBe("SHEET_WRITE_FAILED");
+    expect(mockStripeSessionsCreate).not.toHaveBeenCalled();
+  });
 });
