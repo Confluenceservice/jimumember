@@ -70,10 +70,29 @@ export function getServiceAccountJwtAuth(scopes: string[]): JWT {
     }
   }
 
-  return new google.auth.JWT({
+  const client = new google.auth.JWT({
     email,
     key,
     scopes,
     ...(subject ? { subject } : {}),
   });
+
+  // gaxios 6.x (bundled by googleapis/google-auth-library) ships its own
+  // node-fetch, which throws "Invalid response body ... Premature close" when
+  // reading the OAuth token response body on Node 18+/22. Raw https.request and
+  // Node's native `fetch` (undici) both work fine against the same endpoint.
+  // googleapis routes BOTH the token fetch AND every Sheets/Drive data call
+  // through this auth client's transporter, so forcing native fetch here fixes
+  // the entire chain. See .wolf/buglog.json bug-033/034.
+  const transporter = (client as unknown as {
+    transporter?: { defaults?: Record<string, unknown> };
+  }).transporter;
+  if (transporter) {
+    transporter.defaults = {
+      ...(transporter.defaults ?? {}),
+      fetchImplementation: globalThis.fetch,
+    };
+  }
+
+  return client;
 }
