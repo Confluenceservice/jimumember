@@ -51,9 +51,24 @@ const RENEWAL_HEADERS = [
 
 const SHEET_NAME = "Renewals";
 
+let sheetsClientPromise: Promise<ReturnType<typeof google.sheets>> | null = null;
+
 async function getSheetsClient() {
-  const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
-  return google.sheets({ version: "v4", auth });
+  // Cache the auth-warmed client across all calls in this process. The OAuth
+  // token (good for ~1h) is fetched once and reused. Pre-warming in this layer
+  // lets the transient-retry wrapper catch "Premature close" / "ECONNRESET"
+  // drops in gaxios before any Sheets call would otherwise throw an opaque
+  // auth error from the JWT client internals.
+  if (!sheetsClientPromise) {
+    sheetsClientPromise = (async () => {
+      const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+      await withTransientRetry("oauth_token_refresh", async () => {
+        await auth.authorize();
+      });
+      return google.sheets({ version: "v4", auth });
+    })();
+  }
+  return sheetsClientPromise;
 }
 
 // Google OAuth token endpoint drops connections intermittently with
@@ -122,6 +137,10 @@ async function ensureRenewalsSheet(): Promise<void> {
       }),
     );
   }
+}
+
+export function _resetSheetsClientCacheForTesting(): void {
+  sheetsClientPromise = null;
 }
 
 export async function appendRenewal(input: RenewalInput): Promise<void> {

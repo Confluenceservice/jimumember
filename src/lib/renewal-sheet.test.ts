@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockAuth, mockAppend, mockUpdate, mockGet, mockBatchUpdate, mockEnsureSheet } = vi.hoisted(() => ({
+const { mockAuth, mockAuthorize, mockAppend, mockUpdate, mockGet, mockBatchUpdate, mockEnsureSheet } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
+  mockAuthorize: vi.fn(),
   mockAppend: vi.fn(),
   mockUpdate: vi.fn(),
   mockGet: vi.fn(),
@@ -9,7 +10,11 @@ const { mockAuth, mockAppend, mockUpdate, mockGet, mockBatchUpdate, mockEnsureSh
   mockEnsureSheet: vi.fn(),
 }));
 
-vi.mock("./google-auth", () => ({ getServiceAccountJwtAuth: mockAuth }));
+vi.mock("./google-auth", () => ({
+  getServiceAccountJwtAuth: mockAuth.mockImplementation(() => ({
+    authorize: mockAuthorize,
+  })),
+}));
 
 vi.mock("googleapis", () => ({
   google: {
@@ -27,13 +32,15 @@ vi.mock("googleapis", () => ({
 
 process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "sheet_test_id";
 
-import { appendRenewal, getRenewalBySession, markRenewalPaid } from "./renewal-sheet";
+import { appendRenewal, getRenewalBySession, markRenewalPaid, _resetSheetsClientCacheForTesting } from "./renewal-sheet";
 
 describe("appendRenewal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetSheetsClientCacheForTesting();
     process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "sheet_test_id";
-    mockAuth.mockResolvedValue({});
+    mockAuth.mockImplementation(() => ({ authorize: mockAuthorize }));
+    mockAuthorize.mockResolvedValue({});
     mockAppend.mockResolvedValue({});
     mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals" } }] } });
   });
@@ -101,8 +108,10 @@ describe("appendRenewal", () => {
 describe("markRenewalPaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetSheetsClientCacheForTesting();
     process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "sheet_test_id";
-    mockAuth.mockResolvedValue({});
+    mockAuth.mockImplementation(() => ({ authorize: mockAuthorize }));
+    mockAuthorize.mockResolvedValue({});
     mockUpdate.mockResolvedValue({});
   });
 
@@ -137,8 +146,10 @@ describe("markRenewalPaid", () => {
 describe("getRenewalBySession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetSheetsClientCacheForTesting();
     process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "sheet_test_id";
-    mockAuth.mockResolvedValue({});
+    mockAuth.mockImplementation(() => ({ authorize: mockAuthorize }));
+    mockAuthorize.mockResolvedValue({});
   });
 
   it("returns the row matching stripe_session", async () => {
@@ -170,8 +181,10 @@ describe("getRenewalBySession", () => {
 describe("transient network retry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetSheetsClientCacheForTesting();
     process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "sheet_test_id";
-    mockAuth.mockReturnValue({});
+    mockAuth.mockImplementation(() => ({ authorize: mockAuthorize }));
+    mockAuthorize.mockResolvedValue({});
     mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals" } }] } });
   });
 
@@ -180,6 +193,39 @@ describe("transient network retry", () => {
     (err as Error & { code?: string }).code = "ECONNRESET";
     return err;
   }
+
+  it("retries the OAuth token refresh on Premature close (root cause of bug-033)", async () => {
+    mockAuthorize
+      .mockRejectedValueOnce(makeTransientError())
+      .mockResolvedValueOnce(undefined);
+
+    await appendRenewal({
+      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
+      currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
+      createdAt: "2026-06-23T10:00:00.000Z",
+    });
+
+    expect(mockAuthorize).toHaveBeenCalledTimes(2);
+    expect(mockAppend).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives up on auth refresh after 3 attempts then surfaces error", async () => {
+    mockAuthorize
+      .mockRejectedValueOnce(makeTransientError())
+      .mockRejectedValueOnce(makeTransientError())
+      .mockRejectedValueOnce(makeTransientError());
+
+    await expect(appendRenewal({
+      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
+      currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
+      createdAt: "2026-06-23T10:00:00.000Z",
+    })).rejects.toThrow(/Premature close/);
+
+    expect(mockAuthorize).toHaveBeenCalledTimes(3);
+    expect(mockAppend).not.toHaveBeenCalled();
+  });
 
   it("retries appendRenewal on Premature close then succeeds", async () => {
     mockAppend
