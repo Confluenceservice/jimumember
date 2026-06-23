@@ -123,9 +123,9 @@ async function ensureRenewalsSheet(): Promise<void> {
   const meta = await withTransientRetry("ensure_sheet.get", () =>
     sheets.spreadsheets.get({ spreadsheetId }),
   );
-  const exists = (meta.data.sheets ?? []).some((s) => s.properties?.title === SHEET_NAME);
+  const existing = (meta.data.sheets ?? []).find((s) => s.properties?.title === SHEET_NAME);
 
-  if (!exists) {
+  if (!existing) {
     await withTransientRetry("ensure_sheet.batchUpdate", () =>
       sheets.spreadsheets.batchUpdate({
         spreadsheetId,
@@ -142,7 +142,46 @@ async function ensureRenewalsSheet(): Promise<void> {
         requestBody: { values: [RENEWAL_HEADERS as unknown as string[]] },
       }),
     );
+    return;
   }
+
+  // Self-heal: the sheet exists but may be missing its header row (e.g. created
+  // by an earlier run where the header write failed). If row 1 isn't the header,
+  // insert a fresh row at the top and write headers — without overwriting any
+  // existing data row that currently sits at row 1.
+  const firstRowRes = await withTransientRetry("ensure_sheet.header_check", () =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${SHEET_NAME}'!A1:A1`,
+    }),
+  );
+  const a1 = firstRowRes.data.values?.[0]?.[0];
+  if (a1 === RENEWAL_HEADERS[0]) return; // header already present
+
+  const sheetId = existing.properties?.sheetId;
+  if (sheetId === undefined || sheetId === null) return;
+
+  await withTransientRetry("ensure_sheet.insert_header_row", () =>
+    sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          insertDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: 0, endIndex: 1 },
+            inheritFromBefore: false,
+          },
+        }],
+      },
+    }),
+  );
+  await withTransientRetry("ensure_sheet.backfill_headers", () =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${SHEET_NAME}'!A1:N1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [RENEWAL_HEADERS as unknown as string[]] },
+    }),
+  );
 }
 
 export function _resetSheetsClientCacheForTesting(): void {
@@ -183,7 +222,7 @@ export async function appendRenewal(input: RenewalInput): Promise<void> {
   );
 }
 
-export async function markRenewalPaid(renewalId: string, paidAt: string): Promise<void> {
+export async function markRenewalPaid(renewalId: string, sessionId: string, paidAt: string): Promise<void> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error("MISSING_CONFIG: GOOGLE_SHEETS_SPREADSHEET_ID");
   const sheets = await getSheetsClient();
@@ -204,6 +243,9 @@ export async function markRenewalPaid(renewalId: string, paidAt: string): Promis
   const rowNumber = idx + 2;
 
   const existing = dataRows[idx];
+  // K=payment_status, L=stripe_session, M=created_at, N=paid_at.
+  // stripe_session is empty at row creation (the Checkout Session is created
+  // AFTER appendRenewal), so backfill it here from the webhook.
   await withTransientRetry("mark_paid.update", () =>
     sheets.spreadsheets.values.update({
       spreadsheetId,
@@ -212,7 +254,7 @@ export async function markRenewalPaid(renewalId: string, paidAt: string): Promis
       requestBody: {
         values: [[
           "paid",
-          existing[11] ?? "",
+          sessionId || (existing[11] ?? ""),
           existing[12] ?? "",
           paidAt,
         ]],
@@ -221,12 +263,12 @@ export async function markRenewalPaid(renewalId: string, paidAt: string): Promis
   );
 }
 
-export async function getRenewalBySession(stripeSessionId: string): Promise<RenewalRow | null> {
+export async function getRenewalById(renewalId: string): Promise<RenewalRow | null> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error("MISSING_CONFIG: GOOGLE_SHEETS_SPREADSHEET_ID");
   const sheets = await getSheetsClient();
 
-  const res = await withTransientRetry("get_by_session", () =>
+  const res = await withTransientRetry("get_by_id", () =>
     sheets.spreadsheets.values.get({
       spreadsheetId,
       range: `'${SHEET_NAME}'!A1:N1000`,
@@ -235,7 +277,9 @@ export async function getRenewalBySession(stripeSessionId: string): Promise<Rene
   const rows = res.data.values ?? [];
   const dataRows = rows.slice(1);
 
-  const match = dataRows.find((r) => r[11] === stripeSessionId);
+  // Match by renewal_id (col A). stripe_session (col L) is empty until the
+  // webhook backfills it, so it cannot be the lookup key.
+  const match = dataRows.find((r) => r[0] === renewalId);
   if (!match) return null;
 
   const pdRaw = match[7] ?? "[]";

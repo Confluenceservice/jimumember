@@ -12,7 +12,7 @@ import {
 import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
-import { getRenewalBySession, markRenewalPaid } from "../../lib/renewal-sheet";
+import { getRenewalById, markRenewalPaid } from "../../lib/renewal-sheet";
 import { createApplicationReviewDoc, createAssociateApplicationReviewDoc, refreshPmIndexDoc, refreshAmIndexDoc } from "../../lib/google-docs";
 import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification } from "../../lib/email-sender";
 
@@ -42,7 +42,7 @@ async function handleCheckoutCompleted(
       log.warn("renewal_missing_id", { sessionId: session.id });
       return;
     }
-    const renewal = await getRenewalBySession(session.id);
+    const renewal = await getRenewalById(renewalId);
     if (!renewal) {
       log.warn("renewal_not_found", { sessionId: session.id, renewalId });
       return;
@@ -52,7 +52,7 @@ async function handleCheckoutCompleted(
       return;
     }
     const paidAt = new Date().toISOString();
-    await markRenewalPaid(renewalId, paidAt);
+    await markRenewalPaid(renewalId, session.id, paidAt);
 
     const sessionCustomerId = typeof session.customer === "string" ? session.customer : "";
     void appendCheckoutLog({

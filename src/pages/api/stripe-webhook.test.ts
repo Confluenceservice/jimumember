@@ -21,7 +21,7 @@ const mockSetPaymentFailed = vi.fn();
 const mockGetApplicantById = vi.fn();
 const mockMarkApplicantPaid = vi.fn();
 const mockMarkRenewalPaid = vi.fn();
-const mockGetRenewalBySession = vi.fn();
+const mockGetRenewalById = vi.fn();
 
 vi.mock("../../lib/email-sender", () => ({
   sendProfessionalConfirmation: mockSendProfessionalConfirmation,
@@ -55,7 +55,7 @@ vi.mock("../../lib/upload-sheet", () => ({
 
 vi.mock("../../lib/renewal-sheet", () => ({
   markRenewalPaid: mockMarkRenewalPaid,
-  getRenewalBySession: mockGetRenewalBySession,
+  getRenewalById: mockGetRenewalById,
 }));
 
 vi.mock("@sentry/node", () => ({
@@ -407,7 +407,7 @@ describe("stripe-webhook", () => {
   describe("renewal flow", () => {
     beforeEach(() => {
       mockMarkRenewalPaid.mockReset();
-      mockGetRenewalBySession.mockReset();
+      mockGetRenewalById.mockReset();
       mockAppendCheckoutLog.mockReset();
     });
 
@@ -431,7 +431,7 @@ describe("stripe-webhook", () => {
         },
       });
 
-      mockGetRenewalBySession.mockResolvedValueOnce({
+      mockGetRenewalById.mockResolvedValueOnce({
         renewalId: "r1",
         tier: "pm",
         renewalYear: 2026,
@@ -456,8 +456,8 @@ describe("stripe-webhook", () => {
       const response = await POST(req);
       expect(response.status).toBe(200);
 
-      expect(mockMarkRenewalPaid).toHaveBeenCalledWith("r1", expect.any(String));
-      expect(mockGetRenewalBySession).toHaveBeenCalledWith("cs_renewal_1");
+      expect(mockMarkRenewalPaid).toHaveBeenCalledWith("r1", "cs_renewal_1", expect.any(String));
+      expect(mockGetRenewalById).toHaveBeenCalledWith("r1");
       expect(mockAppendCheckoutLog).toHaveBeenCalledWith(
         expect.objectContaining({
           firstName: "Alice",
@@ -491,7 +491,7 @@ describe("stripe-webhook", () => {
         },
       });
 
-      mockGetRenewalBySession.mockResolvedValueOnce({
+      mockGetRenewalById.mockResolvedValueOnce({
         renewalId: "r2",
         tier: "am",
         renewalYear: 2026,
@@ -530,7 +530,7 @@ describe("stripe-webhook", () => {
         },
       });
 
-      mockGetRenewalBySession.mockResolvedValueOnce(null);
+      mockGetRenewalById.mockResolvedValueOnce(null);
 
       const { POST } = await import("../../pages/api/stripe-webhook");
       const body = JSON.stringify({ type: "checkout.session.completed", data: { object: session } });
