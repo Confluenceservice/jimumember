@@ -361,6 +361,102 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-06-23T20:26:57.761Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-06-24T19:09:59.502Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/lib/renewal-sheet.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T19:09:59.502Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-06-24T19:10:08.129Z",
+      "error_message": "Missing await",
+      "file": "src/lib/email-sender.ts",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T19:10:08.129Z"
+    },
+    {
+      "id": "bug-024",
+      "timestamp": "2026-06-24T19:10:19.352Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "src/pages/api/stripe-webhook.ts",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T19:10:19.352Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-06-24T20:30:01.086Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/pages/api/renew/checkout-pm.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T20:30:01.086Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-06-24T20:30:32.200Z",
+      "error_message": "Missing guard clause",
+      "file": "src/pages/renew/pro.astro",
+      "root_cause": "No early return/throw for edge case: !dateCompleted && !activity && !totalHoursRaw",
+      "fix": "Added guard clause: if (!dateCompleted && !activity && !totalHou)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "astro"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T20:30:32.200Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-06-24T20:30:43.216Z",
+      "error_message": "Significant refactor of ",
+      "file": "src/pages/api/renew/checkout-pm.test.ts",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 6→7 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T20:30:43.216Z"
     }
   ]
 }

@@ -9,6 +9,7 @@ const mockSendProfessionalConfirmation = vi.fn();
 const mockSendProfessionalApplicationNotification = vi.fn();
 const mockSendAssociateConfirmation = vi.fn();
 const mockSendAssociateApplicationNotification = vi.fn();
+const mockSendRenewalPdLogLink = vi.fn();
 const mockAppendCheckoutLog = vi.fn();
 const mockCreateApplicationReviewDoc = vi.fn();
 const mockCreateAssociateApplicationReviewDoc = vi.fn();
@@ -28,6 +29,7 @@ vi.mock("../../lib/email-sender", () => ({
   sendProfessionalApplicationNotification: mockSendProfessionalApplicationNotification,
   sendAssociateConfirmation: mockSendAssociateConfirmation,
   sendAssociateApplicationNotification: mockSendAssociateApplicationNotification,
+  sendRenewalPdLogLink: mockSendRenewalPdLogLink,
 }));
 
 vi.mock("../../lib/google-sheets", () => ({
@@ -409,6 +411,8 @@ describe("stripe-webhook", () => {
       mockMarkRenewalPaid.mockReset();
       mockGetRenewalById.mockReset();
       mockAppendCheckoutLog.mockReset();
+      mockSendRenewalPdLogLink.mockReset();
+      mockSendRenewalPdLogLink.mockResolvedValue(undefined);
     });
 
     it("marks renewal row paid when checkout.session.completed fires for renewal metadata", async () => {

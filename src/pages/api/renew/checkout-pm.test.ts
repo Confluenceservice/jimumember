@@ -112,11 +112,12 @@ describe("checkout-pm", () => {
     expect(response.status).toBe(400);
   });
 
-  it("returns 400 when pdEntries is empty", async () => {
+  it("accepts empty pdEntries — members can log PD after payment", async () => {
     const response = await call({ ...VALID_BODY, pdEntries: [] });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.field).toBe("pdEntries");
+    expect(json.url).toBeDefined();
+    expect(mockAppendRenewal).toHaveBeenCalledWith(expect.objectContaining({ pdEntries: [] }));
   });
 
   it("returns 400 when pdEntries[0] missing required field", async () => {

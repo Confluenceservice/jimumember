@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-23T20:26:57.729Z
-> Files: 135 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-24T20:30:43.205Z
+> Files: 137 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -146,7 +146,7 @@
 
 - `drive-files.ts` — Exports DriveFileRecord, addDriveFile, softDeleteDriveFile, listDriveFiles + 2 more (~1414 tok)
 - `email-sender.test.ts` — Hoisted mocks — must come before the module under test imports them. (~2846 tok)
-- `email-sender.ts` — Exports EmailTemplate, sendEmail, sendProfessionalConfirmation, sendAssociateConfirmation + 3 more (~2274 tok)
+- `email-sender.ts` — Exports EmailTemplate, sendEmail, sendProfessionalConfirmation, sendAssociateConfirmation + 4 more (~2503 tok)
 - `google-auth.ts` — Service-account impersonation. When set, the service account JWT carries a (~1075 tok)
 - `google-docs.ts` — Exports createAssociateApplicationReviewDoc (~6274 tok)
 - `google-sheets.test.ts` — Mock googleapis before importing the module under test (~3375 tok)
@@ -155,7 +155,7 @@
 - `memberships.test.ts` — Test the logic in isolation by re-implementing the store operations locally (~2001 tok)
 - `memberships.ts` — Exports MembershipStatus, MembershipRecord, getMembership, setAwaitingSubscription + 4 more (~639 tok)
 - `renewal-sheet.test.ts` — call: makeTransientError (~3603 tok)
-- `renewal-sheet.ts` — Exports PdEntry, RenewalInput, RenewalRow, _resetSheetsClientCacheForTesting + 3 more (~2894 tok)
+- `renewal-sheet.ts` — Exports PdEntry, RenewalInput, RenewalRow, _resetSheetsClientCacheForTesting + 4 more (~3159 tok)
 - `staging.ts` — Returns the staging folder-name prefix for the current environment. (~206 tok)
 - `stripe-checkout.test.ts` — NZ: dt (~1414 tok)
 - `stripe-checkout.ts` — Calculate first-term amount using proration from now until next July 1. (~828 tok)
@@ -182,8 +182,8 @@
 - `health.test.ts` — Mock Stripe — control products.list behaviour per test. (~2417 tok)
 - `health.ts` — Exports GET (~1331 tok)
 - `session-info.ts` — API routes: GET (1 endpoints) (~342 tok)
-- `stripe-webhook.test.ts` — Mock external dependencies (~5887 tok)
-- `stripe-webhook.ts` — Option C (mode=payment): (~5076 tok)
+- `stripe-webhook.test.ts` — --------------------------------------------------------------------------- (~5943 tok)
+- `stripe-webhook.ts` — Option C (mode=payment): (~5253 tok)
 
 ## src/pages/api/professional/
 
@@ -200,8 +200,9 @@
 
 - `checkout-am.test.ts` — VALID_BODY: call (~1444 tok)
 - `checkout-am.ts` — Exports POST (~1326 tok)
-- `checkout-pm.test.ts` — VALID_BODY: call (~2126 tok)
-- `checkout-pm.ts` — Exports POST (~1610 tok)
+- `checkout-pm.test.ts` — VALID_BODY: call (~2158 tok)
+- `checkout-pm.ts` — Exports POST (~1603 tok)
+- `pd-log.ts` — GET returns member name + pdEntries (403 if not paid, 404 if missing); POST overwrites pd_entries by renewal_id (~700 tok)
 - `session-info.test.ts` — mockStripeSessionsRetrieve: call (~539 tok)
 - `session-info.ts` — API routes: GET (1 endpoints) (~414 tok)
 
@@ -215,7 +216,8 @@
 ## src/pages/renew/
 
 - `associate.astro` — Astro: associate (~1643 tok)
-- `pro.astro` — Astro: pro (~3208 tok)
+- `pd-log.astro` — Astro: pd-log (~2682 tok)
+- `pro.astro` — Astro: pro (~3308 tok)
 - `success.astro` — Astro: success (~360 tok)
 
 ## src/styles/

@@ -69,9 +69,8 @@ export const POST: APIRoute = async ({ request }) => {
   if (!EMAIL_RE.test(email)) return badRequest("email", "Valid email required");
   if (!Number.isInteger(year) || year < 2024 || year > 2100) return badRequest("year", "Valid year required");
 
-  const pdEntries = body.pdEntries ?? [];
-  if (pdEntries.length === 0) return badRequest("pdEntries", "At least one PD entry required");
-  if (!pdEntries.every(isValidPdEntry)) {
+  const pdEntries = (body.pdEntries ?? []).filter((e) => e !== null && e !== undefined);
+  if (pdEntries.length > 0 && !pdEntries.every(isValidPdEntry)) {
     return badRequest("pdEntries", "Each PD entry must have dateCompleted, activity, totalHours (number > 0), provider");
   }
 

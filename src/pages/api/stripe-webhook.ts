@@ -14,7 +14,7 @@ import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { getRenewalById, markRenewalPaid } from "../../lib/renewal-sheet";
 import { createApplicationReviewDoc, createAssociateApplicationReviewDoc, refreshPmIndexDoc, refreshAmIndexDoc } from "../../lib/google-docs";
-import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification } from "../../lib/email-sender";
+import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification, sendRenewalPdLogLink } from "../../lib/email-sender";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -71,6 +71,18 @@ async function handleCheckoutCompleted(
     });
 
     log.info("renewal_marked_paid", { renewalId, sessionId: session.id, tier: renewal.tier });
+
+    // Send PD log link to member (non-blocking, PM only)
+    if (renewal.tier === "pm" && renewal.email) {
+      const appUrl = process.env.PUBLIC_APP_URL?.trim() || "https://subscribe.eldaa.org.nz";
+      const pdLogLink = `${appUrl}/renew/pd-log?token=${renewalId}`;
+      const fullName = `${renewal.firstName} ${renewal.lastName}`.trim();
+      sendRenewalPdLogLink(renewal.email, fullName, pdLogLink, renewalId).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("renewal_pd_log_email_failed", { err: msg, renewalId });
+      });
+    }
+
     return;
   }
 

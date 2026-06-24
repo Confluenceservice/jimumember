@@ -263,6 +263,34 @@ export async function markRenewalPaid(renewalId: string, sessionId: string, paid
   );
 }
 
+export async function updateRenewalPdEntries(renewalId: string, entries: PdEntry[]): Promise<void> {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) throw new Error("MISSING_CONFIG: GOOGLE_SHEETS_SPREADSHEET_ID");
+  const sheets = await getSheetsClient();
+
+  const res = await withTransientRetry("update_pd.get", () =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${SHEET_NAME}'!A1:H1000`,
+    }),
+  );
+  const rows = res.data.values ?? [];
+  const dataRows = rows.slice(1);
+
+  const idx = dataRows.findIndex((r) => r[0] === renewalId);
+  if (idx === -1) return;
+  const rowNumber = idx + 2;
+
+  await withTransientRetry("update_pd.update", () =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${SHEET_NAME}'!H${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[JSON.stringify(entries)]] },
+    }),
+  );
+}
+
 export async function getRenewalById(renewalId: string): Promise<RenewalRow | null> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error("MISSING_CONFIG: GOOGLE_SHEETS_SPREADSHEET_ID");

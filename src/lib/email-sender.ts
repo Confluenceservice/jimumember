@@ -65,7 +65,8 @@ export type EmailTemplate =
   | "associate_confirmation"
   | "application_notification"
   | "associate_application_notification"
-  | "resume_link";
+  | "resume_link"
+  | "renewal_pd_log";
 
 export async function sendEmail(
   params: EmailParams,
@@ -212,6 +213,33 @@ ELDAA`;
   await sendEmail(
     { to: toEmail, subject, body },
     { template: "application_notification", applicantId },
+  );
+}
+
+export async function sendRenewalPdLogLink(
+  toEmail: string,
+  fullName: string,
+  pdLogLink: string,
+  renewalId?: string,
+): Promise<void> {
+  const subject = "Log your Professional Development — ELDAA Membership Renewal";
+
+  const body = `Dear ${fullName},
+
+Thank you for renewing your ELDAA Professional Membership.
+
+As a reminder, Professional Members are required to log at least 10 hours of Professional Development each year. You can log your PD activities at any time using the link below:
+
+${pdLogLink}
+
+Please keep this email — it's your personal link to update your PD record.
+
+Kia ora,
+ELDAA Committee`;
+
+  await sendEmail(
+    { to: toEmail, subject, body, replyTo: "membership@eldaa.org.nz" },
+    { template: "renewal_pd_log", applicantId: renewalId },
   );
 }
 

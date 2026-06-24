@@ -316,3 +316,64 @@
 |------|--------|---------|---------|--------|
 | 08:26 | Edited src/pages/renew/success.astro | modified if() | ~123 |
 | 08:26 | Session end: 1 writes across 1 files (success.astro) | 1 reads | ~594 tok |
+| 08:27 | Session end: 1 writes across 1 files (success.astro) | 1 reads | ~594 tok |
+| 08:27 | Session end: 1 writes across 1 files (success.astro) | 1 reads | ~594 tok |
+| 08:35 | Session end: 1 writes across 1 files (success.astro) | 2 reads | ~594 tok |
+| 08:52 | Session end: 1 writes across 1 files (success.astro) | 2 reads | ~594 tok |
+| 08:54 | Session end: 1 writes across 1 files (success.astro) | 2 reads | ~594 tok |
+| 08:54 | Session end: 1 writes across 1 files (success.astro) | 2 reads | ~594 tok |
+
+## Session: 2026-06-23 08:55
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-23 08:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-24 06:28
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 06:34 | Edited src/pages/renew/pro.astro | 3→3 lines | ~62 |
+| 06:35 | Replaced PD description with 10hrs requirement copy on PM renewal, commit 5999287 | src/pages/renew/pro.astro | ok | ~210 |
+| 06:36 | Session end: 1 writes across 1 files (pro.astro) | 1 reads | ~3274 tok |
+| 06:37 | Session end: 1 writes across 1 files (pro.astro) | 1 reads | ~3274 tok |
+| 06:40 | Session end: 1 writes across 1 files (pro.astro) | 1 reads | ~3274 tok |
+| 07:10 | Pushed to origin; `fly deploy -a eldaa-production`; new copy live at https://subscribe.eldaa.org.nz/renew/pro | src/pages/renew/pro.astro | deployed | ~340 |
+
+## Session: 2026-06-24 07:08
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 07:09 | Edited src/lib/renewal-sheet.ts | added nullish coalescing | ~290 |
+| 07:10 | Edited src/lib/email-sender.ts | 6→7 lines | ~54 |
+| 07:10 | Edited src/lib/email-sender.ts | modified sendRenewalPdLogLink() | ~234 |
+| 07:10 | Edited src/pages/api/stripe-webhook.ts | inline fix | ~57 |
+| 07:10 | Edited src/pages/api/stripe-webhook.ts | added optional chaining | ~203 |
+| 07:10 | Created src/pages/api/renew/pd-log.ts | — | ~1036 |
+| 07:11 | Created src/pages/renew/pd-log.astro | — | ~2682 |
+| 07:12 | Edited src/pages/api/stripe-webhook.test.ts | 4→5 lines | ~74 |
+| 07:12 | Edited src/pages/api/stripe-webhook.test.ts | 6→7 lines | ~113 |
+| 07:13 | Edited src/pages/api/stripe-webhook.test.ts | 5→7 lines | ~73 |
+| 07:14 | Session end: 10 writes across 6 files (renewal-sheet.ts, email-sender.ts, stripe-webhook.ts, pd-log.ts, pd-log.astro) | 5 reads | ~24399 tok |
+| 07:34 | Session end: 10 writes across 6 files (renewal-sheet.ts, email-sender.ts, stripe-webhook.ts, pd-log.ts, pd-log.astro) | 5 reads | ~24399 tok |
+| 07:34 | Session end: 10 writes across 6 files (renewal-sheet.ts, email-sender.ts, stripe-webhook.ts, pd-log.ts, pd-log.astro) | 5 reads | ~24399 tok |
+
+## Session: 2026-06-24 08:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 08:30 | Edited src/pages/api/renew/checkout-pm.ts | 5→4 lines | ~80 |
+| 08:30 | Edited src/pages/renew/pro.astro | fields() → activity() | ~103 |
+| 08:30 | Edited src/pages/renew/pro.astro | 4→4 lines | ~108 |
+| 08:30 | Edited src/pages/renew/pro.astro | added 1 condition(s) | ~239 |
+| 08:30 | Edited src/pages/api/renew/checkout-pm.test.ts | 6→7 lines | ~104 |
+| 08:31 | Session end: 5 writes across 3 files (checkout-pm.ts, pro.astro, checkout-pm.test.ts) | 2 reads | ~4402 tok |
+
+## Session: 2026-06-24 08:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
