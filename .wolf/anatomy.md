@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-24T20:30:43.205Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-24T21:45:30.786Z
 > Files: 137 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
@@ -156,7 +156,7 @@
 - `memberships.ts` — Exports MembershipStatus, MembershipRecord, getMembership, setAwaitingSubscription + 4 more (~639 tok)
 - `renewal-sheet.test.ts` — call: makeTransientError (~3603 tok)
 - `renewal-sheet.ts` — Exports PdEntry, RenewalInput, RenewalRow, _resetSheetsClientCacheForTesting + 4 more (~3159 tok)
-- `staging.ts` — Returns the staging folder-name prefix for the current environment. (~206 tok)
+- `staging.ts` — Returns the staging folder-name prefix for the current environment. (~450 tok)
 - `stripe-checkout.test.ts` — NZ: dt (~1414 tok)
 - `stripe-checkout.ts` — Calculate first-term amount using proration from now until next July 1. (~828 tok)
 - `stripe-products.test.ts` — Declares mockPricesRetrieve (~1208 tok)

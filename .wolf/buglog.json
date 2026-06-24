@@ -457,6 +457,75 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-06-24T20:30:43.216Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-06-24T21:44:45.220Z",
+      "error_message": "Missing guard clause",
+      "file": "src/lib/staging.ts",
+      "root_cause": "No early return/throw for edge case: explicit",
+      "fix": "Added guard clause: if (explicit)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T21:44:45.220Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-06-24T21:45:19.936Z",
+      "error_message": "Incorrect value in code",
+      "file": "src/lib/staging.ts",
+      "root_cause": "Had \"https://eldaa.fly.dev\"",
+      "fix": "Changed to \"https://subscribe-test.eldaa.org.nz\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T21:45:19.936Z"
+    },
+    {
+      "id": "bug-030",
+      "timestamp": "2026-06-24T21:45:30.799Z",
+      "error_message": "Wrong reference: process should be getPublicAppUrl",
+      "file": "src/pages/api/stripe-webhook.ts",
+      "root_cause": "Used \"process\" instead of \"getPublicAppUrl\"",
+      "fix": "Changed process → getPublicAppUrl",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T21:45:30.799Z"
+    },
+    {
+      "id": "bug-037",
+      "timestamp": "2026-06-24T21:46:00.000Z",
+      "error_message": "Renewal PD-log email on staging contained a link to https://subscribe.eldaa.org.nz/renew/pd-log?token=... (production URL) — link unreachable for staging recipients.",
+      "file": "src/pages/api/stripe-webhook.ts",
+      "root_cause": "src/pages/api/stripe-webhook.ts:77 hardcoded fallback `process.env.PUBLIC_APP_URL?.trim() || \"https://subscribe.eldaa.org.nz\"`. Staging Fly app does not set PUBLIC_APP_URL, so the fallback always pointed at production regardless of which Fly app handled the webhook. Single source of truth was missing.",
+      "fix": "Added `getPublicAppUrl()` to src/lib/staging.ts with resolution order: PUBLIC_APP_URL (explicit override) > STAGING_PREFIX set → https://subscribe-test.eldaa.org.nz > default https://subscribe.eldaa.org.nz. Webhook now calls getPublicAppUrl() instead of inline fallback. Prod keeps zero env vars (same behaviour as before); staging with only STAGING_PREFIX=testing- gets the staging URL automatically; setting PUBLIC_APP_URL on either env wins.",
+      "tags": [
+        "staging",
+        "url",
+        "email",
+        "renewal",
+        "pd-log",
+        "env-var",
+        "staging-prefix",
+        "solved"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-24T21:46:00.000Z"
     }
   ]
 }

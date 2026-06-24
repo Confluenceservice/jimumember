@@ -13,6 +13,7 @@ import { appendCheckoutLog } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { getRenewalById, markRenewalPaid } from "../../lib/renewal-sheet";
+import { getPublicAppUrl } from "../../lib/staging";
 import { createApplicationReviewDoc, createAssociateApplicationReviewDoc, refreshPmIndexDoc, refreshAmIndexDoc } from "../../lib/google-docs";
 import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification, sendRenewalPdLogLink } from "../../lib/email-sender";
 
@@ -74,7 +75,7 @@ async function handleCheckoutCompleted(
 
     // Send PD log link to member (non-blocking, PM only)
     if (renewal.tier === "pm" && renewal.email) {
-      const appUrl = process.env.PUBLIC_APP_URL?.trim() || "https://subscribe.eldaa.org.nz";
+      const appUrl = getPublicAppUrl();
       const pdLogLink = `${appUrl}/renew/pd-log?token=${renewalId}`;
       const fullName = `${renewal.firstName} ${renewal.lastName}`.trim();
       sendRenewalPdLogLink(renewal.email, fullName, pdLogLink, renewalId).catch((err) => {

@@ -377,3 +377,8 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 09:44 | Edited src/lib/staging.ts | added 2 condition(s) | ~266 |
+| 09:45 | Edited src/lib/staging.ts | 3→3 lines | ~62 |
+| 09:45 | Edited src/lib/staging.ts | "https://eldaa.fly.dev" → "https://subscribe-test.el" | ~20 |
+| 09:45 | Edited src/pages/api/stripe-webhook.ts | added 1 import(s) | ~37 |
+| 09:45 | Edited src/pages/api/stripe-webhook.ts | inline fix | ~10 |
