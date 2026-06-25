@@ -574,6 +574,22 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-06-25T18:24:32.269Z"
+    },
+    {
+      "id": "bug-035",
+      "timestamp": "2026-06-25T18:28:09.924Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/lib/renewal-sheet.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-25T18:28:09.924Z"
     }
   ]
 }

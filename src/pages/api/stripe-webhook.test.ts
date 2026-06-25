@@ -60,6 +60,7 @@ vi.mock("../../lib/upload-sheet", () => ({
 vi.mock("../../lib/renewal-sheet", () => ({
   markRenewalPaid: mockMarkRenewalPaid,
   getRenewalById: mockGetRenewalById,
+  getRenewalsSheetUrl: vi.fn().mockReturnValue(undefined),
 }));
 
 vi.mock("@sentry/node", () => ({
@@ -484,6 +485,7 @@ describe("stripe-webhook", () => {
         "alice@example.com",
         "r1",
         15000,
+        undefined,
       );
       expect(mockSendRenewalPdLogLink).toHaveBeenCalledWith(
         "alice@example.com",

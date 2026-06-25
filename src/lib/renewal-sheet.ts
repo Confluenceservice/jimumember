@@ -291,6 +291,17 @@ export async function updateRenewalPdEntries(renewalId: string, entries: PdEntry
   );
 }
 
+/**
+ * Returns the public Google Sheets URL for the renewals spreadsheet.
+ * Returns undefined if GOOGLE_SHEETS_SPREADSHEET_ID is not set (admin email
+ * falls back to no-link line).
+ */
+export function getRenewalsSheetUrl(): string | undefined {
+  const id = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+  if (!id) return undefined;
+  return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+}
+
 export async function getRenewalById(renewalId: string): Promise<RenewalRow | null> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error("MISSING_CONFIG: GOOGLE_SHEETS_SPREADSHEET_ID");

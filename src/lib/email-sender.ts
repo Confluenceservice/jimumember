@@ -279,6 +279,7 @@ export async function sendRenewalAdminNotification(
   memberEmail: string,
   renewalId: string,
   amountPaidCents: number,
+  sheetUrl?: string,
 ): Promise<void> {
   const tierLabel = tier === "pm" ? "Professional Member" : "Associate Member";
   const amount = (amountPaidCents / 100).toFixed(2);
@@ -291,6 +292,7 @@ Email: ${memberEmail}
 Tier: ${tierLabel}
 Amount paid: NZ$${amount}
 Renewal ID: ${renewalId}
+${sheetUrl ? `Renewals sheet: ${sheetUrl}` : ""}
 
 The member has been emailed a link to log their Professional Development activities (PM only).
 
