@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-24T21:45:30.786Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-25T18:25:55.011Z
 > Files: 137 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
@@ -146,7 +146,7 @@
 
 - `drive-files.ts` — Exports DriveFileRecord, addDriveFile, softDeleteDriveFile, listDriveFiles + 2 more (~1414 tok)
 - `email-sender.test.ts` — Hoisted mocks — must come before the module under test imports them. (~2846 tok)
-- `email-sender.ts` — Exports EmailTemplate, sendEmail, sendProfessionalConfirmation, sendAssociateConfirmation + 4 more (~2503 tok)
+- `email-sender.ts` — Exports EmailTemplate, sendEmail, sendProfessionalConfirmation, sendAssociateConfirmation + 5 more (~2760 tok)
 - `google-auth.ts` — Service-account impersonation. When set, the service account JWT carries a (~1075 tok)
 - `google-docs.ts` — Exports createAssociateApplicationReviewDoc (~6274 tok)
 - `google-sheets.test.ts` — Mock googleapis before importing the module under test (~3375 tok)
@@ -182,8 +182,8 @@
 - `health.test.ts` — Mock Stripe — control products.list behaviour per test. (~2417 tok)
 - `health.ts` — Exports GET (~1331 tok)
 - `session-info.ts` — API routes: GET (1 endpoints) (~342 tok)
-- `stripe-webhook.test.ts` — --------------------------------------------------------------------------- (~5943 tok)
-- `stripe-webhook.ts` — Option C (mode=payment): (~5253 tok)
+- `stripe-webhook.test.ts` — --------------------------------------------------------------------------- (~6125 tok)
+- `stripe-webhook.ts` — Option C (mode=payment): (~5449 tok)
 
 ## src/pages/api/professional/
 
@@ -202,7 +202,7 @@
 - `checkout-am.ts` — Exports POST (~1326 tok)
 - `checkout-pm.test.ts` — VALID_BODY: call (~2158 tok)
 - `checkout-pm.ts` — Exports POST (~1603 tok)
-- `pd-log.ts` — GET returns member name + pdEntries (403 if not paid, 404 if missing); POST overwrites pd_entries by renewal_id (~700 tok)
+- `pd-log.ts` — API routes: GET (1 endpoints) (~1036 tok)
 - `session-info.test.ts` — mockStripeSessionsRetrieve: call (~539 tok)
 - `session-info.ts` — API routes: GET (1 endpoints) (~414 tok)
 
@@ -217,7 +217,7 @@
 
 - `associate.astro` — Astro: associate (~1643 tok)
 - `pd-log.astro` — Astro: pd-log (~2682 tok)
-- `pro.astro` — Astro: pro (~3308 tok)
+- `pro.astro` — Astro: pro (~3287 tok)
 - `success.astro` — Astro: success (~360 tok)
 
 ## src/styles/

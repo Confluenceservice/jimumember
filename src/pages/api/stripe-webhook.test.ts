@@ -10,6 +10,7 @@ const mockSendProfessionalApplicationNotification = vi.fn();
 const mockSendAssociateConfirmation = vi.fn();
 const mockSendAssociateApplicationNotification = vi.fn();
 const mockSendRenewalPdLogLink = vi.fn();
+const mockSendRenewalAdminNotification = vi.fn();
 const mockAppendCheckoutLog = vi.fn();
 const mockCreateApplicationReviewDoc = vi.fn();
 const mockCreateAssociateApplicationReviewDoc = vi.fn();
@@ -30,6 +31,7 @@ vi.mock("../../lib/email-sender", () => ({
   sendAssociateConfirmation: mockSendAssociateConfirmation,
   sendAssociateApplicationNotification: mockSendAssociateApplicationNotification,
   sendRenewalPdLogLink: mockSendRenewalPdLogLink,
+  sendRenewalAdminNotification: mockSendRenewalAdminNotification,
 }));
 
 vi.mock("../../lib/google-sheets", () => ({
@@ -413,6 +415,8 @@ describe("stripe-webhook", () => {
       mockAppendCheckoutLog.mockReset();
       mockSendRenewalPdLogLink.mockReset();
       mockSendRenewalPdLogLink.mockResolvedValue(undefined);
+      mockSendRenewalAdminNotification.mockReset();
+      mockSendRenewalAdminNotification.mockResolvedValue(undefined);
     });
 
     it("marks renewal row paid when checkout.session.completed fires for renewal metadata", async () => {
@@ -472,6 +476,20 @@ describe("stripe-webhook", () => {
           sessionId: "cs_renewal_1",
           customerId: "cus_renewal",
         })
+      );
+      expect(mockSendRenewalAdminNotification).toHaveBeenCalledWith(
+        "admin@eldaa.org.nz",
+        "pm",
+        "Alice Smith",
+        "alice@example.com",
+        "r1",
+        15000,
+      );
+      expect(mockSendRenewalPdLogLink).toHaveBeenCalledWith(
+        "alice@example.com",
+        "Alice Smith",
+        expect.stringContaining("/renew/pd-log?token=r1"),
+        "r1",
       );
     });
 

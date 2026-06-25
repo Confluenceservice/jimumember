@@ -526,6 +526,54 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-06-24T21:46:00.000Z"
+    },
+    {
+      "id": "bug-032",
+      "timestamp": "2026-06-25T18:24:07.930Z",
+      "error_message": "Wrong reference: span should be h2",
+      "file": "src/pages/renew/pro.astro",
+      "root_cause": "Used \"span\" instead of \"h2\"",
+      "fix": "Changed span → h2",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "astro"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-25T18:24:07.930Z"
+    },
+    {
+      "id": "bug-033",
+      "timestamp": "2026-06-25T18:24:20.352Z",
+      "error_message": "Function not marked async",
+      "file": "src/lib/email-sender.ts",
+      "root_cause": "Function uses await but wasn't declared async",
+      "fix": "Added async modifier",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-25T18:24:20.352Z"
+    },
+    {
+      "id": "bug-034",
+      "timestamp": "2026-06-25T18:24:32.269Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/pages/api/stripe-webhook.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-06-25T18:24:32.269Z"
     }
   ]
 }

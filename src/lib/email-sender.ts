@@ -66,7 +66,8 @@ export type EmailTemplate =
   | "application_notification"
   | "associate_application_notification"
   | "resume_link"
-  | "renewal_pd_log";
+  | "renewal_pd_log"
+  | "renewal_admin_notification";
 
 export async function sendEmail(
   params: EmailParams,
@@ -268,5 +269,35 @@ ELDAA`;
   await sendEmail(
     { to: toEmail, subject, body },
     { template: "resume_link", applicantId },
+  );
+}
+
+export async function sendRenewalAdminNotification(
+  toEmail: string,
+  tier: "pm" | "am",
+  memberName: string,
+  memberEmail: string,
+  renewalId: string,
+  amountPaidCents: number,
+): Promise<void> {
+  const tierLabel = tier === "pm" ? "Professional Member" : "Associate Member";
+  const amount = (amountPaidCents / 100).toFixed(2);
+  const subject = `Membership renewal completed — ${memberName} (${tierLabel})`;
+
+  const body = `A membership renewal has been completed.
+
+Member: ${memberName}
+Email: ${memberEmail}
+Tier: ${tierLabel}
+Amount paid: NZ$${amount}
+Renewal ID: ${renewalId}
+
+The member has been emailed a link to log their Professional Development activities (PM only).
+
+ELDAA`;
+
+  await sendEmail(
+    { to: toEmail, subject, body, replyTo: "membership@eldaa.org.nz" },
+    { template: "renewal_admin_notification", applicantId: renewalId },
   );
 }

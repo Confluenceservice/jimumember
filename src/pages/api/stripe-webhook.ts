@@ -15,7 +15,7 @@ import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { getRenewalById, markRenewalPaid } from "../../lib/renewal-sheet";
 import { getPublicAppUrl } from "../../lib/staging";
 import { createApplicationReviewDoc, createAssociateApplicationReviewDoc, refreshPmIndexDoc, refreshAmIndexDoc } from "../../lib/google-docs";
-import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification, sendRenewalPdLogLink } from "../../lib/email-sender";
+import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification, sendRenewalPdLogLink, sendRenewalAdminNotification } from "../../lib/email-sender";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -72,6 +72,25 @@ async function handleCheckoutCompleted(
     });
 
     log.info("renewal_marked_paid", { renewalId, sessionId: session.id, tier: renewal.tier });
+
+    // Notify admin (non-blocking, every renewal completion)
+    {
+      const adminEmail = "admin@eldaa.org.nz";
+      const fullName = `${renewal.firstName} ${renewal.lastName}`.trim();
+      const adminTier = renewal.tier === "am" ? "am" : "pm";
+      const amountCents = renewal.amountPaidCents;
+      sendRenewalAdminNotification(
+        adminEmail,
+        adminTier,
+        fullName,
+        renewal.email ?? "",
+        renewalId,
+        amountCents,
+      ).catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("renewal_admin_notification_failed", { err: msg, renewalId });
+      });
+    }
 
     // Send PD log link to member (non-blocking, PM only)
     if (renewal.tier === "pm" && renewal.email) {
