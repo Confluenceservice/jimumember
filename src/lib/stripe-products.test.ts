@@ -9,7 +9,7 @@ vi.mock("stripe", () => ({
   }),
 }));
 
-import { invalidateRenewalPriceCache, resolveRenewalPrice } from "./stripe-products";
+import { invalidateRenewalPriceCache, resolveRenewalPrice, resolveRenewalPriceByTier } from "./stripe-products";
 
 describe("resolveRenewalPrice", () => {
   beforeEach(() => {
@@ -103,5 +103,42 @@ describe("resolveRenewalPrice", () => {
     invalidateRenewalPriceCache();
     await resolveRenewalPrice("pm_renewal_nzd");
     expect(mockPricesRetrieve).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("resolveRenewalPriceByTier (Phase D)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invalidateRenewalPriceCache();
+    process.env.STRIPE_PRICE_PROFESSIONAL_RENEWAL = "price_pm_150";
+    process.env.STRIPE_PRICE_ASSOCIATE_RENEWAL = "price_am_75";
+  });
+
+  it("reads STRIPE_PRICE_PROFESSIONAL for tier=professional", async () => {
+    mockPricesRetrieve.mockResolvedValueOnce({
+      id: "price_pm_150", currency: "nzd", unit_amount: 15000, active: true,
+    });
+    const result = await resolveRenewalPriceByTier("professional");
+    expect(result.priceId).toBe("price_pm_150");
+    expect(result.unitAmount).toBe(15000);
+    expect(mockPricesRetrieve).toHaveBeenCalledWith("price_pm_150");
+  });
+
+  it("reads STRIPE_PRICE_ASSOCIATE for tier=associate", async () => {
+    mockPricesRetrieve.mockResolvedValueOnce({
+      id: "price_am_75", currency: "nzd", unit_amount: 7500, active: true,
+    });
+    const result = await resolveRenewalPriceByTier("associate");
+    expect(result.priceId).toBe("price_am_75");
+    expect(result.unitAmount).toBe(7500);
+  });
+
+  it("throws MISSING_CONFIG for unknown tier", async () => {
+    await expect(resolveRenewalPriceByTier("student")).rejects.toThrow(/MISSING_CONFIG: unknown tier/);
+  });
+
+  it("throws MISSING_CONFIG when the tier's renewalPriceEnvVar is unset", async () => {
+    delete process.env.STRIPE_PRICE_ASSOCIATE_RENEWAL;
+    await expect(resolveRenewalPriceByTier("associate")).rejects.toThrow(/MISSING_CONFIG: STRIPE_PRICE_ASSOCIATE_RENEWAL/);
   });
 });

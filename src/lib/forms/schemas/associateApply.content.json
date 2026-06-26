@@ -1,0 +1,25 @@
+{
+  "title": "Associate Membership Application",
+  "description": "Apply for Re:Member Associate Membership.",
+  "submitLabel": "Continue to payment",
+  "steps": {
+    "details": {
+      "title": "Associate application",
+      "fields": {
+        "firstName": { "label": "First name", "autocomplete": "given-name" },
+        "lastName": { "label": "Last name", "autocomplete": "family-name" },
+        "email": { "label": "Email", "autocomplete": "email" },
+        "phone": { "label": "Phone", "autocomplete": "tel" },
+        "fullAddress": { "label": "Full address", "autocomplete": "street-address" },
+        "postalAddress": { "label": "Postal address (if different)" },
+        "businessName": { "label": "Business name (if applicable)" },
+        "interestJoining": { "label": "What is your interest in joining Re:Member?" },
+        "trainingDetails": { "label": "Are you training to be an End of Life Doula? If yes, with which organisation and expected completion date?" },
+        "listOnPage": { "label": "Do you wish to be listed on the public directory?" },
+        "listingDetails": { "label": "If yes, please provide your name, business name, and location for publication.", "help": "Only required when you opt in to public listing." },
+        "signature": { "label": "Your signature (type full name)" },
+        "applicationDate": { "label": "Today's date" }
+      }
+    }
+  }
+}

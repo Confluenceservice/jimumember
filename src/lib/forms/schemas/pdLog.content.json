@@ -1,0 +1,15 @@
+{
+  "title": "Log Professional Development",
+  "description": "Add an entry to your annual PD record.",
+  "steps": {
+    "entry": {
+      "title": "PD entry",
+      "fields": {
+        "dateCompleted": { "label": "Date completed" },
+        "activity": { "label": "Activity", "placeholder": "e.g. course, webinar, book, PD event" },
+        "totalHours": { "label": "Total hours" },
+        "provider": { "label": "Provider" }
+      }
+    }
+  }
+}

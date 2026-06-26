@@ -1,0 +1,25 @@
+{
+  "title": "Professional Membership Renewal",
+  "description": "Renew your Professional Membership and log your professional development for the year.",
+  "submitLabel": "Pay NZ$150",
+  "steps": {
+    "identity": {
+      "title": "Your details",
+      "fields": {
+        "firstName": { "label": "First name", "placeholder": "Jane", "autocomplete": "given-name" },
+        "lastName": { "label": "Last name", "placeholder": "Doe", "autocomplete": "family-name" },
+        "email": { "label": "Email", "autocomplete": "email" },
+        "phone": { "label": "Phone", "autocomplete": "tel" },
+        "year": { "label": "Renewal year", "help": "Year is pre-filled from the link." },
+        "pdEntries": {
+          "label": "Professional Development entries",
+          "help": "Log at least 10 hours/year. Add one row per activity."
+        },
+        "pdEntries.dateCompleted": { "label": "Date completed" },
+        "pdEntries.activity": { "label": "Activity", "placeholder": "e.g. course, webinar, book, PD event" },
+        "pdEntries.totalHours": { "label": "Total hours" },
+        "pdEntries.provider": { "label": "Provider" }
+      }
+    }
+  }
+}
