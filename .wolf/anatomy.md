@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Phase A schema-driven form system added.
-> Files: 6 new in src/lib/forms/ + 4 test files.
+> Auto-maintained by OpenWolf. Phase A + B landed.
+> Files: 8 new in src/lib/forms/ + dynamic [tier] renewal route replacing per-tier files.
 
 ## src/lib/forms/
 
@@ -23,3 +23,20 @@
 ## docs/
 
 - `CUSTOMIZE.md` — Section 7 rewritten: 7a schema-driven (edit JSON), 7b engineers-only (TS schema), 7c not-yet-migrated (edit .astro). (~50 line delta)
+
+## src/lib/forms/schemas/
+
+- `renewAssociate.ts` — Associate renewal schema (4 fields: firstName, lastName, email, year). columnMap: C/D/E/F. rowFactory: appendRenewal. (~55 lines, ~400 tok)
+- `renewAssociate.content.json` — Editable labels/placeholders/autocompletes for the 4 identity fields. (~25 lines, ~150 tok)
+- `renewAssociate.test.ts` — 8 tests for validate/toRow/managed-cell exclusion. (~80 lines, ~550 tok)
+
+## src/pages/renew/
+
+- `[tier].astro` — Dynamic renewal page. Replaces associate.astro + pro.astro. Loads schema per tier (associate wired in Phase B; professional in Phase D). (~140 lines, ~1100 tok)
+- (DELETED Phase B) `associate.astro` — Replaced by [tier].astro
+
+## src/pages/api/renew/checkout/
+
+- `[tier].ts` — Dynamic renewal checkout handler. tier → validateTier → appendRenewal → Stripe. TIER_LOOKUP_KEY map for B2 (Phase D derives from TIERS). (~110 lines, ~800 tok)
+- `[tier].test.ts` — 9 tests covering happy path + metadata.tier="am" assertion (plan C3) + tier param + unknown tier + dry-run + error codes. (~120 lines, ~900 tok)
+- (DELETED Phase B) `checkout-am.ts` + `checkout-am.test.ts` — Replaced by [tier].ts

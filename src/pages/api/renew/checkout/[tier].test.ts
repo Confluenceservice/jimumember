@@ -16,16 +16,16 @@ const {
   mockIsStripeRetryableError: vi.fn(() => false),
 }));
 
-vi.mock("../../../lib/stripe-products", () => ({
+vi.mock("../../../../lib/stripe-products", () => ({
   resolveRenewalPrice: mockResolveRenewalPrice,
   invalidateRenewalPriceCache: vi.fn(),
 }));
-vi.mock("../../../lib/renewal-sheet", () => ({
+vi.mock("../../../../lib/renewal-sheet", () => ({
   appendRenewal: mockAppendRenewal,
   markRenewalPaid: vi.fn(),
   getRenewalById: vi.fn(),
 }));
-vi.mock("../../../lib/stripe-checkout", () => ({
+vi.mock("../../../../lib/stripe-checkout", () => ({
   getSiteBaseUrl: mockGetSiteBaseUrl,
   isCheckoutDryRunEnabled: mockIsCheckoutDryRunEnabled,
   isStripeRetryableError: mockIsStripeRetryableError,
@@ -37,22 +37,22 @@ vi.mock("stripe", () => ({
 }));
 
 process.env.STRIPE_SECRET_KEY = "sk_test_dummy";
-process.env.STRIPE_PRODUCT_AM_RENEWAL = "prod_am";
+process.env.STRIPE_PRICE_ASSOCIATE = "price_am_75";
 
-import { POST } from "./checkout-am";
+import { POST } from "./[tier]";
 
 const VALID_BODY = { firstName: "Bob", lastName: "Doe", email: "bob@example.com", year: 2026 };
 
-async function call(body: unknown) {
-  const request = new Request("https://test.example.com/api/renew/checkout-am", {
+async function call(body: unknown, tier = "associate") {
+  const request = new Request(`https://test.example.com/api/renew/checkout/${tier}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  return POST({ request } as any);
+  return POST({ request, params: { tier } } as any);
 }
 
-describe("checkout-am", () => {
+describe("checkout/[tier]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsCheckoutDryRunEnabled.mockReturnValue(false);
@@ -61,8 +61,8 @@ describe("checkout-am", () => {
     mockStripeSessionsCreate.mockResolvedValue({ id: "cs_am_1", url: "https://stripe.com/c/cs_am_1" });
   });
 
-  it("happy path: creates Stripe session with am_renewal_nzd lookup", async () => {
-    const response = await call(VALID_BODY);
+  it("happy path (associate): writes tier='am' to sheet AND metadata (plan finding C3)", async () => {
+    const response = await call(VALID_BODY, "associate");
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(json.url).toBe("https://stripe.com/c/cs_am_1");
@@ -74,10 +74,17 @@ describe("checkout-am", () => {
     expect(mockStripeSessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         line_items: [{ quantity: 1, price: "price_am_75" }],
-        metadata: expect.objectContaining({ flow: "renewal", tier: "am", pd_entries: "", amount_cents: "7500" }),
+        metadata: expect.objectContaining({
+          flow: "renewal", tier: "am", pd_entries: "", amount_cents: "7500",
+        }),
       }),
       expect.objectContaining({ idempotencyKey: expect.stringMatching(/^renewal:am:/) }),
     );
+  });
+
+  it("uses dynamic [tier] URL segment as the route parameter", async () => {
+    await call(VALID_BODY, "associate");
+    expect(mockResolveRenewalPrice).toHaveBeenCalledWith("am_renewal_nzd");
   });
 
   it("returns 400 on missing fields", async () => {
@@ -90,17 +97,24 @@ describe("checkout-am", () => {
     expect((await call({ ...VALID_BODY, email: "not-an-email" })).status).toBe(400);
   });
 
-  it("returns 500 MISSING_CONFIG when STRIPE_PRODUCT_AM_RENEWAL missing", async () => {
-    mockResolveRenewalPrice.mockRejectedValueOnce(new Error("MISSING_CONFIG: STRIPE_PRODUCT_AM_RENEWAL not set"));
-    const response = await call(VALID_BODY);
+  it("returns 400 on unknown tier slug", async () => {
+    const response = await call(VALID_BODY, "unknown-tier");
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.field).toBe("tier");
+  });
+
+  it("returns 500 MISSING_CONFIG when STRIPE_PRICE_ASSOCIATE missing", async () => {
+    mockResolveRenewalPrice.mockRejectedValueOnce(new Error("MISSING_CONFIG: STRIPE_PRICE_ASSOCIATE not set"));
+    const response = await call(VALID_BODY, "associate");
     expect(response.status).toBe(500);
     const json = await response.json();
     expect(json.code).toBe("MISSING_CONFIG");
   });
 
-  it("dry-run returns { dryRun: true } without creating session", async () => {
+  it("dry-run returns { dryRun: true } without creating session or writing sheet", async () => {
     mockIsCheckoutDryRunEnabled.mockReturnValue(true);
-    const response = await call(VALID_BODY);
+    const response = await call(VALID_BODY, "associate");
     const json = await response.json();
     expect(json.dryRun).toBe(true);
     expect(mockStripeSessionsCreate).not.toHaveBeenCalled();
@@ -109,16 +123,15 @@ describe("checkout-am", () => {
 
   it("returns 500 CHECKOUT_ERROR on Stripe error", async () => {
     mockStripeSessionsCreate.mockRejectedValueOnce(new Error("stripe failed"));
-    const response = await call(VALID_BODY);
+    const response = await call(VALID_BODY, "associate");
     expect(response.status).toBe(500);
     const json = await response.json();
     expect(json.code).toBe("CHECKOUT_ERROR");
   });
 
-  it("returns 500 with code SHEET_WRITE_FAILED when appendRenewal throws", async () => {
+  it("returns 500 SHEET_WRITE_FAILED retryable=true when appendRenewal throws", async () => {
     mockAppendRenewal.mockRejectedValueOnce(new Error("OAuth token fetch failed"));
-
-    const response = await call(VALID_BODY);
+    const response = await call(VALID_BODY, "associate");
     expect(response.status).toBe(500);
     const json = await response.json();
     expect(json.code).toBe("SHEET_WRITE_FAILED");

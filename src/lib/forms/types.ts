@@ -44,6 +44,7 @@ export interface Validator {
     | "phone"
     | "ynRadio"
     | "jsonArray"
+    | "integer"
     | "minLength"
     | "maxLength"
     | "min"

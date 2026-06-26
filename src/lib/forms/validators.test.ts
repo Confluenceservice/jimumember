@@ -6,6 +6,7 @@ import {
   phoneNZ,
   ynRadio,
   jsonArray,
+  integer,
   minLength,
   maxLength,
   min,
@@ -113,6 +114,13 @@ describe("runValidator — length + numeric bounds", () => {
   it("min / max", () => {
     expect(runValidator(min(18), 17, {})).toMatch(/≥ 18/);
     expect(runValidator(max(99), 100, {})).toMatch(/≤ 99/);
+  });
+  it("integer", () => {
+    expect(runValidator(integer, 5, {})).toBeNull();
+    expect(runValidator(integer, "5", {})).toBeNull();
+    expect(runValidator(integer, 5.5, {})).toBe("Must be a whole number");
+    expect(runValidator(integer, "abc", {})).toBe("Must be a whole number");
+    expect(runValidator(integer, "", {})).toBeNull(); // blank => optional
   });
 });
 

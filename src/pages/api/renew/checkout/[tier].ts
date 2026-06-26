@@ -1,17 +1,23 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
-import { resolveRenewalPrice } from "../../../lib/stripe-products";
-import { appendRenewal } from "../../../lib/renewal-sheet";
-import { getSiteBaseUrl, isCheckoutDryRunEnabled, isStripeRetryableError } from "../../../lib/stripe-checkout";
+import { resolveRenewalPrice } from "../../../../lib/stripe-products";
+import { appendRenewal } from "../../../../lib/renewal-sheet";
+import {
+  getSiteBaseUrl,
+  isCheckoutDryRunEnabled,
+  isStripeRetryableError,
+} from "../../../../lib/stripe-checkout";
+import { validateTier } from "../../../../lib/forms/runtime";
+import { getTier } from "../../../../lib/forms/tiers";
 
-const EMAIL_RE = /^[^\r\n@\s]+@[^\r\n@\s]+\.[^\r\n@\s]+$/;
-
-interface CheckoutAmBody {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  year?: number;
-}
+/**
+ * Tier → Stripe renewal lookup-key map. Hardcoded for B2 (Associate only);
+ * Phase D derives this from TIERS + the renewal price env vars.
+ */
+const TIER_LOOKUP_KEY: Record<string, "am_renewal_nzd" | "pm_renewal_nzd"> = {
+  associate: "am_renewal_nzd",
+  professional: "pm_renewal_nzd",
+};
 
 let stripeInstance: Stripe | null = null;
 function getStripe(): Stripe {
@@ -31,24 +37,39 @@ function serverError(code: string, message: string, retryable = false) {
   return new Response(JSON.stringify({ error: message, code, retryable }), { status: 500, headers: { "content-type": "application/json" } });
 }
 
-export const POST: APIRoute = async ({ request }) => {
-  let body: CheckoutAmBody;
-  try { body = (await request.json()) as CheckoutAmBody; }
+export const POST: APIRoute = async ({ request, params }) => {
+  const tierSlug = params.tier;
+  if (!tierSlug) return badRequest("tier", "Tier required");
+
+  let tierConfig;
+  try { tierConfig = getTier(tierSlug); }
+  catch { return badRequest("tier", `Unknown tier: ${tierSlug}`); }
+
+  const lookupKey = TIER_LOOKUP_KEY[tierSlug];
+  if (!lookupKey) return badRequest("tier", `No Stripe renewal price mapped for tier: ${tierSlug}`);
+
+  let body: unknown;
+  try { body = await request.json(); }
   catch { return badRequest("body", "Invalid JSON"); }
 
-  const firstName = (body.firstName ?? "").trim();
-  const lastName = (body.lastName ?? "").trim();
-  const email = (body.email ?? "").trim();
-  const year = Number(body.year);
+  const result = await validateTier(tierSlug, body);
+  if (!result.ok) {
+    const [field, message] = Object.entries(result.errors)[0] ?? ["body", "Invalid input"];
+    return badRequest(field, message);
+  }
 
-  if (!firstName) return badRequest("firstName", "First name required");
-  if (!lastName) return badRequest("lastName", "Last name required");
-  if (!EMAIL_RE.test(email)) return badRequest("email", "Valid email required");
-  if (!Number.isInteger(year) || year < 2024 || year > 2100) return badRequest("year", "Valid year required");
+  const values = result.values as Record<string, unknown>;
+  const firstName = String(values.firstName ?? "").trim();
+  const lastName = String(values.lastName ?? "").trim();
+  const email = String(values.email ?? "").trim();
+  const year = Number(values.year);
+
+  // tier is config-sourced (plan finding C3: sheet + metadata must match).
+  const tier = tierConfig.storageValue;
 
   let priceConfig;
   try {
-    priceConfig = await resolveRenewalPrice("am_renewal_nzd");
+    priceConfig = await resolveRenewalPrice(lookupKey);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     if (msg.includes("MISSING_CONFIG")) return serverError("MISSING_CONFIG", msg);
@@ -69,15 +90,12 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     await appendRenewal({
-      renewalId, tier: "am", year, firstName, lastName, email, phone: "",
+      renewalId, tier, year, firstName, lastName, email, phone: "",
       pdEntries: [], amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
       stripeSession: "", paymentStatus: "pending", createdAt,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    // Marked retryable: client form should retry on click. The Sheets write
-    // is transient (gaxios 6.x Premature close on OAuth token fetch) — a
-    // retry from a fresh client context almost always succeeds.
     return serverError("SHEET_WRITE_FAILED", `Failed to write renewal row: ${msg}`, true);
   }
 
@@ -86,18 +104,18 @@ export const POST: APIRoute = async ({ request }) => {
     session = await getStripe().checkout.sessions.create({
       mode: "payment",
       success_url: `${siteBaseUrl}/renew/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBaseUrl}/renew/associate?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}`,
+      cancel_url: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}`,
       line_items: [{ quantity: 1, price: priceConfig.priceId }],
       customer_email: email,
       customer_creation: "always",
       client_reference_id: renewalId,
       payment_intent_data: { receipt_email: email, setup_future_usage: "off_session" },
       metadata: {
-        flow: "renewal", tier: "am", renewal_id: renewalId, renewal_year: String(year),
+        flow: "renewal", tier, renewal_id: renewalId, renewal_year: String(year),
         first_name: firstName, last_name: lastName, email, phone: "",
         pd_entries: "", amount_cents: String(priceConfig.unitAmount),
       },
-    }, { idempotencyKey: `renewal:am:${renewalId}` });
+    }, { idempotencyKey: `renewal:${tier}:${renewalId}` });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return serverError("CHECKOUT_ERROR", msg, isStripeRetryableError(err));
