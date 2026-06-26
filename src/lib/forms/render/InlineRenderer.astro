@@ -1,0 +1,29 @@
+---
+/**
+ * Internal recursive renderer. FieldRenderer.astro is the public face —
+ * Astro doesn't allow component self-import, so group/repeatable
+ * expansion uses this sibling that imports cleanly.
+ *
+ * Same DOM contract as FieldRenderer.astro. Differences:
+ *   - No top-level `<div class="field">` wrapper (caller provides it)
+ *   - No top-level label/helper/error chrome (handled at the field level)
+ *
+ * See FieldRenderer.astro for the full design notes.
+ */
+
+import type { FormContent } from "../types";
+import FieldRenderer from "./FieldRenderer.astro";
+
+interface Props {
+  field: import("../types").FieldDefinition;
+  content: FormContent;
+  value?: unknown;
+  namePrefix?: string;
+  readonly?: boolean;
+  error?: string;
+}
+
+const props = Astro.props;
+---
+
+<FieldRenderer {...props} />

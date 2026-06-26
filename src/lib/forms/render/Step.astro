@@ -1,0 +1,38 @@
+---
+/**
+ * Step wrapper — renders a single step's fields in declaration order
+ * inside the step chrome (title + nav slot).
+ *
+ * Steps are owned by the parent page; this component just iterates the
+ * step's fields. Step-level `completeWhen` predicates and navigation
+ * logic live in the client runtime (`form-client.ts`).
+ */
+
+import type { FormContent, Step } from "../types";
+import FieldRenderer from "./FieldRenderer.astro";
+
+interface Props {
+  step: Step;
+  content: FormContent;
+  values?: Record<string, unknown>;
+  errors?: Record<string, string>;
+}
+
+const { step, content, values, errors } = Astro.props;
+const stepContent = content.steps[step.id];
+---
+
+<section class="form-step" data-step-id={step.id}>
+  <h2 class="step-title">{stepContent?.title ?? step.id}</h2>
+
+  {step.fields.map((field) => {
+    const path = field.name;
+    const value = values?.[path];
+    const error = errors?.[path];
+    return (
+      <FieldRenderer field={field} content={content} value={value} error={error} />
+    );
+  })}
+
+  <slot name="nav" />
+</section>

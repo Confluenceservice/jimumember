@@ -95,7 +95,52 @@ Two providers supported (pick one):
 ## 7. Sample form content (the big one)
 
 The blueprint ships with EOL-doula + NZ-specific sample data. Touch these before
-real applicants:
+real applicants.
+
+### 7a. Schema-driven forms (edit JSON)
+
+Phase A of the schema-driven form system is shipped — the runtime,
+validators, tier config, and renderer skeleton live in
+`src/lib/forms/`. As Phase B-D migrate each form, content moves from
+hardcoded `.astro` markup into per-form JSON content files:
+
+| Form | Schema TS | Content JSON |
+|------|-----------|--------------|
+| Associate renewal | `src/lib/forms/schemas/renewAssociate.ts` | `src/lib/forms/schemas/renewAssociate.content.json` |
+| Professional renewal | `src/lib/forms/schemas/renewPro.ts` | `src/lib/forms/schemas/renewPro.content.json` |
+| PD log entry | `src/lib/forms/schemas/pdLog.ts` | `src/lib/forms/schemas/pdLog.content.json` |
+| Associate application | `src/lib/forms/schemas/associateApply.ts` | `src/lib/forms/schemas/associateApply.content.json` |
+| Professional application | `src/lib/forms/schemas/professionalApply.ts` | `src/lib/forms/schemas/professionalApply.content.json` |
+
+Once a schema exists for a form, non-developers edit labels, descriptions,
+placeholders, help text, option **labels**, and ordering in the
+`.content.json` file — no code review required. Phase E ships
+`docs/forms/composing-a-form.md` with the full walkthrough.
+
+### 7b. Schema-driven forms — things only engineers can edit
+
+Even after a form migrates, the **types**, **validators**, **option
+values**, **conditional `visibleWhen` predicates**, and **sheet column
+letters** stay in the TypeScript schema (the compiler protects those
+contracts). Plan review finding M3: a predicate like
+`visibleWhen: (v) => v.listOnPage === "yes"` depends on the literal
+`"yes"`, so option values must live in TS. The JSON is labels + ordering
+only.
+
+If you need to:
+- Add a new field → edit the schema TS + content JSON + sheet column map
+- Change a validator → edit the schema TS
+- Change a `visibleWhen` predicate → edit the schema TS
+- Reorder grid columns → edit the schema TS (column **labels** can move to JSON)
+
+These edits require code review because they touch the production sheet
+contract.
+
+### 7c. Not-yet-migrated forms (Phase A only — edit `.astro` files)
+
+Until Phase B-D land, the following files still contain hardcoded form
+content. Edit them in place with the same care you would for any
+production `.astro`:
 
 - `src/pages/professional/apply.astro` — 8-step wizard, 21 core competencies
   (`COMPETENCIES` const around line 564), 8 declarations, 6 required doc types,
@@ -104,14 +149,16 @@ real applicants:
   `trainingDetails`, `listOnPage`/`listingDetails` conditional)
 - `src/pages/renew/pro.astro` — Professional Development entries (10 hours/year
   commitment language)
+- `src/pages/renew/associate.astro` — Associate renewal identity fields
+- `src/pages/renew/pd-log.astro` — PD-log entry rows
 - `src/lib/email-sender.ts` — email bodies reference "End of Life Doula",
-  "Doula hubs", "ELDAA meetings", "Code of Ethics", "Scope of Practice"
+  "Doula hubs", "Re:Member meetings", "Code of Ethics", "Scope of Practice"
 
-Planned but **not yet shipped**: a schema-driven form system (TS structure +
-JSON content) so non-developers can edit labels/descriptions/options/order
-without touching `.astro` files. Design is in
-`docs/superpowers/plans/`. Until that's built, editing the sample data above
-requires code review.
+`docs/superpowers/plans/currently-i-believe-the-kind-cloud.md` (the schema-abstraction
+plan) is the source of truth for which form migrates when. Sections
+Phase B (Associate renewal pilot), Phase C (Professional application),
+Phase D (Pro renewal + PD log + Associate application), and Phase E
+(docs + non-dev example) cover the full migration.
 
 ## 8. Pre-deploy checklist
 

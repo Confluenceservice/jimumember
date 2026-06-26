@@ -1,0 +1,236 @@
+---
+/**
+ * Schema-driven field renderer.
+ *
+ * Server-side render only — emits static HTML for every FieldDefinition
+ * variant. The companion `form-client.ts` (loaded via `<script>`) wires
+ * up interactivity: autosave, repeatable add/remove, `visibleWhen`
+ * show/hide, upload in-flight lock, resume hydration. Phase A ships a
+ * skeleton; full implementation lands in Phase C when forms migrate.
+ *
+ * Content (labels/help/option labels) reads from the schema's `.content.json`
+ * via `field.contentKey` (a dotted path like `identity.firstName`).
+ * Option **values** come from the TS schema (not the JSON) — see plan
+ * finding M3: a `visibleWhen: (v) => v.listOnPage === "yes"` predicate
+ * depends on the literal `"yes"`, so option values stay TS-side.
+ *
+ * Group + Repeatable expand inline (no component recursion — Astro
+ * doesn't allow self-import cleanly). The actual repeatable rows beyond
+ * the initial one are added client-side by `form-client.ts` via the
+ * `<template data-repeatable-template>` clone.
+ */
+
+import type {
+  FieldDefinition,
+  FormContent,
+  GridField,
+  RepeatableField,
+  SelectField,
+  TextField,
+} from "../types";
+import InlineRenderer from "./InlineRenderer.astro";
+
+interface Props {
+  field: FieldDefinition;
+  content: FormContent;
+  /** Optional value — used for resume hydration (server-side pre-fill). */
+  value?: unknown;
+  /** Optional name prefix for nested groups (e.g. `details.phone`). */
+  namePrefix?: string;
+  /** Render with `disabled` (read-only summary views). */
+  readonly?: boolean;
+  /** Server-rendered error message keyed by full field path. */
+  error?: string;
+}
+
+const { field, content, value, namePrefix, readonly, error } = Astro.props;
+
+// Resolve contentKey → { label, help, placeholder, options }
+function resolveContent(key: string) {
+  const [stepId, fieldKey] = key.split(".");
+  const step = content.steps[stepId];
+  const fieldContent = step?.fields[fieldKey];
+  return {
+    label: fieldContent?.label ?? key,
+    help: fieldContent?.help,
+    placeholder: fieldContent?.placeholder,
+    optionLabels: fieldContent?.options ?? {},
+  };
+}
+
+const { label, help, placeholder, optionLabels } = resolveContent(field.contentKey);
+const inputName = namePrefix ? `${namePrefix}.${field.name}` : field.name;
+const inputId = `f-${inputName.replace(/[^a-zA-Z0-9]/g, "-")}`;
+const isRequired = field.required === true;
+const isReadonly = readonly === true;
+const describedById = help ? `${inputId}-help` : undefined;
+const errorId = error ? `${inputId}-error` : undefined;
+---
+
+<div class="field" data-field-name={field.name} data-field-type={field.type}>
+  {field.type !== "checkbox" && (
+    <label for={inputId} class="field-label">
+      {label}
+      {isRequired && <span class="required-mark" aria-hidden="true">*</span>}
+    </label>
+  )}
+
+  {field.type === "checkbox" && (
+    <label class="checkbox-label">
+      <input
+        type="checkbox"
+        id={inputId}
+        name={inputName}
+        value="true"
+        checked={Boolean(value)}
+        required={isRequired}
+        disabled={isReadonly}
+        aria-describedby={[describedById, errorId].filter(Boolean).join(" ") || undefined}
+      />
+      <span>{label}</span>
+      {isRequired && <span class="required-mark" aria-hidden="true">*</span>}
+    </label>
+  )}
+
+  {(field.type === "text" || field.type === "email" || field.type === "tel" ||
+    field.type === "date" || field.type === "number") && (
+    <input
+      type={field.type === "number" ? "number" : field.type}
+      id={inputId}
+      name={inputName}
+      value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
+      placeholder={placeholder}
+      required={isRequired}
+      disabled={isReadonly}
+      autocomplete={(field as TextField).autocomplete}
+      min={(field as TextField).min}
+      max={(field as TextField).max}
+      step={(field as TextField).step}
+      aria-describedby={[describedById, errorId].filter(Boolean).join(" ") || undefined}
+    />
+  )}
+
+  {field.type === "textarea" && (
+    <textarea
+      id={inputId}
+      name={inputName}
+      placeholder={placeholder}
+      required={isRequired}
+      disabled={isReadonly}
+      aria-describedby={[describedById, errorId].filter(Boolean).join(" ") || undefined}>{typeof value === "string" ? value : ""}</textarea>
+  )}
+
+  {field.type === "select" && (
+    <select id={inputId} name={inputName} required={isRequired} disabled={isReadonly}>
+      <option value="">{placeholder ?? "Select…"}</option>
+      {(field as SelectField).options.map((opt) => (
+        <option value={opt.value} selected={value === opt.value}>
+          {optionLabels[opt.value] ?? opt.label}
+        </option>
+      ))}
+    </select>
+  )}
+
+  {field.type === "radio" && (
+    <div class="radio-group">
+      {(field as SelectField).options.map((opt) => (
+        <label class="radio-option">
+          <input
+            type="radio"
+            name={inputName}
+            value={opt.value}
+            checked={value === opt.value}
+            required={isRequired}
+            disabled={isReadonly}
+          />
+          <span>{optionLabels[opt.value] ?? opt.label}</span>
+        </label>
+      ))}
+    </div>
+  )}
+
+  {field.type === "group" && (
+    <fieldset class="field-group">
+      <legend class="sr-only">{label}</legend>
+      {field.fields.map((child) => (
+        <Fragment>
+          <InlineRenderer
+            field={child}
+            content={content}
+            value={undefined}
+            namePrefix={inputName}
+            readonly={isReadonly}
+          />
+        </Fragment>
+      ))}
+    </fieldset>
+  )}
+
+  {field.type === "repeatable" && (
+    <div
+      class="repeatable"
+      data-repeatable-name={field.name}
+      data-min-rows={(field as RepeatableField).minRows ?? 0}
+      data-max-rows={(field as RepeatableField).maxRows ?? 50}
+    >
+      <template data-repeatable-template>
+        <div class="repeatable-row" data-repeatable-row>
+          {(field as RepeatableField).itemFields.map((child) => (
+            <Fragment>
+              <InlineRenderer
+                field={child}
+                content={content}
+                value={undefined}
+                namePrefix={`${inputName}.[ROW]`}
+                readonly={isReadonly}
+              />
+            </Fragment>
+          ))}
+          <button type="button" data-repeatable-remove aria-label="Remove row">×</button>
+        </div>
+      </template>
+      <button type="button" data-repeatable-add aria-label="Add row">+ Add row</button>
+    </div>
+  )}
+
+  {field.type === "grid" && (
+    <table class="field-grid" data-grid-name={field.name}>
+      <thead>
+        <tr>
+          {(field as GridField).columns.map((col) => (
+            <th scope="col">{optionLabels[col.name] ?? col.name}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          {(field as GridField).columns.map((col) => (
+            <td>
+              <input
+                type={col.type}
+                name={`${inputName}.${col.name}`}
+                value={col.type === "text" ? "" : "true"}
+                disabled={isReadonly}
+              />
+            </td>
+          ))}
+        </tr>
+      </tbody>
+    </table>
+  )}
+
+  {help && <div id={describedById} class="field-help">{help}</div>}
+  {error && <div id={errorId} class="field-error" role="alert">{error}</div>}
+</div>
+
+<script>
+  // Inline child renderer — duplicate of the markup above, scoped to
+  // group/repeatable expansion. Astro does not allow component
+  // self-import, so the inner fields are rendered by this helper which
+  // mounts the same DOM structure.
+  //
+  // No client-side logic lives here yet — Phase C adds interactive
+  // behaviour via form-client.ts.
+</script>
+
+<script type="module" define:vars={{ inlineAvailable: true }} />

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "bug-001",
+    "timestamp": "2026-06-26T22:05:00Z",
+    "error_message": "EMAIL_RE in apply.ts uses [\\s@] character class — accepts CR/LF in email payload (header-injection risk). Unified header-injection-safe regex /[^\\r\\n@\\s]+@[^\\r\\n@\\s]+\\.[^\\r\\n@\\s]+$/ lives in src/lib/forms/validators.ts:emailNZ. apply.ts still imports its own copy.",
+    "file": "src/pages/api/professional/apply.ts:35",
+    "root_cause": "Three duplicated copies of email regex (apply.ts:35 + checkout-pm.ts:7 + checkout-am.ts:7). checkout-pm/am used CR/LF-safe class [\\r\\n@\\s], apply.ts used weaker [\\s@]. Diff not noticed when each route was refactored independently.",
+    "fix": "Phase A: emailNZ exported from src/lib/forms/validators.ts with the safe class. Tests assert CR/LF payloads (`a@b.com\\r\\nBcc: v@y.com`) are rejected. Phase C: apply.ts validation migrates to use emailNZ, closing the bug at the call site.",
+    "tags": ["security", "header-injection", "email-validation", "schema-abstraction"],
+    "related_bugs": [],
+    "occurrences": 1,
+    "last_seen": "2026-06-26T22:05:00Z"
+  }
+]
