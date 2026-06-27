@@ -24,7 +24,7 @@
 
 import type { FormSchema } from "../types";
 import { emailNZ, phoneNZ, required } from "../validators";
-import content from "./professionalApply.content.json";
+import content from "./advancedApply.content.json";
 
 /**
  * Grid column ids are derived from the content JSON's `options` map keys —
@@ -51,7 +51,7 @@ export const COMPETENCY_IDS = Object.keys(
 );
 
 export const schema: FormSchema = {
-  id: "professionalApply",
+  id: "advancedApply",
   content: {} as FormSchema["content"], // loaded from .content.json
   steps: [
     // ── Step 1: About You ─────────────────────────────────────────────
@@ -214,7 +214,7 @@ export const schema: FormSchema = {
   ],
   storage: {
     kind: "sheet",
-    sheetName: "Professional Applications",
+    sheetName: "Advanced Applications",
     columnMap: {
       // 31 form-derived columns. Letters mirror `createApplicantRow`'s
       // positional contract in upload-sheet.ts. Managed cells (emailHash,

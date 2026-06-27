@@ -21,10 +21,10 @@ vi.mock("./google-sheets", () => ({
 
 import {
   sendEmail,
-  sendProfessionalConfirmation,
-  sendAssociateConfirmation,
-  sendProfessionalApplicationNotification,
-  sendAssociateApplicationNotification,
+  sendAdvancedConfirmation,
+  sendBasicConfirmation,
+  sendAdvancedApplicationNotification,
+  sendBasicApplicationNotification,
   sendResumeLink,
 } from "./email-sender";
 
@@ -184,16 +184,16 @@ describe("sendEmail", () => {
 // Template content — high-level senders
 // ---------------------------------------------------------------------------
 
-async function captureBody(template: "professional" | "associate" | "associateNotListed" | "notification" | "associateNotification" | "resume") {
+async function captureBody(template: "advanced" | "basic" | "basicNotListed" | "applicationNotification" | "basicApplicationNotification" | "resume") {
   await (
     {
-      professional: () => sendProfessionalConfirmation("jane@example.com", "Jane Doe"),
-      associate: () => sendAssociateConfirmation("bob@example.com", "Bob Smith", true),
-      associateNotListed: () => sendAssociateConfirmation("bob@example.com", "Bob Smith", false),
-      notification: () =>
-        sendProfessionalApplicationNotification("membership@example.com", "Jane Doe", "https://docs.google.com/document/d/abc"),
-      associateNotification: () =>
-        sendAssociateApplicationNotification("membership@example.com", "Bob Smith", "https://docs.google.com/document/d/xyz"),
+      advanced: () => sendAdvancedConfirmation("jane@example.com", "Jane Doe"),
+      basic: () => sendBasicConfirmation("bob@example.com", "Bob Smith", true),
+      basicNotListed: () => sendBasicConfirmation("bob@example.com", "Bob Smith", false),
+      applicationNotification: () =>
+        sendAdvancedApplicationNotification("membership@example.com", "Jane Doe", "https://docs.google.com/document/d/abc"),
+      basicApplicationNotification: () =>
+        sendBasicApplicationNotification("membership@example.com", "Bob Smith", "https://docs.google.com/document/d/xyz"),
       resume: () => sendResumeLink("jane@example.com", "Jane Doe", "https://example.com/resume/abc123"),
     }[template]()
   );
@@ -203,54 +203,54 @@ async function captureBody(template: "professional" | "associate" | "associateNo
   return { to: call[1].to[0], subject: call[1].subject, text: call[1].text as string, replyTo: call[1]["h:Reply-To"] as string | undefined };
 }
 
-describe("sendProfessionalConfirmation", () => {
+describe("sendAdvancedConfirmation", () => {
   it("addresses the applicant by full name and includes the right subject", async () => {
-    const { to, subject, text } = await captureBody("professional");
+    const { to, subject, text } = await captureBody("advanced");
     expect(to).toBe("jane@example.com");
-    expect(subject).toBe("Your Re:Member Professional Membership Application");
+    expect(subject).toBe("Your Re:Member Advanced Membership Application");
     expect(text).toContain("Dear Jane Doe");
-    expect(text).toContain("Professional Member of Re:Member");
+    expect(text).toContain("Advanced Member of Re:Member");
     expect(text).toContain("The Re:Member Committee");
   });
 });
 
-describe("sendAssociateConfirmation", () => {
+describe("sendBasicConfirmation", () => {
   it("includes the listing note when listOnPage is true and sets Reply-To", async () => {
-    const { text, replyTo } = await captureBody("associate");
-    expect(text).toContain("You have requested to be listed on our Associate Member list");
+    const { text, replyTo } = await captureBody("basic");
+    expect(text).toContain("You have requested to be listed on our Basic Member list");
     expect(replyTo).toBe("membership@example.com");
   });
 
   it("includes the non-listing note when listOnPage is false", async () => {
-    const { text } = await captureBody("associateNotListed");
+    const { text } = await captureBody("basicNotListed");
     expect(text).toContain("You have not requested to be listed at this time");
     expect(text).toContain("membership@example.com");
   });
 
   it("includes member resources, meetings, and welcome content", async () => {
-    const { text } = await captureBody("associateNotListed");
-    expect(text).toContain("Associate Member Resources");
+    const { text } = await captureBody("basicNotListed");
+    expect(text).toContain("Basic Member Resources");
     expect(text).toContain("Meetings");
     expect(text).toContain("Networking");
     expect(text).toContain("welcome on board");
   });
 });
 
-describe("sendProfessionalApplicationNotification", () => {
+describe("sendAdvancedApplicationNotification", () => {
   it("includes applicant name and Google Doc URL", async () => {
-    const { to, subject, text } = await captureBody("notification");
+    const { to, subject, text } = await captureBody("applicationNotification");
     expect(to).toBe("membership@example.com");
-    expect(subject).toBe("New Professional Membership Application — Jane Doe");
+    expect(subject).toBe("New Advanced Membership Application — Jane Doe");
     expect(text).toContain("Applicant: Jane Doe");
     expect(text).toContain("https://docs.google.com/document/d/abc");
   });
 });
 
-describe("sendAssociateApplicationNotification", () => {
+describe("sendBasicApplicationNotification", () => {
   it("includes associate name and review doc URL", async () => {
-    const { to, subject, text } = await captureBody("associateNotification");
+    const { to, subject, text } = await captureBody("basicApplicationNotification");
     expect(to).toBe("membership@example.com");
-    expect(subject).toBe("New Associate Membership Application — Bob Smith");
+    expect(subject).toBe("New Basic Membership Application — Bob Smith");
     expect(text).toContain("Applicant: Bob Smith");
     expect(text).toContain("https://docs.google.com/document/d/xyz");
   });
@@ -260,7 +260,7 @@ describe("sendResumeLink", () => {
   it("includes the resume link and applicant name", async () => {
     const { to, subject, text } = await captureBody("resume");
     expect(to).toBe("jane@example.com");
-    expect(subject).toBe("Your Re:Member Professional Membership Application");
+    expect(subject).toBe("Your Re:Member Advanced Membership Application");
     expect(text).toContain("Dear Jane Doe");
     expect(text).toContain("https://example.com/resume/abc123");
     expect(text).toContain("If you did not start this application, please ignore this email");

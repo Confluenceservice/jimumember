@@ -1,6 +1,11 @@
 import { DateTime } from "luxon";
+import { TIERS } from "./forms/tiers";
 
-export type MembershipPlan = "associate" | "professional";
+/**
+ * Phase M: derive the MembershipPlan union from TIERS so adding a tier
+ * to tiers.ts auto-extends this type.
+ */
+export type MembershipPlan = keyof typeof TIERS;
 
 const NZ_TIMEZONE = "Pacific/Auckland";
 
@@ -64,16 +69,13 @@ export function getSiteBaseUrl(requestUrl: string): string {
 }
 
 export function getPriceForPlan(plan: MembershipPlan): string {
-  const map: Record<MembershipPlan, string> = {
-    associate: process.env.STRIPE_PRICE_ASSOCIATE ?? "",
-    professional: process.env.STRIPE_PRICE_PROFESSIONAL ?? "",
-  };
-
-  return map[plan];
+  const tier = TIERS[plan];
+  if (!tier) return "";
+  return process.env[tier.priceEnvVar] ?? "";
 }
 
 export function getPlanDisplayName(plan: MembershipPlan): string {
-  return plan === "associate" ? "Associate Membership" : "Professional Membership";
+  return TIERS[plan]?.label ?? plan;
 }
 
 export function formatAmountNzd(amountInCents: number): string {

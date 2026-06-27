@@ -13,7 +13,7 @@
  *   H postalAddress, I businessName, J interestJoining, K trainingDetails,
  *   L listOnPage, M listingDetails, N signature, O applicationDate
  * Managed cells stay in `create-checkout-session.ts` /
- * `appendAssociateApplication`:
+ * `appendBasicApplication`:
  *   A submittedAt, B applicationId, P checkoutStatus
  *
  * `listingDetails` is gated by `visibleWhen: v.listOnPage === "yes"`
@@ -26,7 +26,7 @@ import { emailNZ, phoneNZ, required } from "../validators";
 import { conditional } from "../validators";
 
 export const schema: FormSchema = {
-  id: "associateApply",
+  id: "basicApply",
   content: {} as FormSchema["content"],
   steps: [
     {
@@ -68,7 +68,7 @@ export const schema: FormSchema = {
   ],
   storage: {
     kind: "sheet",
-    sheetName: "Associate Applications",
+    sheetName: "Basic Applications",
     columnMap: {
       firstName: "C",
       lastName: "D",
@@ -84,6 +84,6 @@ export const schema: FormSchema = {
       signature: "N",
       applicationDate: "O",
     },
-    rowFactory: "appendAssociateApplication",
+    rowFactory: "appendBasicApplication",
   },
 };

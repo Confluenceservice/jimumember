@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { schema } from "./renewPro";
+import { schema } from "./renewAdvanced";
 import { validate, toRow } from "../runtime";
 import { getTier } from "../tiers";
 
 describe("renewPro schema", () => {
-  it("matches the tier config for professional", () => {
-    const tier = getTier("professional");
-    expect(tier.renewalSchemaId).toBe("renewPro");
+  it("matches the tier config for advanced", () => {
+    const tier = getTier("advanced");
+    expect(tier.renewalSchemaId).toBe("renewAdvanced");
     expect(schema.id).toBe(tier.renewalSchemaId);
   });
 

@@ -24,13 +24,13 @@ describe("renew/session-info", () => {
     mockStripeSessionsRetrieve.mockResolvedValueOnce({
       id: "cs_pm_1", payment_status: "paid",
       amount_total: 15000,
-      metadata: { flow: "renewal", tier: "pm", renewal_year: "2026" },
+      metadata: { flow: "renewal", tier: "adv", renewal_year: "2026" },
     });
 
     const response = await call("cs_pm_1");
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json).toEqual({ tier: "pm", renewalYear: 2026, amountPaidCents: 15000 });
+    expect(json).toEqual({ tier: "adv", renewalYear: 2026, amountPaidCents: 15000 });
   });
 
   it("returns 400 when session_id missing", async () => {
@@ -41,7 +41,7 @@ describe("renew/session-info", () => {
   it("returns 404 when session is not a renewal", async () => {
     mockStripeSessionsRetrieve.mockResolvedValueOnce({
       id: "cs_other", payment_status: "paid",
-      metadata: { flow: "option_c", tier: "professional" },
+      metadata: { flow: "option_c", tier: "advanced" },
     });
 
     const response = await call("cs_other");

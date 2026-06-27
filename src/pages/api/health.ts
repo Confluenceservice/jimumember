@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import Stripe from "stripe";
 import { logger } from "../../lib/logger";
 import { resolveRenewalPrice } from "../../lib/stripe-products";
+import { listTiers } from "../../lib/forms/tiers";
 
 type SubsystemStatus = "connected" | "disconnected" | "not_configured";
 
@@ -15,7 +16,7 @@ type RenewalTierResult =
   | { ok: false; error: string };
 
 async function safeResolveRenewalPrice(
-  key: "pm_renewal_nzd" | "am_renewal_nzd"
+  key: `${string}_renewal_nzd`,
 ): Promise<RenewalTierResult> {
   try {
     const price = await resolveRenewalPrice(key);
@@ -66,12 +67,25 @@ async function checkMailgun(): Promise<SubsystemResult> {
 }
 
 export const GET: APIRoute = async () => {
-  const [stripe, email, pmRenewal, amRenewal] = await Promise.all([
-    checkStripe(),
-    checkMailgun(),
-    safeResolveRenewalPrice("pm_renewal_nzd"),
-    safeResolveRenewalPrice("am_renewal_nzd"),
-  ]);
+  // Phase M: iterate TIERS — N-tier ready. Each tier contributes one entry
+  // to renewal_prices, keyed by tier slug.
+  const renewalEntries = await Promise.all(
+    listTiers().map(async (tier) => {
+      const key = `${tier.storageValue}_renewal_nzd` as `${string}_renewal_nzd`;
+      const result = await safeResolveRenewalPrice(key);
+      if (!result.ok) {
+        logger.error("health.renewal_price_check_failed", {
+          tier: tier.slug,
+          error: result.error,
+        });
+      }
+      return [tier.slug, result] as const;
+    }),
+  );
+  const renewalPrices = Object.fromEntries(renewalEntries);
+  const allRenewalsOk = renewalEntries.every(([, r]) => r.ok);
+
+  const [stripe, email] = await Promise.all([checkStripe(), checkMailgun()]);
 
   if (stripe.status === "disconnected") {
     logger.error("health.stripe_check_failed", { error: stripe.error });
@@ -87,18 +101,6 @@ export const GET: APIRoute = async () => {
       reason: "MAILGUN_API_KEY or MAILGUN_DOMAIN not configured",
     });
   }
-  if (!pmRenewal.ok) {
-    logger.error("health.renewal_price_check_failed", {
-      tier: "pm",
-      error: pmRenewal.error,
-    });
-  }
-  if (!amRenewal.ok) {
-    logger.error("health.renewal_price_check_failed", {
-      tier: "am",
-      error: amRenewal.error,
-    });
-  }
 
   // A subsystem is healthy only when fully connected. "not_configured" counts
   // as unhealthy: in deployed envs these credentials are mandatory, and a
@@ -109,23 +111,23 @@ export const GET: APIRoute = async () => {
   const healthy =
     stripe.status === "connected" &&
     email.status === "connected" &&
-    pmRenewal.ok &&
-    amRenewal.ok;
+    allRenewalsOk;
   const body: Record<string, unknown> = {
     status: healthy ? "ok" : "degraded",
     stripe: stripe.status,
     email: email.status,
-    renewal_prices: {
-      pm: pmRenewal,
-      am: amRenewal,
-    },
+    renewal_prices: renewalPrices,
   };
-  if (stripe.error || email.error || !pmRenewal.ok || !amRenewal.ok) {
+  if (stripe.error || email.error || !allRenewalsOk) {
     body.errors = {
       ...(stripe.error ? { stripe: stripe.error } : {}),
       ...(email.error ? { email: email.error } : {}),
-      ...(!pmRenewal.ok ? { "renewal_prices.pm": pmRenewal.error } : {}),
-      ...(!amRenewal.ok ? { "renewal_prices.am": amRenewal.error } : {}),
+      ...renewalEntries
+        .filter(([, r]) => !r.ok)
+        .reduce<Record<string, string>>((acc, [slug, r]) => {
+          acc[`renewal_prices.${slug}`] = (r as { ok: false; error: string }).error;
+          return acc;
+        }, {}),
     };
   }
 

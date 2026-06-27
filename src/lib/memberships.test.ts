@@ -105,7 +105,7 @@ describe("setAwaitingSubscription", () => {
     cleanTestStore();
 
     setAwaitingSubscription("cus_test123", {
-      plan: "associate",
+      plan: "basic",
       recurringPriceId: "price_123",
       nextJuly1Epoch: 1751328000,
       joinedAt: "2026-03-23T12:00:00.000Z",
@@ -115,7 +115,7 @@ describe("setAwaitingSubscription", () => {
     const record = getMembership("cus_test123");
     expect(record).toMatchObject({
       customerId: "cus_test123",
-      plan: "associate",
+      plan: "basic",
       recurringPriceId: "price_123",
       status: "awaiting_subscription",
       subscriptionId: "sub_test456",
@@ -135,7 +135,7 @@ describe("setActive", () => {
     saveTestStore({
       "cus_test123": {
         customerId: "cus_test123",
-        plan: "associate",
+        plan: "basic",
         recurringPriceId: "price_123",
         status: "awaiting_subscription",
         nextJuly1Epoch: 1751328000,
@@ -163,7 +163,7 @@ describe("setPaymentFailed", () => {
     saveTestStore({
       "cus_test123": {
         customerId: "cus_test123",
-        plan: "professional",
+        plan: "advanced",
         recurringPriceId: "price_456",
         status: "active",
         nextJuly1Epoch: 1751328000,
@@ -184,7 +184,7 @@ describe("setCancelled", () => {
     saveTestStore({
       "cus_test123": {
         customerId: "cus_test123",
-        plan: "professional",
+        plan: "advanced",
         recurringPriceId: "price_456",
         status: "active",
         nextJuly1Epoch: 1751328000,
@@ -205,7 +205,7 @@ describe("hasActiveSubscription", () => {
     saveTestStore({
       "cus_active": {
         customerId: "cus_active",
-        plan: "associate",
+        plan: "basic",
         recurringPriceId: "price_123",
         status: "active",
         nextJuly1Epoch: 1751328000,
@@ -222,7 +222,7 @@ describe("hasActiveSubscription", () => {
     saveTestStore({
       "cus_awaiting": {
         customerId: "cus_awaiting",
-        plan: "associate",
+        plan: "basic",
         recurringPriceId: "price_123",
         status: "awaiting_subscription",
         nextJuly1Epoch: 1751328000,
@@ -238,7 +238,7 @@ describe("hasActiveSubscription", () => {
     saveTestStore({
       "cus_failed": {
         customerId: "cus_failed",
-        plan: "associate",
+        plan: "basic",
         recurringPriceId: "price_123",
         status: "payment_failed",
         nextJuly1Epoch: 1751328000,

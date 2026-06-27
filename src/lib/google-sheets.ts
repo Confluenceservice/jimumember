@@ -31,7 +31,7 @@ type AssociateApplicationEntry = {
   checkoutStatus: string;
 };
 
-const ASSOCIATE_APPLICATIONS_SHEET = "Associate Applications";
+const BASIC_APPLICATIONS_SHEET = "Basic Applications";
 const EMAIL_LOG_SHEET = "Email log";
 const ASSOCIATE_APPLICATIONS_HEADERS = [
   "submitted_at",
@@ -170,7 +170,7 @@ export async function appendEmailLog(entry: EmailLogEntry): Promise<void> {
   });
 }
 
-export async function appendAssociateApplication(
+export async function appendBasicApplication(
   entry: AssociateApplicationEntry,
 ): Promise<void> {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
@@ -179,7 +179,7 @@ export async function appendAssociateApplication(
   }
 
   await ensureSheetWithHeaders(
-    ASSOCIATE_APPLICATIONS_SHEET,
+    BASIC_APPLICATIONS_SHEET,
     ASSOCIATE_APPLICATIONS_HEADERS,
   );
 
@@ -205,7 +205,7 @@ export async function appendAssociateApplication(
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `'${ASSOCIATE_APPLICATIONS_SHEET}'!A1:P1`,
+    range: `'${BASIC_APPLICATIONS_SHEET}'!A1:P1`,
     valueInputOption: "RAW",
     requestBody: {
       values: [row],

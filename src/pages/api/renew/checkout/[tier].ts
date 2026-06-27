@@ -14,9 +14,9 @@ import { getTier } from "../../../../lib/forms/tiers";
  * Tier → Stripe renewal lookup-key map. Hardcoded for B2 (Associate only);
  * Phase D derives this from TIERS + the renewal price env vars.
  */
-const TIER_LOOKUP_KEY: Record<string, "am_renewal_nzd" | "pm_renewal_nzd"> = {
-  associate: "am_renewal_nzd",
-  professional: "pm_renewal_nzd",
+const TIER_LOOKUP_KEY: Record<string, `${string}_renewal_nzd`> = {
+  basic: "basic_renewal_nzd",
+  advanced: "adv_renewal_nzd",
 };
 
 function coercePdEntries(raw: unknown): PdEntry[] {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { schema } from "./associateApply";
+import { schema } from "./basicApply";
 import { validate, toRow } from "../runtime";
 import { getTier } from "../tiers";
 
-describe("associateApply schema", () => {
-  it("matches the tier config for associate", () => {
-    const tier = getTier("associate");
-    expect(tier.applicationSchemaId).toBe("associateApply");
+describe("basicApply schema", () => {
+  it("matches the tier config for basic", () => {
+    const tier = getTier("basic");
+    expect(tier.applicationSchemaId).toBe("basicApply");
     expect(schema.id).toBe(tier.applicationSchemaId);
     expect(schema.storage.sheetName).toBe(tier.sheetName);
   });

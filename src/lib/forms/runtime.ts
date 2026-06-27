@@ -12,7 +12,7 @@
  *
  * `toRow` is the single place that knows a form's column layout. API
  * handlers call it before handing the row to existing `createApplicantRow`
- * / `appendRenewal` / `appendAssociateApplication`. The 47/14/16-column
+ * / `appendRenewal` / `appendBasicApplication`. The 47/14/16-column
  * layouts in `upload-sheet.ts` / `renewal-sheet.ts` / `google-sheets.ts`
  * stay byte-identical; this layer is an adapter, not a replacement.
  */

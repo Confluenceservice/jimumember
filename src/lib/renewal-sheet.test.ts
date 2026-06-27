@@ -54,7 +54,7 @@ describe("appendRenewal", () => {
   it("appends a row with all 14 columns in correct order", async () => {
     await appendRenewal({
       renewalId: "r1",
-      tier: "pm",
+      tier: "adv",
       year: 2026,
       firstName: "Alice",
       lastName: "Smith",
@@ -73,7 +73,7 @@ describe("appendRenewal", () => {
     expect(call.range).toBe("'Renewals'!A1:N1");
     expect(call.requestBody.values[0]).toHaveLength(14);
     expect(call.requestBody.values[0][0]).toBe("r1");
-    expect(call.requestBody.values[0][1]).toBe("pm");
+    expect(call.requestBody.values[0][1]).toBe("adv");
     expect(call.requestBody.values[0][7]).toBe(JSON.stringify([{ dateCompleted: "2026-01-15", activity: "Workshop", totalHours: 3, provider: "Hospice NZ" }]));
     expect(call.requestBody.values[0][10]).toBe("pending");
   });
@@ -82,7 +82,7 @@ describe("appendRenewal", () => {
     mockEnsureSheet.mockResolvedValueOnce({ data: { sheets: [] } });
 
     await appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -96,7 +96,7 @@ describe("appendRenewal", () => {
     mockEnsureSheet.mockResolvedValue({ data: { sheets: [{ properties: { title: "Renewals", sheetId: 123 } }] } });
 
     await appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -112,7 +112,7 @@ describe("appendRenewal", () => {
     mockGet.mockResolvedValue({ data: { values: [["ad28eb82-data-row-id"]] } });
 
     await appendRenewal({
-      renewalId: "r2", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r2", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -147,7 +147,7 @@ describe("markRenewalPaid", () => {
       data: {
         values: [
           ["renewal_id", "tier", "renewal_year", "first_name", "last_name", "email", "phone", "pd_entries", "amount_paid_cents", "currency", "payment_status", "stripe_session", "created_at", "paid_at"],
-          ["r1", "pm", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "", "2026-06-23T10:00:00Z", ""],
+          ["r1", "adv", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "", "2026-06-23T10:00:00Z", ""],
         ],
       },
     });
@@ -184,7 +184,7 @@ describe("getRenewalById", () => {
       data: {
         values: [
           ["renewal_id", "tier", "renewal_year", "first_name", "last_name", "email", "phone", "pd_entries", "amount_paid_cents", "currency", "payment_status", "stripe_session", "created_at", "paid_at"],
-          ["r1", "pm", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "", "2026-06-23T10:00:00Z", ""],
+          ["r1", "adv", "2026", "Alice", "Smith", "alice@example.com", "", "[]", "15000", "nzd", "pending", "", "2026-06-23T10:00:00Z", ""],
         ],
       },
     });
@@ -227,7 +227,7 @@ describe("transient network retry", () => {
       .mockResolvedValueOnce(undefined);
 
     await appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -246,7 +246,7 @@ describe("transient network retry", () => {
       .mockRejectedValueOnce(makeTransientError());
 
     await expect(appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -262,7 +262,7 @@ describe("transient network retry", () => {
       .mockResolvedValueOnce({});
 
     await appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -276,7 +276,7 @@ describe("transient network retry", () => {
     mockAppend.mockRejectedValueOnce(err);
 
     await expect(appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -294,7 +294,7 @@ describe("transient network retry", () => {
       .mockRejectedValueOnce(makeTransientError());
 
     await expect(appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",
@@ -309,7 +309,7 @@ describe("transient network retry", () => {
     mockAppend.mockRejectedValueOnce(err).mockResolvedValueOnce({});
 
     await appendRenewal({
-      renewalId: "r1", tier: "pm", year: 2026, firstName: "A", lastName: "B",
+      renewalId: "r1", tier: "adv", year: 2026, firstName: "A", lastName: "B",
       email: "a@b.com", phone: "", pdEntries: [], amountCents: 15000,
       currency: "nzd", stripeSession: "cs_1", paymentStatus: "pending",
       createdAt: "2026-06-23T10:00:00.000Z",

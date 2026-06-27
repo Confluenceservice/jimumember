@@ -199,7 +199,7 @@ describe("upload-sheet", () => {
       mocks.mockSpreadsheetsValuesAppend.mockResolvedValue({});
       mocks.mockSpreadsheetsGet.mockResolvedValue({
         data: {
-          sheets: [{ properties: { title: "Professional Applications", sheetId: "0" } }],
+          sheets: [{ properties: { title: "Advanced Applications", sheetId: "0" } }],
         },
       });
 
@@ -229,7 +229,7 @@ describe("upload-sheet", () => {
       mocks.mockSpreadsheetsValuesGet.mockResolvedValue({ data: { values: [["applicant_id"]] } });
       mocks.mockSpreadsheetsValuesAppend.mockResolvedValue({});
       mocks.mockSpreadsheetsGet.mockResolvedValue({
-        data: { sheets: [{ properties: { title: "Professional Applications", sheetId: "0" } }] },
+        data: { sheets: [{ properties: { title: "Advanced Applications", sheetId: "0" } }] },
       });
 
       const { createApplicantRow } = await import("./upload-sheet");
@@ -260,8 +260,8 @@ describe("upload-sheet", () => {
       expect(mocks.mockSpreadsheetsValuesBatchUpdate).toHaveBeenCalled();
       const data = mocks.mockSpreadsheetsValuesBatchUpdate.mock.calls[0][0].requestBody.data;
       const ranges = data.map((d: { range: string }) => d.range);
-      expect(ranges).toContain("Professional Applications!C2"); // first_name
-      expect(ranges).toContain("Professional Applications!E2"); // phone
+      expect(ranges).toContain("Advanced Applications!C2"); // first_name
+      expect(ranges).toContain("Advanced Applications!E2"); // phone
     });
 
     it("skips empty values (no update sent for empty firstName)", async () => {
@@ -340,7 +340,7 @@ describe("upload-sheet", () => {
 
       expect(mocks.mockSpreadsheetsValuesUpdate).toHaveBeenCalled();
       const call = mocks.mockSpreadsheetsValuesUpdate.mock.calls[0][0];
-      expect(call.range).toBe("Professional Applications!AP2:AQ2");
+      expect(call.range).toBe("Advanced Applications!AP2:AQ2");
       expect(call.requestBody.values).toEqual([["TRUE", "cs_complete_123"]]);
     });
   });
@@ -363,8 +363,8 @@ describe("upload-sheet", () => {
       expect(mocks.mockSpreadsheetsValuesBatchUpdate).toHaveBeenCalled();
       const data = mocks.mockSpreadsheetsValuesBatchUpdate.mock.calls[0][0].requestBody.data;
       const ranges = data.map((d: { range: string }) => d.range);
-      expect(ranges).toContain("Professional Applications!AR2");
-      expect(ranges).toContain("Professional Applications!AT2");
+      expect(ranges).toContain("Advanced Applications!AR2");
+      expect(ranges).toContain("Advanced Applications!AT2");
     });
   });
 
@@ -508,7 +508,7 @@ describe("upload-sheet", () => {
       });
       mocks.mockSpreadsheetsValuesAppend.mockResolvedValue({});
       mocks.mockSpreadsheetsGet.mockResolvedValue({
-        data: { sheets: [{ properties: { title: "Professional Applications", sheetId: "0" } }] },
+        data: { sheets: [{ properties: { title: "Advanced Applications", sheetId: "0" } }] },
       });
 
       const { createApplicantRow } = await import("./upload-sheet");

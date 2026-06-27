@@ -167,7 +167,7 @@ export interface FormContent {
 export type RowFactory =
   | "createApplicantRow"
   | "appendRenewal"
-  | "appendAssociateApplication";
+  | "appendBasicApplication";
 
 export interface SheetStorage {
   kind: "sheet";
