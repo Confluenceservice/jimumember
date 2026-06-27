@@ -67,6 +67,11 @@ export const required: Validator = {
   message: "Required",
 };
 
+export const integer: Validator = {
+  kind: "integer",
+  message: "Must be a whole number",
+};
+
 /**
  * `required` that only fires when the predicate returns true. Used for the
  * Associate-apply `listingDetails` gate: only required when `listOnPage === "yes"`.
@@ -143,6 +148,12 @@ export function runValidator(
       return Number(value) <= Number(validator.value)
         ? null
         : validator.message ?? `Must be ≤ ${validator.value}`;
+
+    case "integer":
+      if (isBlank(value)) return null;
+      return Number.isInteger(Number(value))
+        ? null
+        : validator.message ?? "Must be a whole number";
 
     case "regex": {
       if (isBlank(value)) return null;

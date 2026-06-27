@@ -51,7 +51,7 @@ No-CMS. Sheets-as-DB. Drive-as-DMS. Volunteer admin runs it from the spreadsheet
 - `POST /api/create-professional-checkout` — Professional checkout
 - `POST /api/stripe-webhook` — payment events → Sheets logging + Doc review + emails
 - `POST /api/renew/checkout-pm` — Pro renewal session
-- `POST /api/renew/checkout-am` — Associate renewal session
+- `POST /api/renew/checkout/[tier]` — renewal session (dynamic by tier; `associate` replaces the old `checkout-am`)
 - `GET  /api/renew/session-info` — lookup renewal checkout status
 - `POST /api/renew/pd-log` — record PD entry
 - `GET  /api/health` — Stripe + email probe (used by Cloudflare alerting worker)
