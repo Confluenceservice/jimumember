@@ -10,7 +10,10 @@ interface CachedPrice {
   resolvedAt: number;
 }
 
-const priceCache = new Map<LookupKey, CachedPrice>();
+// Keyed by LookupKey ("pm_renewal_nzd" / "am_renewal_nzd") for the legacy
+// resolver, OR `tier:<slug>` for the tier-driven resolver. The `tier:`
+// prefix keeps the two namespaces disjoint in the shared cache.
+const priceCache = new Map<string, CachedPrice>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let stripeInstance: Stripe | null = null;
@@ -88,7 +91,7 @@ export async function resolveRenewalPriceByTier(
   }
 
   // Cache key per env-var so different tiers sharing a price don't collide.
-  const cacheKey = `tier:${tierSlug}` as LookupKey;
+  const cacheKey = `tier:${tierSlug}`;
   const cached = priceCache.get(cacheKey);
   if (cached && Date.now() - cached.resolvedAt < CACHE_TTL_MS) {
     return { priceId: cached.priceId, currency: cached.currency, unitAmount: cached.unitAmount };
