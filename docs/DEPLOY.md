@@ -217,24 +217,36 @@ The deploying party should never have `sa-key.json` in plaintext on disk after t
 
 **Bitwarden CLI (`bw`):**
 ```sh
-# In your local terminal (bw needs a TTY)
+# In your local terminal (bw needs a TTY for password input)
 export BW_SESSION="$(bw unlock --raw)"
 
 # Create a folder for the deployment (one per client)
-bw create folder '{"name":"itdocsnow-member"}' | jq -r .id
+FOLDER_ID=$(bw create folder '{"name":"itdocsnow-member"}' | jq -r .id)
 
-# Create a custom-field item holding the JSON key
-ITEM=$(jq -nc --arg name "gcp-sa-key-itdocsnow" \
-  --arg folder "<folder-id>" \
-  '{type: 1, name: $name, folderId: $folder, fields: []}')
-ITEM_ENC=$(printf '%s' "$ITEM" | bw encode)
+# Create the item shell — no fields yet
+ITEM_JSON=$(jq -nc \
+  --arg name "gcp-sa-key-itdocsnow" \
+  --arg folderId "$FOLDER_ID" \
+  --arg notes "Service account JSON key for remember-sheets@<project>.iam.gserviceaccount.com. Attached file is the raw key from gcloud iam service-accounts keys create." \
+  '{type: 1, name: $name, folderId: $folderId, notes: $notes, fields: []}')
+ITEM_ENC=$(printf '%s' "$ITEM_JSON" | bw encode)
 ITEM_ID=$(bw create item "$ITEM_ENC" | jq -r .id)
 
-# Edit the item to attach the JSON key as a custom field
-# (bw edit takes JSON; use the Bitwarden UI for ad-hoc edits)
+# Upload the key file as an attachment (preferred over custom fields for binary/large data)
+bw create attachment --file ./sa-key.json --itemid "$ITEM_ID" | jq -r .id > /tmp/sa-key-attachment-id
+
+bw sync
 ```
 
-Then `bw get item gcp-sa-key-itdocsnow` retrieves the JSON, which is piped into `fly secrets set` via `jq -r '.fields[0].value'`.
+Retrieval (later, when setting Fly secrets):
+```sh
+ATTACHMENT_ID=$(cat /tmp/sa-key-attachment-id)
+bw get attachment "$ATTACHMENT_ID" --itemid "$ITEM_ID" --output /tmp/sa-key.json
+fly secrets set GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY="$(jq -r .private_key /tmp/sa-key.json)" -a <app>-staging
+shred -u /tmp/sa-key.json
+```
+
+**Bitwarden (UI):** same flow — create the item in the folder, attach the JSON file as a file attachment. The BW UI renders attachments as encrypted blobs; you can right-click → download when needed.
 
 **1Password CLI (`op`):**
 ```sh
