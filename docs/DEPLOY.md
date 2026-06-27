@@ -104,6 +104,35 @@ git push -u origin main
 
 Verify: `git grep -E "remember-staging|remember-production|remember-health-alert"` returns empty.
 
+### 1a. Workflows self-disable until Phase 10 sets secrets
+
+The three GitHub Actions workflows inherited from the blueprint all fire on a freshly-forked repo:
+
+- `fly-deploy-staging.yml` — every push to `main`
+- `fly-deploy.yml` — manual dispatch
+- `health-check.yml` — every 5 min cron + manual dispatch
+
+Without secrets, every run fails. The 5-min cron generates ~288 failed runs/day in your Actions tab — noisy and demoralising during onboarding.
+
+**Defense:** the workflows have `if: ${{ secrets.X != '' }}` guards at the job level. When `FLY_API_TOKEN` / `REMEMBER_HEALTH_CHECK_TOKEN` / `REMEMBER_HEALTH_ALERT_URL` are unset, the jobs skip silently instead of failing.
+
+**Before pushing the first commit to the fork**, verify the guards are present:
+
+```sh
+grep -E "if: \\\${{ secrets\." .github/workflows/*.yml
+```
+
+Expect 3 hits (one per workflow file). If any is missing — the fork predates the guard commit — add it manually:
+
+```yaml
+jobs:
+  deploy:
+    if: ${{ secrets.FLY_API_TOKEN != '' }}
+    # ...
+```
+
+Push the rename commit only after confirming the guards work. To silence spam from a fork created before the guards existed: fork → Settings → Actions → General → "Disable Actions" → toggle on. Re-enable in Phase 10 once secrets are set.
+
 ---
 
 ## 2. Google Cloud project + service account
