@@ -1,0 +1,59 @@
+{
+  "title": "Member Survey",
+  "description": "Tell us how your year went and what we should improve.",
+  "submitLabel": "Submit survey",
+  "steps": {
+    "identity": {
+      "title": "About you",
+      "fields": {
+        "firstName": { "label": "First name", "placeholder": "Jane" },
+        "lastName": { "label": "Last name", "placeholder": "Doe" },
+        "email": { "label": "Email" },
+        "phone": { "label": "Phone" },
+        "memberSince": { "label": "Member since" }
+      }
+    },
+    "feedback": {
+      "title": "Your feedback",
+      "fields": {
+        "satisfaction": { "label": "Overall satisfaction" },
+        "improvementAreas": { "label": "Which area needs the most improvement?" },
+        "comments": { "label": "Comments" }
+      }
+    },
+    "ratings": {
+      "title": "Rate each area",
+      "fields": {
+        "ratings": {
+          "label": "Rate each dimension",
+          "options": {
+            "events": "Events",
+            "resources": "Resources",
+            "comms": "Communication",
+            "training": "Training"
+          }
+        }
+      }
+    },
+    "activities": {
+      "title": "Activities and referrals",
+      "fields": {
+        "coursesAttended": { "label": "Courses you attended" },
+        "coursesAttended.title": { "label": "Course title" },
+        "coursesAttended.date": { "label": "Date" },
+        "coursesAttended.rating": { "label": "Rating (1-5)" },
+        "wouldRecommend": { "label": "I would recommend Re:Member to a colleague" },
+        "referralSource": { "label": "How did you hear about us?" },
+        "referralDetail": { "label": "Tell us more (required when 'Other')" }
+      }
+    },
+    "contact": {
+      "title": "Optional contact details",
+      "fields": {
+        "street": { "label": "Street" },
+        "city": { "label": "City" },
+        "postcode": { "label": "Postcode" }
+      }
+    }
+  }
+}

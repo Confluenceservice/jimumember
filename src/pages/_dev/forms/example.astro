@@ -1,0 +1,58 @@
+---
+/**
+ * Phase E smoke-render page.
+ *
+ * Renders the `exampleMemberSurvey` schema to real HTML so non-developers
+ * can preview every FieldDefinition variant in a browser. NOT linked
+ * from the main navigation — visit `/_dev/forms/example` directly.
+ *
+ * Also serves as a minimal example of how to wire a schema into an Astro
+ * page:
+ *   1. import the schema + its sibling .content.json
+ *   2. merge them (matches runtime.loadSchema contract)
+ *   3. loop over schema.steps and render via <Step>
+ */
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import Step from "../../../lib/forms/render/Step.astro";
+import FieldRenderer from "../../../lib/forms/render/FieldRenderer.astro";
+import { schema as exampleSchema } from "../../../lib/forms/schemas/example.memberSurvey";
+import exampleContent from "../../../lib/forms/schemas/example.memberSurvey.content.json";
+
+const schema = { ...exampleSchema, content: exampleContent } as typeof exampleSchema;
+---
+
+<BaseLayout title={`${schema.content.title} — dev preview`}>
+  <div class="max-w-3xl mx-auto p-4 sm:p-8">
+    <header class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+      <h1 class="text-2xl font-bold text-amber-900 mb-1">Dev preview — example member survey</h1>
+      <p class="text-amber-800 text-sm">
+        This page renders every <code>FieldDefinition</code> variant the schema system
+        supports. Use it as a working reference when composing your own form.
+        See <code>docs/forms/composing-a-form.md</code>.
+      </p>
+    </header>
+
+    <header class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">{schema.content.title}</h2>
+      <p class="text-gray-600">{schema.content.description}</p>
+    </header>
+
+    <form data-schema-driven data-schema-id={schema.id} novalidate>
+      {schema.steps.map((step) => (
+        <section class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+          <h3 class="text-lg font-semibold mb-4">{step.id}</h3>
+          {step.fields.map((field) => (
+            <FieldRenderer field={field} content={schema.content} />
+          ))}
+        </section>
+      ))}
+
+      <button
+        type="button"
+        class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl"
+      >
+        {schema.content.submitLabel ?? "Submit"}
+      </button>
+    </form>
+  </div>
+</BaseLayout>

@@ -209,7 +209,7 @@ The doc is saved in the configured Google Drive folder (`GOOGLE_DRIVE_REVIEW_DOC
 | J | `business_name` | AR | `paid` |
 | K | `website` | AS | `created_at` |
 | L | `qualifications` (JSON) | AT | `paid_at` |
-| M | `experience` (JSON) | AU | (spare) |
+| M | `experience` (JSON) | AU | `email_verified` |
 | N | `further_requirements` (JSON) | | |
 | O | `core_competencies` (JSON) | | |
 | P–S | Referee 1 (name, role, email, phone) | | |

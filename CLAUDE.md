@@ -190,7 +190,7 @@ AQ:  stripe_session
 AR:  paid ("TRUE"/"FALSE")
 AS:  created_at
 AT:  paid_at
-AU:  (spare/reserved)
+AU:  email_verified ("TRUE"/"FALSE"; blank = legacy row, treated as verified)
 ```
 
 Reads normalize `complete`/`paid`/declaration flags case-insensitively (`true` and `TRUE` are both accepted).
