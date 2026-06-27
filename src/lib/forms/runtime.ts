@@ -248,13 +248,22 @@ export async function validateTier(tierSlug: string, body: unknown): Promise<Val
 // -- path helpers --------------------------------------------------------------
 
 function readPath(obj: Record<string, unknown>, path: string): unknown {
-  // dotted paths only for v1 (groups, simple repeatable indexed segments)
+  // Dotted paths (groups like "referees.referee1Name") try nested first,
+  // then fall back to the flat last-segment key — FormData posts flat
+  // keys even when the schema groups them. Nested takes priority so
+  // callers that DO send grouped payloads are read correctly.
   if (!path.includes(".")) return obj[path];
   const segments = path.split(".");
   let cur: unknown = obj;
   for (const seg of segments) {
-    if (cur === null || cur === undefined || typeof cur !== "object") return undefined;
+    if (cur === null || cur === undefined || typeof cur !== "object") {
+      cur = undefined;
+      break;
+    }
     cur = (cur as Record<string, unknown>)[seg];
+  }
+  if (cur === undefined) {
+    return obj[segments[segments.length - 1]];
   }
   return cur;
 }
