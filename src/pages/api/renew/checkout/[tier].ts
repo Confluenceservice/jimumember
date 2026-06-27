@@ -65,7 +65,9 @@ export const POST: APIRoute = async ({ request, params }) => {
   const year = Number(values.year);
 
   // tier is config-sourced (plan finding C3: sheet + metadata must match).
-  const tier = tierConfig.storageValue;
+  // Cast to the legacy literal union — RenewalInput.tier is "pm" | "am";
+  // storageValue is typed string for future flexibility.
+  const tier = tierConfig.storageValue as "pm" | "am";
 
   let priceConfig;
   try {
