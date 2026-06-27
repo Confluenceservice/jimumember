@@ -54,13 +54,13 @@ export const POST: APIRoute = async ({ request }) => {
 
   const cleaned: PdEntry[] = [];
   for (const raw of entries) {
+    const o = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+    const totalHours = o.totalHours;
     if (
-      typeof raw !== "object" ||
-      raw === null ||
-      typeof (raw as Record<string, unknown>).dateCompleted !== "string" ||
-      typeof (raw as Record<string, unknown>).activity !== "string" ||
-      typeof (raw as Record<string, unknown>).totalHours !== "number" ||
-      (raw as Record<string, unknown>).totalHours <= 0
+      typeof o.dateCompleted !== "string" ||
+      typeof o.activity !== "string" ||
+      typeof totalHours !== "number" ||
+      totalHours <= 0
     ) {
       return Response.json(
         { error: "Each entry needs dateCompleted (string), activity (string), totalHours (number > 0)" },
@@ -68,12 +68,10 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     cleaned.push({
-      dateCompleted: (raw as Record<string, unknown>).dateCompleted as string,
-      activity: (raw as Record<string, unknown>).activity as string,
-      totalHours: (raw as Record<string, unknown>).totalHours as number,
-      provider: typeof (raw as Record<string, unknown>).provider === "string"
-        ? ((raw as Record<string, unknown>).provider as string)
-        : "",
+      dateCompleted: o.dateCompleted as string,
+      activity: o.activity as string,
+      totalHours,
+      provider: typeof o.provider === "string" ? o.provider : "",
     });
   }
 
