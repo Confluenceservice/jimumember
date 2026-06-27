@@ -159,24 +159,41 @@ Why it happens: security-conscious orgs ban static SA keys because they can't be
 
 2. **Override the constraint at the project level** (limits the override to this project only — doesn't weaken org-wide policy):
    ```sh
-   gcloud org-policies disable-enforcement iam.disableServiceAccountKeyCreation \
-     --project=itdocsnow-member-sheets
-   ```
-   For the managed constraint, set the allowed services parameter instead:
-   ```sh
-   gcloud org-policies set-policy iam.managed.disableServiceAccountApiKeyCreation \
-     --project=itdocsnow-member-sheets \
-     policy.json
-   ```
-   where `policy.json` contains:
-   ```json
+   # The simple constraint — disable via project-level override
+   cat > /tmp/disable-key-policy.json <<'EOF'
    {
-     "constraint": "constraints/iam.managed.disableServiceAccountApiKeyCreation",
-     "listPolicy": {
-       "allValues": "ALLOW"
+     "name": "projects/<project-id>/policies/iam.disableServiceAccountKeyCreation",
+     "spec": {
+       "rules": [{"enforce": false}]
      }
    }
+   EOF
+   gcloud org-policies set-policy /tmp/disable-key-policy.json --project=<project-id>
+
+   # The managed constraint — same syntax, different name
+   cat > /tmp/disable-managed-policy.json <<'EOF'
+   {
+     "name": "projects/<project-id>/policies/iam.managed.disableServiceAccountKeyCreation",
+     "spec": {
+       "rules": [{"enforce": false}]
+     }
+   }
+   EOF
+   gcloud org-policies set-policy /tmp/disable-managed-policy.json --project=<project-id>
+
+   # The managed API-key-binding constraint (visible in some orgs' console)
+   cat > /tmp/disable-api-key-policy.json <<'EOF'
+   {
+     "name": "projects/<project-id>/policies/iam.managed.disableServiceAccountApiKeyCreation",
+     "spec": {
+       "rules": [{"enforce": false}]
+     }
+   }
+   EOF
+   gcloud org-policies set-policy /tmp/disable-api-key-policy.json --project=<project-id>
    ```
+
+   You may see a warning about "Operation not recommended by org policy" — that's the org admin's signal that they should review your override. Safe to ignore.
 
 3. **Retry the key creation:**
    ```sh
