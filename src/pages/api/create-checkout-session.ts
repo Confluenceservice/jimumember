@@ -13,6 +13,7 @@ import {
 } from "../../lib/stripe-checkout";
 import { appendAssociateApplication } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
+import { validateTier } from "../../lib/forms/runtime";
 
 type CreateSessionPayload = {
   plan?: MembershipPlan;
@@ -92,34 +93,32 @@ export const POST: APIRoute = async ({ request }) => {
   const email = payload.email?.trim().toLowerCase();
   const applicationSource = payload.applicationSource;
   const isAssociateApply = plan === "associate" && applicationSource === "apply";
-  const fullAddress = payload.fullAddress?.trim() ?? "";
-  const postalAddress = payload.postalAddress?.trim() ?? "";
-  const businessName = payload.businessName?.trim() ?? "";
-  const interestJoining = payload.interestJoining?.trim() ?? "";
-  const trainingDetails = payload.trainingDetails?.trim() ?? "";
-  const listOnPage = payload.listOnPage;
-  const listingDetails = payload.listingDetails?.trim() ?? "";
-  const signature = payload.signature?.trim() ?? "";
-  const applicationDate = payload.applicationDate?.trim() ?? "";
 
   if (!firstName) return badRequest("Provide a first name.");
   if (!lastName) return badRequest("Provide a last name.");
   if (!email) return badRequest("Provide an email.");
 
+  // Associate-apply path uses the schema (validateTier). Other plans/flows
+  // fall through with the raw payload — `appendAssociateApplication` only
+  // runs for the associate-apply path.
+  let associateValues: Record<string, unknown> | null = null;
   if (isAssociateApply) {
-    if (!phone) return badRequest("Provide a phone number.");
-    if (!fullAddress) return badRequest("Provide a full address.");
-    if (!interestJoining) return badRequest("Provide your interest in joining Re:Member.");
-    if (!trainingDetails) return badRequest("Provide your End of Life Doula training details.");
-    if (!listOnPage || (listOnPage !== "yes" && listOnPage !== "no")) {
-      return badRequest("Select whether you want to be listed on the Associate Members page.");
+    const result = await validateTier("associate", payload);
+    if (!result.ok) {
+      const [field, message] = Object.entries(result.errors)[0] ?? ["body", "Invalid input"];
+      return Response.json({ error: message, field }, { status: 400 });
     }
-    if (listOnPage === "yes" && !listingDetails) {
-      return badRequest("Provide listing details for publication.");
-    }
-    if (!signature) return badRequest("Provide your signature.");
-    if (!applicationDate) return badRequest("Provide your application date.");
+    associateValues = result.values as Record<string, unknown>;
   }
+  const fullAddress = (associateValues ? String(associateValues.fullAddress ?? "") : (payload.fullAddress?.trim() ?? ""));
+  const postalAddress = (associateValues ? String(associateValues.postalAddress ?? "") : (payload.postalAddress?.trim() ?? ""));
+  const businessName = (associateValues ? String(associateValues.businessName ?? "") : (payload.businessName?.trim() ?? ""));
+  const interestJoining = (associateValues ? String(associateValues.interestJoining ?? "") : (payload.interestJoining?.trim() ?? ""));
+  const trainingDetails = (associateValues ? String(associateValues.trainingDetails ?? "") : (payload.trainingDetails?.trim() ?? ""));
+  const listOnPage = (associateValues ? String(associateValues.listOnPage ?? "") : (payload.listOnPage ?? ""));
+  const listingDetails = (associateValues ? String(associateValues.listingDetails ?? "") : (payload.listingDetails?.trim() ?? ""));
+  const signature = (associateValues ? String(associateValues.signature ?? "") : (payload.signature?.trim() ?? ""));
+  const applicationDate = (associateValues ? String(associateValues.applicationDate ?? "") : (payload.applicationDate?.trim() ?? ""));
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {

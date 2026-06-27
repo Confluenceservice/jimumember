@@ -27,7 +27,7 @@ import type {
   FormSchema,
   Step,
 } from "./types.js";
-import { runValidator } from "./validators.js";
+import { runValidator, isBlank } from "./validators.js";
 
 export interface ValidationResult {
   ok: boolean;
@@ -143,6 +143,25 @@ export function validate(schema: FormSchema, body: unknown): ValidationResult {
     const value = readPath(raw, path);
     const validators = field.validators ?? [];
 
+    // Implicit required: safety net for `required: true` paired with format-only
+    // validators (email/phone/minLength/regex/etc.) that pass through blank
+    // input. Skipped when an explicit blank-rejecting validator is already in
+    // the array — that validator's message wins.
+    if (field.required && isBlank(value)) {
+      const hasBlankRejector = validators.some(
+        (v) =>
+          v.kind === "required" ||
+          v.kind === "conditional" ||
+          v.kind === "ynRadio" ||
+          v.kind === "jsonArray",
+      );
+      if (!hasBlankRejector) {
+        errors[path] = field.requiredMessage ?? "Required";
+        writePath(values, path, value);
+        continue;
+      }
+    }
+
     let firstError: string | null = null;
     for (const v of validators) {
       const err = runValidator(v, value, raw as FieldValues);
@@ -170,6 +189,10 @@ export function toRow(schema: FormSchema, values: FieldValues): Record<string, s
   const map = schema.storage.columnMap;
 
   for (const { field, path } of walkFields(schema)) {
+    // Honour visibleWhen — hidden fields skip both validation (in validate())
+    // and copy-through (the values bag never holds them). Writing "" for a
+    // hidden column would falsely look like "user submitted empty" downstream.
+    if (field.visibleWhen && !field.visibleWhen(values)) continue;
     const column = map[path] ?? map[field.name];
     if (!column) continue;
     const value = readPath(values, path);

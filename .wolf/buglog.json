@@ -1,5 +1,17 @@
 [
   {
+    "id": "bug-002",
+    "timestamp": "2026-06-27T14:00:00Z",
+    "error_message": "toRow() writes empty string `''` for hidden (visibleWhen=false) fields whose column is in columnMap. Sheet looks like the user submitted empty; in reality the field was gated off.",
+    "file": "src/lib/forms/runtime.ts:toRow (Phase I uncovered)",
+    "root_cause": "validate() correctly skips both validation AND copy-through for hidden fields (values bag never holds them). toRow walked walkFields(schema) which yields ALL fields regardless of visibility, then wrote `serializeValue(undefined, field) = ''` for hidden columns.",
+    "fix": "Phase I: toRow now early-continues when `field.visibleWhen && !field.visibleWhen(values)`. Regression test added in associateApply.test.ts (visibleWhen excludes listingDetails). 277/277 tests pass.",
+    "tags": ["schema-abstraction", "toRow", "visibleWhen", "phase-I"],
+    "related_bugs": [],
+    "occurrences": 1,
+    "last_seen": "2026-06-27T14:00:00Z"
+  },
+  {
     "id": "bug-001",
     "timestamp": "2026-06-26T22:05:00Z",
     "error_message": "EMAIL_RE in apply.ts uses [\\s@] character class — accepts CR/LF in email payload (header-injection risk). Unified header-injection-safe regex /[^\\r\\n@\\s]+@[^\\r\\n@\\s]+\\.[^\\r\\n@\\s]+$/ lives in src/lib/forms/validators.ts:emailNZ. apply.ts still imports its own copy.",

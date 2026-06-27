@@ -28,3 +28,11 @@
 ## User Preferences
 
 (none recorded yet)
+
+## Key Learnings
+
+- **(2026-06-27)** Phase F: `validate()` honours `field.required` regardless of `validators[]` content. Skipped only when validators[] contains one of `required`/`conditional`/`ynRadio`/`jsonArray` (kinds that themselves reject blank). Default error message `"Required"` (matches existing `required` validator); override via `requiredMessage?: string` on BaseField. Closes the latent bypass where a schema author pairs `required: true` with format-only validators (emailNZ/minLength/etc.) that pass through blank input.
+- **(2026-06-27)** Phase G: schema-driven pages pass the schema to the client via `<script type="application/json" id="form-schema" set:html={JSON.stringify(schema)}>`, then a module `<script>` imports `mount` from `form-client.ts` and reads it back. JSON roundtrip silently drops `visibleWhen` predicates — safe because `attachVisibleWhen` early-returns when `field.visibleWhen` is undefined. Repeatable add/remove works without any new code because FieldRenderer emits `<template data-repeatable-template>` + `[data-repeatable-row]` + `[data-repeatable-add]` + `[data-repeatable-remove]` already wired by Phase A skeleton.
+- **(2026-06-27)** Phase G: defence in depth at the handler boundary. Phase F's implicit `required` doesn't reach nested repeatable item children (walks the leaf path only). The old `checkout-pm.ts` had `isValidPdEntry` filtering — kept that pattern in `coercePdEntries()` on the dynamic handler so malformed nested entries are dropped before they hit the sheet.
+- **(2026-06-27)** Phase H: per-entry validation pattern when schema has `repeatable` with itemFields. `walkFields` treats repeatable as a leaf (no descent). The handler builds a synthetic single-entry schema by `flatMap`ing itemFields out of the step's fields, then calls `validate(syntheticSchema, entry)` once per entry. Keeps runtime.ts unchanged; validation logic stays in the handler.
+- **(2026-06-27)** Phase I + bug-002: `toRow()` honours `visibleWhen`. Before the fix, hidden fields were written as `""` to the sheet (looked like "user submitted empty"). Fix: early-continue when `field.visibleWhen && !field.visibleWhen(values)`. `validate()` already skipped copy-through for hidden fields; toRow now mirrors that contract.

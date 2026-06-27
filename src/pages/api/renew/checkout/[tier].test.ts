@@ -75,10 +75,65 @@ describe("checkout/[tier]", () => {
       expect.objectContaining({
         line_items: [{ quantity: 1, price: "price_am_75" }],
         metadata: expect.objectContaining({
-          flow: "renewal", tier: "am", pd_entries: "", amount_cents: "7500",
+          flow: "renewal", tier: "am", pd_entries: "[]", amount_cents: "7500",
         }),
       }),
       expect.objectContaining({ idempotencyKey: expect.stringMatching(/^renewal:am:/) }),
+    );
+  });
+
+  it("happy path (professional): phone + pdEntries pass through to sheet AND metadata", async () => {
+    mockResolveRenewalPrice.mockResolvedValue({ priceId: "price_pm_150", currency: "nzd", unitAmount: 15000 });
+    const proBody = {
+      firstName: "Alice",
+      lastName: "Smith",
+      email: "alice@example.com",
+      phone: "+64 21 123 4567",
+      year: 2026,
+      pdEntries: [
+        { dateCompleted: "2026-03-15", activity: "Webinar", totalHours: 2, provider: "Hospice NZ" },
+      ],
+    };
+    const response = await call(proBody, "professional");
+    expect(response.status).toBe(200);
+
+    expect(mockResolveRenewalPrice).toHaveBeenCalledWith("pm_renewal_nzd");
+    expect(mockAppendRenewal).toHaveBeenCalledWith(expect.objectContaining({
+      tier: "pm",
+      phone: "+64 21 123 4567",
+      pdEntries: proBody.pdEntries,
+      amountCents: 15000,
+    }));
+    expect(mockStripeSessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ quantity: 1, price: "price_pm_150" }],
+        metadata: expect.objectContaining({
+          flow: "renewal", tier: "pm",
+          phone: "+64 21 123 4567",
+          pd_entries: JSON.stringify(proBody.pdEntries),
+          amount_cents: "15000",
+        }),
+        cancel_url: expect.stringContaining("phone=%2B64%2021%20123%204567"),
+      }),
+      expect.objectContaining({ idempotencyKey: expect.stringMatching(/^renewal:pm:/) }),
+    );
+  });
+
+  it("professional with empty pdEntries writes [] to sheet + metadata", async () => {
+    mockResolveRenewalPrice.mockResolvedValue({ priceId: "price_pm_150", currency: "nzd", unitAmount: 15000 });
+    const response = await call({
+      firstName: "Alice", lastName: "Smith", email: "alice@example.com",
+      phone: "021 123 4567", year: 2026, pdEntries: [],
+    }, "professional");
+    expect(response.status).toBe(200);
+    expect(mockAppendRenewal).toHaveBeenCalledWith(expect.objectContaining({
+      tier: "pm", phone: "021 123 4567", pdEntries: [],
+    }));
+    expect(mockStripeSessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ pd_entries: "[]", phone: "021 123 4567" }),
+      }),
+      expect.anything(),
     );
   });
 

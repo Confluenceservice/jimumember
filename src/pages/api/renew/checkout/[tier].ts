@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
 import { resolveRenewalPrice } from "../../../../lib/stripe-products";
-import { appendRenewal } from "../../../../lib/renewal-sheet";
+import { appendRenewal, type PdEntry } from "../../../../lib/renewal-sheet";
 import {
   getSiteBaseUrl,
   isCheckoutDryRunEnabled,
@@ -18,6 +18,28 @@ const TIER_LOOKUP_KEY: Record<string, "am_renewal_nzd" | "pm_renewal_nzd"> = {
   associate: "am_renewal_nzd",
   professional: "pm_renewal_nzd",
 };
+
+function coercePdEntries(raw: unknown): PdEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PdEntry[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") continue;
+    const o = e as Record<string, unknown>;
+    if (
+      typeof o.dateCompleted !== "string" ||
+      typeof o.activity !== "string" ||
+      typeof o.totalHours !== "number" ||
+      typeof o.provider !== "string"
+    ) continue;
+    out.push({
+      dateCompleted: o.dateCompleted,
+      activity: o.activity,
+      totalHours: o.totalHours,
+      provider: o.provider,
+    });
+  }
+  return out;
+}
 
 let stripeInstance: Stripe | null = null;
 function getStripe(): Stripe {
@@ -62,7 +84,9 @@ export const POST: APIRoute = async ({ request, params }) => {
   const firstName = String(values.firstName ?? "").trim();
   const lastName = String(values.lastName ?? "").trim();
   const email = String(values.email ?? "").trim();
+  const phone = String(values.phone ?? "").trim();
   const year = Number(values.year);
+  const pdEntries = coercePdEntries(values.pdEntries);
 
   // tier is config-sourced (plan finding C3: sheet + metadata must match).
   // Cast to the legacy literal union — RenewalInput.tier is "pm" | "am";
@@ -92,8 +116,8 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   try {
     await appendRenewal({
-      renewalId, tier, year, firstName, lastName, email, phone: "",
-      pdEntries: [], amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
+      renewalId, tier, year, firstName, lastName, email, phone,
+      pdEntries, amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
       stripeSession: "", paymentStatus: "pending", createdAt,
     });
   } catch (err) {
@@ -106,7 +130,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     session = await getStripe().checkout.sessions.create({
       mode: "payment",
       success_url: `${siteBaseUrl}/renew/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}`,
+      cancel_url: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`,
       line_items: [{ quantity: 1, price: priceConfig.priceId }],
       customer_email: email,
       customer_creation: "always",
@@ -114,8 +138,9 @@ export const POST: APIRoute = async ({ request, params }) => {
       payment_intent_data: { receipt_email: email, setup_future_usage: "off_session" },
       metadata: {
         flow: "renewal", tier, renewal_id: renewalId, renewal_year: String(year),
-        first_name: firstName, last_name: lastName, email, phone: "",
-        pd_entries: "", amount_cents: String(priceConfig.unitAmount),
+        first_name: firstName, last_name: lastName, email, phone,
+        pd_entries: JSON.stringify(pdEntries),
+        amount_cents: String(priceConfig.unitAmount),
       },
     }, { idempotencyKey: `renewal:${tier}:${renewalId}` });
   } catch (err) {
