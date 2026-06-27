@@ -1,0 +1,30 @@
+{
+  "title": "Associate Membership Renewal",
+  "description": "Renew your Associate Membership.",
+  "submitLabel": "Pay NZ$75",
+  "steps": {
+    "identity": {
+      "title": "Your details",
+      "fields": {
+        "firstName": {
+          "label": "First name",
+          "placeholder": "Jane",
+          "autocomplete": "given-name"
+        },
+        "lastName": {
+          "label": "Last name",
+          "placeholder": "Doe",
+          "autocomplete": "family-name"
+        },
+        "email": {
+          "label": "Email",
+          "autocomplete": "email"
+        },
+        "year": {
+          "label": "Renewal year",
+          "help": "Year is pre-filled from the link."
+        }
+      }
+    }
+  }
+}
