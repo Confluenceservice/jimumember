@@ -138,6 +138,99 @@ gcloud iam service-accounts update remember-sheets@itdocsnow-member-sheets.iam.g
 
 Verify: `gcloud iam service-accounts describe remember-sheets@itdocsnow-member-sheets.iam.gserviceaccount.com` returns an `oauth2ClientId` field that's a large number.
 
+### 2a. If `gcloud iam service-accounts keys create` is denied
+
+Some orgs enforce `iam.disableServiceAccountKeyCreation` (or its managed sibling `iam.managed.disableServiceAccountApiKeyCreation`) at the organization level. The error is:
+
+```
+ERROR: Key creation is not allowed on this service account.
+type: constraints/iam.disableServiceAccountKeyCreation
+```
+
+Why it happens: security-conscious orgs ban static SA keys because they can't be revoked without re-deploying the app. This is a **defensible security posture** — don't fight it, work around it.
+
+**Workaround (one-time per project):**
+
+1. **Grant the deploying party `roles/orgpolicy.policyAdmin` at the organization level.** In your browser:
+   ```
+   https://console.cloud.google.com/iam-admin/iam?orgonly=true&organizationId=<your-org-id>
+   ```
+   Click **Grant access** → principal = your deploying-party user → role = **Organization Policy Administrator**. The org ID is in the URL when you visit any GCP page for a project under that org.
+
+2. **Override the constraint at the project level** (limits the override to this project only — doesn't weaken org-wide policy):
+   ```sh
+   gcloud org-policies disable-enforcement iam.disableServiceAccountKeyCreation \
+     --project=itdocsnow-member-sheets
+   ```
+   For the managed constraint, set the allowed services parameter instead:
+   ```sh
+   gcloud org-policies set-policy iam.managed.disableServiceAccountApiKeyCreation \
+     --project=itdocsnow-member-sheets \
+     policy.json
+   ```
+   where `policy.json` contains:
+   ```json
+   {
+     "constraint": "constraints/iam.managed.disableServiceAccountApiKeyCreation",
+     "listPolicy": {
+       "allValues": "ALLOW"
+     }
+   }
+   ```
+
+3. **Retry the key creation:**
+   ```sh
+   gcloud iam service-accounts keys create ./sa-key.json \
+     --iam-account=remember-sheets@itdocsnow-member-sheets.iam.gserviceaccount.com
+   ```
+
+4. **Document the override in the project description** so the next person doesn't undo it:
+   ```sh
+   gcloud projects describe itdocsnow-member-sheets --format='value(name)'
+   # Add a note in the project's "Description" field in the GCP console
+   ```
+
+**Storage of the key:** once created, do not leave `sa-key.json` on the deploying party's laptop. Move it to a password-manager-backed secret store (Bitwarden, 1Password) — see §9b below.
+
+**Key rotation:** quarterly. Old key → `gcloud iam service-accounts keys delete <KEY_ID> --iam-account=...`. New key → set as `GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY` Fly secret → redeploy.
+
+### 2b. Storing the key locally (Bitwarden / 1Password)
+
+The deploying party should never have `sa-key.json` in plaintext on disk after the Fly secret is set. Two recommended patterns:
+
+**Bitwarden CLI (`bw`):**
+```sh
+# In your local terminal (bw needs a TTY)
+export BW_SESSION="$(bw unlock --raw)"
+
+# Create a folder for the deployment (one per client)
+bw create folder '{"name":"itdocsnow-member"}' | jq -r .id
+
+# Create a custom-field item holding the JSON key
+ITEM=$(jq -nc --arg name "gcp-sa-key-itdocsnow" \
+  --arg folder "<folder-id>" \
+  '{type: 1, name: $name, folderId: $folder, fields: []}')
+ITEM_ENC=$(printf '%s' "$ITEM" | bw encode)
+ITEM_ID=$(bw create item "$ITEM_ENC" | jq -r .id)
+
+# Edit the item to attach the JSON key as a custom field
+# (bw edit takes JSON; use the Bitwarden UI for ad-hoc edits)
+```
+
+Then `bw get item gcp-sa-key-itdocsnow` retrieves the JSON, which is piped into `fly secrets set` via `jq -r '.fields[0].value'`.
+
+**1Password CLI (`op`):**
+```sh
+op create item login \
+  --title="GCP SA Key — itdocsnow" \
+  --vault="Re:Member Deploys" \
+  sa-key.json=@./sa-key.json
+```
+
+Retrieval: `op read "op://Re:Member Deploys/GCP SA Key — itdocsnow/sa-key.json" | jq -r .private_key` → Fly secret.
+
+**Either pattern eliminates the plaintext-on-laptop risk** without changing the Fly secrets model. The credentials live in an encrypted vault with MFA + audit log; the deploying party's laptop is a client of that vault, not a store.
+
 ---
 
 ## 3. Google Workspace preparation
