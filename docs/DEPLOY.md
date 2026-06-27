@@ -264,13 +264,38 @@ Retrieval: `op read "op://Re:Member Deploys/GCP SA Key — itdocsnow/sa-key.json
 
 ## 3. Google Workspace preparation
 
-- Confirm a real Workspace exists on the target domain. **Cloud Identity free tier does not have admin.google.com API Controls** — DWD cannot be authorized there.
+- Confirm a real Workspace exists on the target domain. **Cloud Identity free tier does have admin.google.com API Controls** — DWD can be authorized there (the playbook's older note about Cloud Identity free tier was wrong; Cloud Identity supports DWD).
 - Create or confirm the impersonation user (the mailbox the SA will send as). A shared mailbox (`it-admin@<client-domain>`) is preferred over a personal human's primary mailbox.
-- Confirm the impersonation user has enough Drive storage. Workspace Starter (30 GB) is usually enough for low-volume clients.
 
-For itdocsnow.com: confirm `it-admin@itdocsnow.com` exists and that `admin@itdocsnow.com` can log into admin.google.com.
+### 3a. Impersonation user setup (the service-account target)
 
-Verify: open `https://admin.google.com/ac/security/apicontrols` while logged in as an admin. The "Manage Domain Wide Delegation" link should be visible.
+The impersonation user is **never logged into by a human** — it's the `subject` claim that the Re:Member service account puts into its JWT. Because DWD authenticates the SA via its own private key (not via the impersonation user's password), 2-Step Verification is irrelevant for the impersonation user.
+
+Configure as follows:
+
+1. Create the user: admin.google.com → Directory → Users → Add new user. Display name `IT Admin` (or similar; the email is what matters). Do NOT assign any admin role.
+2. Set a long random password (32+ chars). Store in BW if you want — but you'll rarely need it.
+3. **Disable 2SV for this specific user.** admin.google.com → Directory → Users → the user → Security → 2-Step Verification → set to "Off". Rationale: this account doesn't log in via browser, so 2SV would just be operational overhead.
+4. **Disable password reset requirements / inactivity policy for this user.** admin.google.com → Security → Password management → exclude this user from any forced rotation. Google's inactivity-based password resets can break DWD if the impersonation user's auth lapses.
+5. **Revoke any existing OAuth refresh tokens.** Users sometimes accumulate refresh tokens from past admin sessions. admin.google.com → Security → API Controls → revoke any refresh tokens for this user. The DWD path doesn't use refresh tokens.
+
+Verify: `gcloud iam service-accounts get-iam-policy remember-sheets@<project>.iam.gserviceaccount.com` shows the SA exists. The impersonation user setup itself doesn't need an API check — it's a UI-only configuration.
+
+### 3b. Admin user setup (humans who manage the org)
+
+For real admin users (the deploying party + the client's volunteer admin):
+
+- Enforce 2SV org-wide. admin.google.com → Security → 2-Step Verification → Enforcement → On.
+- Allow authenticator app + hardware security keys (YubiKey etc.) as 2SV methods.
+- Recovery codes: print and store in BW for each admin user.
+
+This is best practice and orthogonal to Re:Member — Re:Member's runtime doesn't care if admins have 2SV.
+
+### 3c. Verify
+
+For itdocsnow.com: confirm `it-admin@itdocsnow.com` exists, has 2SV off, and that `admin@itdocsnow.com` can log into admin.google.com.
+
+Open `https://admin.google.com/ac/security/apicontrols` while logged in as an admin. The "Manage Domain Wide Delegation" link should be visible.
 
 ---
 
