@@ -26,6 +26,15 @@ export interface AutosaveOptions {
   debounceMs?: number;
   /** Trigger after every blur OR after every input (default blur). */
   trigger?: "blur" | "input";
+  /**
+   * Custom body serializer. Receives FormData and returns a string body.
+   * Default: URL-encoded FormData (browser-native). For pages that need a
+   * JSON payload with nested groups flattened or repeatables serialised,
+   * pass `serialize: (fd) => JSON.stringify(buildPayload(fd))`.
+   */
+  serialize?: (fd: FormData) => string;
+  /** Content-Type header. Default: "application/x-www-form-urlencoded". */
+  contentType?: string;
 }
 
 export interface MountOptions {
@@ -52,10 +61,11 @@ export function attachAutosaveQueue(
 
   const submit = async () => {
     const fd = new FormData(form);
-    const body = new URLSearchParams(fd as unknown as Record<string, string>);
+    const body = options.serialize ? options.serialize(fd) : new URLSearchParams(fd as unknown as Record<string, string>).toString();
+    const contentType = options.contentType ?? (options.serialize ? "application/json" : "application/x-www-form-urlencoded");
     const res = await fetch(options.endpoint, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+      headers: { "content-type": contentType },
       body,
     });
     if (!res.ok && res.status >= 500) {
@@ -106,7 +116,12 @@ export function attachRepeatable(container: HTMLElement): void {
       row.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
         "input, textarea, select",
       ).forEach((el) => {
-        if (el.name) el.name = el.name.replace(/\.\[ROW\]/g, `.${idx}`);
+        if (!el.name) return;
+        // Replace the template placeholder AND any existing numeric suffix so
+        // deletions leave a dense, zero-indexed name array. Without this,
+        // deleting row 0 would leave `.1`/`.2` in place and the server would
+        // see a sparse array with a hole at index 0.
+        el.name = el.name.replace(/\.\[ROW\]/g, `.${idx}`).replace(/\.\d+(?=\b|$)/g, `.${idx}`);
       });
     });
     rowCount = rows.length;
@@ -275,18 +290,28 @@ export function mount(root: HTMLElement, options: MountOptions): {
 
 export function assertOptionValuesExist(schema: FormSchema): string[] {
   const violations: string[] = [];
-  const collect = (field: FieldDefinition, path: string) => {
+  // First pass: collect every option value across the schema so visibleWhen
+  // predicates can reference ANY field's options.
+  const allValues = new Set<string>();
+  const collectValues = (field: FieldDefinition) => {
     if (field.type === "select" || field.type === "radio") {
-      const values = field.options.map((o) => o.value);
-      const source = field.visibleWhen?.toString() ?? "";
-      const triggerValues = valuesOf(source);
+      field.options.forEach((o) => allValues.add(o.value));
+    }
+    if (field.type === "group") field.fields.forEach(collectValues);
+    if (field.type === "repeatable") field.itemFields.forEach(collectValues);
+  };
+  schema.steps.forEach((step) => step.fields.forEach(collectValues));
+
+  // Second pass: every visibleWhen predicate must reference known option values.
+  const collect = (field: FieldDefinition, path: string) => {
+    if (field.visibleWhen) {
+      const triggerValues = valuesOf(field.visibleWhen.toString());
       triggerValues.forEach((v) => {
-        if (!values.includes(v)) violations.push(`${path}: visibleWhen references ${v}`);
+        if (!allValues.has(v)) violations.push(`${path}: visibleWhen references ${v}`);
       });
     }
-    if (field.type === "group") {
-      field.fields.forEach((child) => collect(child, `${path}.${child.name}`));
-    }
+    if (field.type === "group") field.fields.forEach((child) => collect(child, `${path}.${child.name}`));
+    if (field.type === "repeatable") field.itemFields.forEach((child) => collect(child, `${path}.${child.name}.[ROW]`));
   };
   schema.steps.forEach((step) => step.fields.forEach((f) => collect(f, f.name)));
   return violations;

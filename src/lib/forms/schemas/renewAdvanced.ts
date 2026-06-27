@@ -17,7 +17,7 @@ import type { FormSchema } from "../types";
 import { emailNZ, phoneNZ, required } from "../validators";
 
 export const schema: FormSchema = {
-  id: "renewPro",
+  id: "renewAdvanced",
   content: {} as FormSchema["content"],
   steps: [
     {

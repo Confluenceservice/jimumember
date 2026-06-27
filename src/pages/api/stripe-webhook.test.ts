@@ -5,15 +5,15 @@ import Stripe from "stripe";
 // Mock external dependencies
 // ---------------------------------------------------------------------------
 
-const mockSendProfessionalConfirmation = vi.fn();
-const mockSendProfessionalApplicationNotification = vi.fn();
-const mockSendAssociateConfirmation = vi.fn();
-const mockSendAssociateApplicationNotification = vi.fn();
+const mockSendAdvancedConfirmation = vi.fn();
+const mockSendAdvancedApplicationNotification = vi.fn();
+const mockSendBasicConfirmation = vi.fn();
+const mockSendBasicApplicationNotification = vi.fn();
 const mockSendRenewalPdLogLink = vi.fn();
 const mockSendRenewalAdminNotification = vi.fn();
 const mockAppendCheckoutLog = vi.fn();
-const mockCreateApplicationReviewDoc = vi.fn();
-const mockCreateAssociateApplicationReviewDoc = vi.fn();
+const mockCreateAdvancedApplicationReviewDoc = vi.fn();
+const mockCreateBasicApplicationReviewDoc = vi.fn();
 const mockGetMembership = vi.fn();
 const mockHasActiveSubscription = vi.fn();
 const mockSetAwaitingSubscription = vi.fn();
@@ -26,10 +26,10 @@ const mockMarkRenewalPaid = vi.fn();
 const mockGetRenewalById = vi.fn();
 
 vi.mock("../../lib/email-sender", () => ({
-  sendProfessionalConfirmation: mockSendProfessionalConfirmation,
-  sendProfessionalApplicationNotification: mockSendProfessionalApplicationNotification,
-  sendAssociateConfirmation: mockSendAssociateConfirmation,
-  sendAssociateApplicationNotification: mockSendAssociateApplicationNotification,
+  sendAdvancedConfirmation: mockSendAdvancedConfirmation,
+  sendAdvancedApplicationNotification: mockSendAdvancedApplicationNotification,
+  sendBasicConfirmation: mockSendBasicConfirmation,
+  sendBasicApplicationNotification: mockSendBasicApplicationNotification,
   sendRenewalPdLogLink: mockSendRenewalPdLogLink,
   sendRenewalAdminNotification: mockSendRenewalAdminNotification,
 }));
@@ -39,8 +39,8 @@ vi.mock("../../lib/google-sheets", () => ({
 }));
 
 vi.mock("../../lib/google-docs", () => ({
-  createApplicationReviewDoc: mockCreateApplicationReviewDoc,
-  createAssociateApplicationReviewDoc: mockCreateAssociateApplicationReviewDoc,
+  createAdvancedApplicationReviewDoc: mockCreateAdvancedApplicationReviewDoc,
+  createBasicApplicationReviewDoc: mockCreateBasicApplicationReviewDoc,
 }));
 
 vi.mock("../../lib/memberships", () => ({
@@ -121,7 +121,7 @@ function makeCheckoutSession(overrides: Partial<Stripe.Checkout.Session> = {}): 
     object: "checkout.session",
     metadata: {
       flow: "option_c",
-      plan: "professional",
+      plan: "advanced",
       recurring_price_id: "price_123",
       next_july1_epoch: "1751328000",
       first_name: "Jane",
@@ -262,22 +262,22 @@ describe("stripe-webhook", () => {
       expect(res.status).toBe(200);
     });
 
-    it("marks professional applicant paid and sends confirmation email", async () => {
+    it("marks advanced applicant paid and sends confirmation email", async () => {
       mockGetMembership.mockReturnValue(null);
       mockSetActive.mockReturnValue(undefined);
       mockSetAwaitingSubscription.mockReturnValue(undefined);
       mockMarkApplicantPaid.mockResolvedValue(undefined);
       mockGetApplicantById.mockResolvedValue({ email: "jane@example.com", firstName: "Jane", lastName: "Doe" });
-      mockSendProfessionalConfirmation.mockResolvedValue(undefined);
-      mockCreateApplicationReviewDoc.mockResolvedValue("https://docs.google.com/document/d/abc");
-      mockSendProfessionalApplicationNotification.mockResolvedValue(undefined);
+      mockSendAdvancedConfirmation.mockResolvedValue(undefined);
+      mockCreateAdvancedApplicationReviewDoc.mockResolvedValue("https://docs.google.com/document/d/abc");
+      mockSendAdvancedApplicationNotification.mockResolvedValue(undefined);
       mockAppendCheckoutLog.mockResolvedValue(undefined);
 
       const { POST } = await import("../../pages/api/stripe-webhook");
       const session = makeCheckoutSession({
         metadata: {
           flow: "option_c",
-          plan: "professional",
+          plan: "advanced",
           recurring_price_id: "price_123",
           next_july1_epoch: "1751328000",
           first_name: "Jane",
@@ -290,28 +290,28 @@ describe("stripe-webhook", () => {
       const res = await POST(req);
       expect(res.status).toBe(200);
       expect(mockMarkApplicantPaid).toHaveBeenCalledWith("app_123", "cs_test_123");
-      expect(mockSendProfessionalConfirmation).toHaveBeenCalledWith("jane@example.com", "Jane", "app_123");
+      expect(mockSendAdvancedConfirmation).toHaveBeenCalledWith("jane@example.com", "Jane", "app_123");
     });
 
-    it("sends associate confirmation email after associate checkout completes", async () => {
+    it("sends basic confirmation email after basic checkout completes", async () => {
       mockGetMembership.mockReturnValue(null);
       mockSetActive.mockReturnValue(undefined);
       mockSetAwaitingSubscription.mockReturnValue(undefined);
       mockAppendCheckoutLog.mockResolvedValue(undefined);
-      mockCreateAssociateApplicationReviewDoc.mockResolvedValue("https://docs.google.com/document/d/assoc123");
-      mockSendAssociateConfirmation.mockResolvedValue(undefined);
-      mockSendAssociateApplicationNotification.mockResolvedValue(undefined);
+      mockCreateBasicApplicationReviewDoc.mockResolvedValue("https://docs.google.com/document/d/assoc123");
+      mockSendBasicConfirmation.mockResolvedValue(undefined);
+      mockSendBasicApplicationNotification.mockResolvedValue(undefined);
 
       const { POST } = await import("../../pages/api/stripe-webhook");
       const session = makeCheckoutSession({
         metadata: {
           flow: "option_c",
-          plan: "associate",
+          plan: "basic",
           recurring_price_id: "price_assoc",
           next_july1_epoch: "1751328000",
           first_name: "Bob",
           last_name: "Smith",
-          associate_application_id: "assoc_app_456",
+          basic_application_id: "assoc_app_456",
           list_on_page: "yes",
         },
       });
@@ -319,14 +319,14 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockCreateAssociateApplicationReviewDoc).toHaveBeenCalled();
-      expect(mockSendAssociateConfirmation).toHaveBeenCalledWith(
+      expect(mockCreateBasicApplicationReviewDoc).toHaveBeenCalled();
+      expect(mockSendBasicConfirmation).toHaveBeenCalledWith(
         "jane@example.com",
         "Bob Smith",
         true,
         "assoc_app_456"
       );
-      expect(mockSendAssociateApplicationNotification).toHaveBeenCalledWith(
+      expect(mockSendBasicApplicationNotification).toHaveBeenCalledWith(
         "admin@example.com",
         "Bob Smith",
         "https://docs.google.com/document/d/assoc123",
@@ -428,7 +428,7 @@ describe("stripe-webhook", () => {
         payment_intent: "pi_1",
         metadata: {
           flow: "renewal",
-          tier: "pm",
+          tier: "adv",
           renewal_id: "r1",
           renewal_year: "2026",
           first_name: "Alice",
@@ -442,7 +442,7 @@ describe("stripe-webhook", () => {
 
       mockGetRenewalById.mockResolvedValueOnce({
         renewalId: "r1",
-        tier: "pm",
+        tier: "adv",
         renewalYear: 2026,
         firstName: "Alice",
         lastName: "Smith",
@@ -472,7 +472,7 @@ describe("stripe-webhook", () => {
           firstName: "Alice",
           lastName: "Smith",
           email: "alice@example.com",
-          plan: "renewal_pm",
+          plan: "renewal_adv",
           amountPaid: 15000,
           sessionId: "cs_renewal_1",
           customerId: "cus_renewal",
@@ -480,7 +480,7 @@ describe("stripe-webhook", () => {
       );
       expect(mockSendRenewalAdminNotification).toHaveBeenCalledWith(
         "admin@example.com",
-        "pm",
+        "adv",
         "Alice Smith",
         "alice@example.com",
         "r1",
@@ -503,7 +503,7 @@ describe("stripe-webhook", () => {
         payment_intent: "pi_2",
         metadata: {
           flow: "renewal",
-          tier: "am",
+          tier: "basic",
           renewal_id: "r2",
           renewal_year: "2026",
           first_name: "Bob",
@@ -517,7 +517,7 @@ describe("stripe-webhook", () => {
 
       mockGetRenewalById.mockResolvedValueOnce({
         renewalId: "r2",
-        tier: "am",
+        tier: "basic",
         renewalYear: 2026,
         firstName: "Bob",
         lastName: "Doe",
@@ -549,7 +549,7 @@ describe("stripe-webhook", () => {
         payment_intent: "pi_3",
         metadata: {
           flow: "renewal",
-          tier: "pm",
+          tier: "adv",
           renewal_id: "missing",
         },
       });

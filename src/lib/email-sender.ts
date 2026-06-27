@@ -1,6 +1,18 @@
 import FormData from "form-data";
 import Mailgun from "mailgun.js";
 import { appendEmailLog } from "./google-sheets";
+import { TIERS } from "./forms/tiers";
+
+/**
+ * Phase K: look up tier label from TIERS config by storageValue. O(N) over
+ * the (small) TIERS list — no hardcoded "pm"/"am" branch.
+ */
+function tierLabelFor(storageValue: string): string {
+  for (const t of Object.values(TIERS)) {
+    if (t.storageValue === storageValue) return t.label;
+  }
+  return storageValue;
+}
 
 interface EmailParams {
   to: string;
@@ -73,9 +85,9 @@ function getMailgunClient() {
 
 export type EmailTemplate =
   | "confirmation"
-  | "associate_confirmation"
+  | "basic_confirmation"
   | "application_notification"
-  | "associate_application_notification"
+  | "basic_application_notification"
   | "resume_link"
   | "renewal_pd_log"
   | "renewal_admin_notification";
@@ -119,17 +131,17 @@ export async function sendEmail(
   }
 }
 
-export async function sendProfessionalConfirmation(
+export async function sendAdvancedConfirmation(
   toEmail: string,
   fullName: string,
   applicantId?: string,
 ): Promise<void> {
   const orgName = getOrgName();
-  const subject = `Your ${orgName} Professional Membership Application`;
+  const subject = `Your ${orgName} Advanced Membership Application`;
 
   const body = `Dear ${fullName},
 
-Thank you for your application to become a Professional Member of ${orgName}. We will process your application and get back to you as soon as we can.
+Thank you for your application to become a Advanced Member of ${orgName}. We will process your application and get back to you as soon as we can.
 
 We look forward to seeing you soon.
 
@@ -142,30 +154,30 @@ The ${orgName} Committee`;
   );
 }
 
-export async function sendAssociateConfirmation(
+export async function sendBasicConfirmation(
   toEmail: string,
   fullName: string,
   listOnPage: boolean,
-  associateApplicationId?: string,
+  basicApplicationId?: string,
 ): Promise<void> {
   const orgName = getOrgName();
   const support = getSupportEmail();
   const orgUrl = getOrgUrl();
   const listNote = listOnPage
-    ? "You have requested to be listed on our Associate Member list on our website — we will process that shortly."
+    ? "You have requested to be listed on our Basic Member list on our website — we will process that shortly."
     : `You have not requested to be listed at this time. If you would like to be added in future, please email us at ${support}.`;
 
-  const subject = `Welcome to ${orgName} — Associate Membership Confirmed`;
+  const subject = `Welcome to ${orgName} — Basic Membership Confirmed`;
 
   const body = `Welcome to ${orgName} ☺
 
 Dear ${fullName},
 
-We would like to officially welcome you on board as an Associate Member. We are delighted you are joining us in this role.
+We would like to officially welcome you on board as an Basic Member. We are delighted you are joining us in this role.
 
 ${listNote}
 
-Associate Member Resources: Access your resources at ${orgUrl} — Members Area — Members Login. If you haven't signed up yet, click 'Sign up' and we will approve your access. If you're already a member, click 'Log In'.
+Basic Member Resources: Access your resources at ${orgUrl} — Members Area — Members Login. If you haven't signed up yet, click 'Sign up' and we will approve your access. If you're already a member, click 'Log In'.
 
 You will find recordings of our educational sessions and other relevant information there.
 
@@ -182,18 +194,18 @@ The ${orgName} Committee`;
 
   await sendEmail(
     { to: toEmail, subject, body, replyTo: support },
-    { template: "associate_confirmation", applicantId: associateApplicationId },
+    { template: "basic_confirmation", applicantId: basicApplicationId },
   );
 }
 
-export async function sendAssociateApplicationNotification(
+export async function sendBasicApplicationNotification(
   toEmail: string,
   associateName: string,
   docUrl: string,
-  associateApplicationId?: string,
+  basicApplicationId?: string,
 ): Promise<void> {
   const orgName = getOrgName();
-  const subject = `New Associate Membership Application — ${associateName}`;
+  const subject = `New Basic Membership Application — ${associateName}`;
 
   const body = `A new associate membership application has been received and the review document is ready.
 
@@ -206,18 +218,18 @@ ${orgName}`;
 
   await sendEmail(
     { to: toEmail, subject, body },
-    { template: "associate_application_notification", applicantId: associateApplicationId },
+    { template: "basic_application_notification", applicantId: basicApplicationId },
   );
 }
 
-export async function sendProfessionalApplicationNotification(
+export async function sendAdvancedApplicationNotification(
   toEmail: string,
   applicantName: string,
   docUrl: string,
   applicantId?: string,
 ): Promise<void> {
   const orgName = getOrgName();
-  const subject = `New Professional Membership Application — ${applicantName}`;
+  const subject = `New Advanced Membership Application — ${applicantName}`;
 
   const body = `A new professional membership application has been received and the review document is ready.
 
@@ -246,9 +258,9 @@ export async function sendRenewalPdLogLink(
 
   const body = `Dear ${fullName},
 
-Thank you for renewing your ${orgName} Professional Membership.
+Thank you for renewing your ${orgName} Advanced Membership.
 
-As a reminder, Professional Members are required to log at least 10 hours of Professional Development each year. You can log your PD activities at any time using the link below:
+As a reminder, Advanced Members are required to log at least 10 hours of Professional Development each year. You can log your PD activities at any time using the link below:
 
 ${pdLogLink}
 
@@ -270,11 +282,11 @@ export async function sendResumeLink(
   applicantId?: string,
 ): Promise<void> {
   const orgName = getOrgName();
-  const subject = `Your ${orgName} Professional Membership Application`;
+  const subject = `Your ${orgName} Advanced Membership Application`;
 
   const body = `Dear ${fullName},
 
-Thank you for starting your Professional Membership application with ${orgName}.
+Thank you for starting your Advanced Membership application with ${orgName}.
 
 To continue your application, please click the link below:
 ${resumeLink}
@@ -294,7 +306,9 @@ ${orgName}`;
 
 export async function sendRenewalAdminNotification(
   toEmail: string,
-  tier: "pm" | "am",
+  /** Phase K: tier widened from "pm"|"am" literal to string so any
+   *  TierConfig.storageValue works. Display label is resolved from TIERS. */
+  tier: string,
   memberName: string,
   memberEmail: string,
   renewalId: string,
@@ -303,7 +317,7 @@ export async function sendRenewalAdminNotification(
 ): Promise<void> {
   const orgName = getOrgName();
   const support = getSupportEmail();
-  const tierLabel = tier === "pm" ? "Professional Member" : "Associate Member";
+  const tierLabel = tierLabelFor(tier);
   const amount = (amountPaidCents / 100).toFixed(2);
   const subject = `Membership renewal completed — ${memberName} (${tierLabel})`;
 

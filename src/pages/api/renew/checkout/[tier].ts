@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
-import { resolveRenewalPrice } from "../../../../lib/stripe-products";
-import { appendRenewal } from "../../../../lib/renewal-sheet";
+import { resolveRenewalPrice, type LookupKey } from "../../../../lib/stripe-products";
+import { appendRenewal, type PdEntry } from "../../../../lib/renewal-sheet";
 import {
   getSiteBaseUrl,
   isCheckoutDryRunEnabled,
@@ -11,13 +11,35 @@ import { validateTier } from "../../../../lib/forms/runtime";
 import { getTier } from "../../../../lib/forms/tiers";
 
 /**
- * Tier → Stripe renewal lookup-key map. Hardcoded for B2 (Associate only);
- * Phase D derives this from TIERS + the renewal price env vars.
+ * Derive the Stripe renewal lookup key from the tier config. Adding a tier
+ * to TIERS automatically extends this — no code edit required (Phase D).
  */
-const TIER_LOOKUP_KEY: Record<string, "am_renewal_nzd" | "pm_renewal_nzd"> = {
-  associate: "am_renewal_nzd",
-  professional: "pm_renewal_nzd",
-};
+function lookupKeyForTier(tierSlug: string): LookupKey {
+  const tier = getTier(tierSlug);
+  return `${tier.storageValue}_renewal_nzd` as LookupKey;
+}
+
+function coercePdEntries(raw: unknown): PdEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PdEntry[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") continue;
+    const o = e as Record<string, unknown>;
+    if (
+      typeof o.dateCompleted !== "string" ||
+      typeof o.activity !== "string" ||
+      typeof o.totalHours !== "number" ||
+      typeof o.provider !== "string"
+    ) continue;
+    out.push({
+      dateCompleted: o.dateCompleted,
+      activity: o.activity,
+      totalHours: o.totalHours,
+      provider: o.provider,
+    });
+  }
+  return out;
+}
 
 let stripeInstance: Stripe | null = null;
 function getStripe(): Stripe {
@@ -45,8 +67,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   try { tierConfig = getTier(tierSlug); }
   catch { return badRequest("tier", `Unknown tier: ${tierSlug}`); }
 
-  const lookupKey = TIER_LOOKUP_KEY[tierSlug];
-  if (!lookupKey) return badRequest("tier", `No Stripe renewal price mapped for tier: ${tierSlug}`);
+  const lookupKey = lookupKeyForTier(tierSlug);
 
   let body: unknown;
   try { body = await request.json(); }
@@ -62,12 +83,14 @@ export const POST: APIRoute = async ({ request, params }) => {
   const firstName = String(values.firstName ?? "").trim();
   const lastName = String(values.lastName ?? "").trim();
   const email = String(values.email ?? "").trim();
+  const phone = String(values.phone ?? "").trim();
   const year = Number(values.year);
+  const pdEntries = coercePdEntries(values.pdEntries);
 
-  // tier is config-sourced (plan finding C3: sheet + metadata must match).
-  // Cast to the legacy literal union — RenewalInput.tier is "pm" | "am";
-  // storageValue is typed string for future flexibility.
-  const tier = tierConfig.storageValue as "pm" | "am";
+  // Phase K: tier is config-sourced (plan finding C3: sheet + metadata must
+  // match). RenewalInput.tier widened from "pm"|"am" to string, so the cast
+  // is gone — storageValue is already a string.
+  const tier = tierConfig.storageValue;
 
   let priceConfig;
   try {
@@ -92,8 +115,8 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   try {
     await appendRenewal({
-      renewalId, tier, year, firstName, lastName, email, phone: "",
-      pdEntries: [], amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
+      renewalId, tier, year, firstName, lastName, email, phone,
+      pdEntries, amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
       stripeSession: "", paymentStatus: "pending", createdAt,
     });
   } catch (err) {
@@ -106,7 +129,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     session = await getStripe().checkout.sessions.create({
       mode: "payment",
       success_url: `${siteBaseUrl}/renew/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}`,
+      cancel_url: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`,
       line_items: [{ quantity: 1, price: priceConfig.priceId }],
       customer_email: email,
       customer_creation: "always",
@@ -114,8 +137,9 @@ export const POST: APIRoute = async ({ request, params }) => {
       payment_intent_data: { receipt_email: email, setup_future_usage: "off_session" },
       metadata: {
         flow: "renewal", tier, renewal_id: renewalId, renewal_year: String(year),
-        first_name: firstName, last_name: lastName, email, phone: "",
-        pd_entries: "", amount_cents: String(priceConfig.unitAmount),
+        first_name: firstName, last_name: lastName, email, phone,
+        pd_entries: JSON.stringify(pdEntries),
+        amount_cents: String(priceConfig.unitAmount),
       },
     }, { idempotencyKey: `renewal:${tier}:${renewalId}` });
   } catch (err) {

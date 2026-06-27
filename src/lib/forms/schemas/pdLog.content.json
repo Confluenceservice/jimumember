@@ -2,13 +2,17 @@
   "title": "Log Professional Development",
   "description": "Add an entry to your annual PD record.",
   "steps": {
-    "entry": {
-      "title": "PD entry",
+    "entries": {
+      "title": "PD entries",
       "fields": {
-        "dateCompleted": { "label": "Date completed" },
-        "activity": { "label": "Activity", "placeholder": "e.g. course, webinar, book, PD event" },
-        "totalHours": { "label": "Total hours" },
-        "provider": { "label": "Provider" }
+        "entries": {
+          "label": "Record of Learning",
+          "help": "Professional Members must complete at least 10 hours of Professional Development each year. Add all activities you have completed and save when done."
+        },
+        "entries.dateCompleted": { "label": "Date completed" },
+        "entries.activity": { "label": "Activity", "placeholder": "e.g. course, webinar, book, PD event" },
+        "entries.totalHours": { "label": "Total hours" },
+        "entries.provider": { "label": "Provider" }
       }
     }
   }

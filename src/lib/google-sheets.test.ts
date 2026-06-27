@@ -5,7 +5,7 @@ const mockAppend = vi.fn().mockResolvedValue({});
 const mockUpdate = vi.fn().mockResolvedValue({});
 const mockSpreadsheetGet = vi.fn().mockResolvedValue({
   data: {
-    sheets: [{ properties: { title: "Associate Applications" } }],
+    sheets: [{ properties: { title: "Basic Applications" } }],
   },
 });
 const mockBatchUpdate = vi.fn().mockResolvedValue({});
@@ -51,7 +51,7 @@ describe("google-sheets", () => {
   }
   async function getAppendAssociateApplication() {
     const mod = await import("./google-sheets");
-    return mod.appendAssociateApplication;
+    return mod.appendBasicApplication;
   }
   async function getAppendEmailLog() {
     const mod = await import("./google-sheets");
@@ -68,7 +68,7 @@ describe("google-sheets", () => {
         lastName: "Doe",
         phone: "+64 21 123 4567",
         email: "jane@example.com",
-        plan: "associate",
+        plan: "basic",
         amountPaid: 7500,
         sessionId: "cs_test_abc123",
         customerId: "cus_xyz789",
@@ -86,7 +86,7 @@ describe("google-sheets", () => {
             "Doe",
             "+64 21 123 4567",
             "jane@example.com",
-            "associate",
+            "basic",
             "NZ$75.00",
             "cs_test_abc123",
             "cus_xyz789",
@@ -104,7 +104,7 @@ describe("google-sheets", () => {
         lastName: "Smith",
         phone: "",
         email: "john@example.com",
-        plan: "professional",
+        plan: "advanced",
         amountPaid: 14999, // $149.99
         sessionId: "cs_test_xyz",
         customerId: "cus_abc",
@@ -124,7 +124,7 @@ describe("google-sheets", () => {
         lastName: "Doe",
         phone: "",
         email: "jane@example.com",
-        plan: "associate",
+        plan: "basic",
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
@@ -141,7 +141,7 @@ describe("google-sheets", () => {
         lastName: "Doe",
         phone: "",
         email: "jane@example.com",
-        plan: "associate",
+        plan: "basic",
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
@@ -158,7 +158,7 @@ describe("google-sheets", () => {
         lastName: "Doe",
         phone: "",
         email: "jane@example.com",
-        plan: "associate",
+        plan: "basic",
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
@@ -174,7 +174,7 @@ describe("google-sheets", () => {
         lastName: "Doe",
         phone: "",
         email: "jane@example.com",
-        plan: "associate",
+        plan: "basic",
         amountPaid: 0,
         sessionId: "cs_test",
         customerId: "cus_test",
@@ -210,7 +210,7 @@ describe("google-sheets", () => {
       await appendEmailLog({
         timestamp: "2026-06-01T09:00:00.000Z",
         to: "jane@example.com",
-        subject: "Your Re:Member Professional Membership Application",
+        subject: "Your Re:Member Advanced Membership Application",
         template: "confirmation",
         applicantId: "app_abc123",
         result: "sent",
@@ -225,7 +225,7 @@ describe("google-sheets", () => {
           values: [[
             "2026-06-01T09:00:00.000Z",
             "jane@example.com",
-            "Your Re:Member Professional Membership Application",
+            "Your Re:Member Advanced Membership Application",
             "confirmation",
             "app_abc123",
             "sent",
@@ -241,7 +241,7 @@ describe("google-sheets", () => {
       await appendEmailLog({
         timestamp: "2026-06-01T09:00:00.000Z",
         to: "jane@example.com",
-        subject: "Your Re:Member Professional Membership Application",
+        subject: "Your Re:Member Advanced Membership Application",
         template: "resume_link",
         applicantId: "app_abc123",
         result: "failed",
@@ -259,7 +259,7 @@ describe("google-sheets", () => {
       await appendEmailLog({
         timestamp: "2026-06-01T09:00:00.000Z",
         to: "membership@example.com",
-        subject: "New Professional Membership Application — Jane Doe",
+        subject: "New Advanced Membership Application — Jane Doe",
         template: "application_notification",
         result: "sent",
       });
@@ -274,8 +274,8 @@ describe("google-sheets", () => {
       await appendEmailLog({
         timestamp: "2026-06-01T09:00:00.000Z",
         to: "bob@example.com",
-        subject: "Welcome to Re:Member — Associate Membership Confirmed",
-        template: "associate_confirmation",
+        subject: "Welcome to Re:Member — Basic Membership Confirmed",
+        template: "basic_confirmation",
         result: "sent",
       });
 
@@ -297,11 +297,11 @@ describe("google-sheets", () => {
     });
   });
 
-  describe("appendAssociateApplication", () => {
-    it("writes Associate application data to the Associate Applications sheet", async () => {
-      const appendAssociateApplication = await getAppendAssociateApplication();
+  describe("appendBasicApplication", () => {
+    it("writes Basic application data to the Basic Applications sheet", async () => {
+      const appendBasicApplication = await getAppendAssociateApplication();
 
-      await appendAssociateApplication({
+      await appendBasicApplication({
         submittedAt: "2026-05-11T06:30:00.000Z",
         applicationId: "app_123",
         firstName: "Alex",
@@ -322,7 +322,7 @@ describe("google-sheets", () => {
 
       expect(mockUpdate).toHaveBeenCalledWith({
         spreadsheetId: "1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8",
-        range: "'Associate Applications'!A1:P1",
+        range: "'Basic Applications'!A1:P1",
         valueInputOption: "RAW",
         requestBody: {
           values: [[
@@ -348,7 +348,7 @@ describe("google-sheets", () => {
 
       expect(mockAppend).toHaveBeenCalledWith({
         spreadsheetId: "1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8",
-        range: "'Associate Applications'!A1:P1",
+        range: "'Basic Applications'!A1:P1",
         valueInputOption: "RAW",
         requestBody: {
           values: [[

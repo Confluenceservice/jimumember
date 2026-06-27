@@ -12,6 +12,7 @@ import { logger } from "../../lib/logger";
 
 type CreateSessionPayload = {
   plan?: string;
+  applicantId?: string;
   firstName?: string;
   lastName?: string;
   phone?: string;
@@ -55,8 +56,8 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const plan = payload.plan;
-  if (plan !== "professional") {
-    return badRequest("Invalid plan. Use 'professional'.");
+  if (plan !== "advanced") {
+    return badRequest("Invalid plan. Use 'advanced'.");
   }
 
   const firstName = payload.firstName?.trim();
@@ -79,13 +80,13 @@ export const POST: APIRoute = async ({ request }) => {
   const stripe = new Stripe(secretKey, { apiVersion: "2026-02-25.clover" });
   const dryRun = isCheckoutDryRunEnabled();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  const recurringPriceId = process.env.STRIPE_PRICE_PROFESSIONAL?.trim();
+  const recurringPriceId = process.env.STRIPE_PRICE_ADVANCED?.trim();
   const billingCycleAnchor = getNextJulyAnchorEpoch();
   const siteBaseUrl = getSiteBaseUrl(request.url);
 
   if (!recurringPriceId) {
     return Response.json(
-      { error: "Server is missing STRIPE_PRICE_PROFESSIONAL." },
+      { error: "Server is missing STRIPE_PRICE_ADVANCED." },
       { status: 500 },
     );
   }
@@ -161,7 +162,8 @@ export const POST: APIRoute = async ({ request }) => {
     ],
     metadata: {
       flow: "option_c",
-      plan: "professional",
+      plan: "advanced",
+      applicant_id: payload.applicantId ?? "",
       recurring_price_id: recurringPriceId,
       annual_amount: String(annualAmount),
       next_july1_epoch: String(billingCycleAnchor),

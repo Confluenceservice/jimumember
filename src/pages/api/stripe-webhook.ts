@@ -14,8 +14,8 @@ import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { getRenewalById, markRenewalPaid, getRenewalsSheetUrl } from "../../lib/renewal-sheet";
 import { getPublicAppUrl } from "../../lib/staging";
-import { createApplicationReviewDoc, createAssociateApplicationReviewDoc, refreshPmIndexDoc, refreshAmIndexDoc } from "../../lib/google-docs";
-import { sendProfessionalConfirmation, sendProfessionalApplicationNotification, sendAssociateConfirmation, sendAssociateApplicationNotification, sendRenewalPdLogLink, sendRenewalAdminNotification } from "../../lib/email-sender";
+import { createAdvancedApplicationReviewDoc, createBasicApplicationReviewDoc, refreshAdvancedIndexDoc, refreshBasicIndexDoc } from "../../lib/google-docs";
+import { sendAdvancedConfirmation, sendAdvancedApplicationNotification, sendBasicConfirmation, sendBasicApplicationNotification, sendRenewalPdLogLink, sendRenewalAdminNotification } from "../../lib/email-sender";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -77,7 +77,7 @@ async function handleCheckoutCompleted(
     {
       const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@example.com";
       const fullName = `${renewal.firstName} ${renewal.lastName}`.trim();
-      const adminTier = renewal.tier === "am" ? "am" : "pm";
+      const adminTier = renewal.tier === "basic" ? "basic" : "adv";
       const amountCents = renewal.amountPaidCents;
       sendRenewalAdminNotification(
         adminEmail,
@@ -94,7 +94,7 @@ async function handleCheckoutCompleted(
     }
 
     // Send PD log link to member (non-blocking, PM only)
-    if (renewal.tier === "pm" && renewal.email) {
+    if (renewal.tier === "adv" && renewal.email) {
       const appUrl = getPublicAppUrl();
       const pdLogLink = `${appUrl}/renew/pd-log?token=${renewalId}`;
       const fullName = `${renewal.firstName} ${renewal.lastName}`.trim();
@@ -238,8 +238,8 @@ async function handleCheckoutCompleted(
 
   // Mark professional applicant paid/complete in the application sheet.
   const applicantId = session.metadata?.applicant_id;
-  let professionalApplicant = null;
-  if (plan === "professional" && applicantId) {
+  let advancedApplicant = null;
+  if (plan === "advanced" && applicantId) {
     await markApplicantPaid(applicantId, session.id);
     log.info("checkout_completed.applicant_marked_paid", {
       applicantId,
@@ -247,11 +247,11 @@ async function handleCheckoutCompleted(
     });
 
     // Send confirmation email to the applicant (non-blocking)
-    professionalApplicant = await getApplicantById(applicantId);
-    if (professionalApplicant?.email && professionalApplicant?.firstName) {
-      sendProfessionalConfirmation(
-        professionalApplicant.email,
-        professionalApplicant.firstName,
+    advancedApplicant = await getApplicantById(applicantId);
+    if (advancedApplicant?.email && advancedApplicant?.firstName) {
+      sendAdvancedConfirmation(
+        advancedApplicant.email,
+        advancedApplicant.firstName,
         applicantId
       ).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
@@ -296,11 +296,11 @@ async function handleCheckoutCompleted(
   });
 
   // Create a Google Doc review document for professional applications
-  if (plan === "professional" && applicantId && professionalApplicant) {
-    createApplicationReviewDoc(professionalApplicant).then(async (docUrl) => {
+  if (plan === "advanced" && applicantId && advancedApplicant) {
+    createAdvancedApplicationReviewDoc(advancedApplicant).then(async (docUrl: string) => {
       const membershipEmail = process.env.SUPPORT_EMAIL?.trim() || "membership@example.com";
-      const applicantFullName = `${professionalApplicant.firstName} ${professionalApplicant.lastName}`;
-      sendProfessionalApplicationNotification(membershipEmail, applicantFullName, docUrl, applicantId).catch((err) => {
+      const applicantFullName = `${advancedApplicant.firstName} ${advancedApplicant.lastName}`;
+      sendAdvancedApplicationNotification(membershipEmail, applicantFullName, docUrl, applicantId).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         log.error("checkout_completed.internal_notification_failed", {
           applicantId,
@@ -309,11 +309,11 @@ async function handleCheckoutCompleted(
         });
       });
       // Refresh PM index doc
-      refreshPmIndexDoc().catch((err) => {
+      refreshAdvancedIndexDoc().catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         log.error("checkout_completed.pm_index_refresh_failed", { applicantId, sessionId: session.id, error: msg });
       });
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("checkout_completed.review_doc_failed", {
         applicantId,
@@ -321,7 +321,7 @@ async function handleCheckoutCompleted(
         error: msg,
       });
     });
-  } else if (plan === "professional" && applicantId) {
+  } else if (plan === "advanced" && applicantId) {
     log.warn("checkout_completed.applicant_not_found_for_review_doc", {
       applicantId,
       sessionId: session.id,
@@ -329,11 +329,11 @@ async function handleCheckoutCompleted(
   }
 
   // Create a Google Doc review document for associate applications
-  const associateApplicationId = session.metadata?.associate_application_id;
+  const basicApplicationId = session.metadata?.basic_application_id;
   const associateListOnPage = session.metadata?.list_on_page ?? "";
-  if (plan === "associate" && associateApplicationId) {
+  if (plan === "basic" && basicApplicationId) {
     const associateDocData = {
-      applicationId: associateApplicationId,
+      applicationId: basicApplicationId,
       submittedAt: "",
       firstName: session.metadata?.first_name ?? "",
       lastName: session.metadata?.last_name ?? "",
@@ -350,45 +350,45 @@ async function handleCheckoutCompleted(
       applicationDate: "",
       checkoutStatus: "paid",
     };
-    createAssociateApplicationReviewDoc(associateDocData).then(async (docUrl) => {
+    createBasicApplicationReviewDoc(associateDocData).then(async (docUrl) => {
       const fullName = `${associateDocData.firstName} ${associateDocData.lastName}`;
-      sendAssociateConfirmation(
+      sendBasicConfirmation(
         associateDocData.email,
         fullName,
         associateListOnPage === "yes",
-        associateApplicationId
+        basicApplicationId
       ).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         log.error("checkout_completed.associate_confirmation_failed", {
-          associateApplicationId,
+          basicApplicationId,
           sessionId: session.id,
           error: msg,
         });
       });
 
       // Send internal committee notification for AM
-      sendAssociateApplicationNotification(
+      sendBasicApplicationNotification(
         process.env.ADMIN_EMAIL?.trim() || "admin@example.com",
         fullName,
         docUrl,
-        associateApplicationId
+        basicApplicationId
       ).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         log.error("checkout_completed.associate_internal_notification_failed", {
-          associateApplicationId,
+          basicApplicationId,
           sessionId: session.id,
           error: msg,
         });
       });
       // Refresh AM index doc
-      refreshAmIndexDoc().catch((err) => {
+      refreshBasicIndexDoc().catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
-        log.error("checkout_completed.am_index_refresh_failed", { associateApplicationId, sessionId: session.id, error: msg });
+        log.error("checkout_completed.am_index_refresh_failed", { basicApplicationId, sessionId: session.id, error: msg });
       });
     }).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("checkout_completed.associate_review_doc_failed", {
-        associateApplicationId,
+        basicApplicationId,
         sessionId: session.id,
         error: msg,
       });

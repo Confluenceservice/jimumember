@@ -73,13 +73,13 @@ export const POST: APIRoute = async ({ request, url }) => {
   const stripe = new Stripe(secretKey, { apiVersion: "2026-02-25.clover" });
   const dryRun = isCheckoutDryRunEnabled();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  const recurringPriceId = process.env.STRIPE_PRICE_PROFESSIONAL?.trim();
+  const recurringPriceId = process.env.STRIPE_PRICE_ADVANCED?.trim();
   const billingCycleAnchor = getNextJulyAnchorEpoch();
   const siteBaseUrl = getSiteBaseUrl(url.href);
 
   if (!recurringPriceId) {
     return Response.json(
-      { error: "Server is missing STRIPE_PRICE_PROFESSIONAL.", code: "MISSING_CONFIG" },
+      { error: "Server is missing STRIPE_PRICE_ADVANCED.", code: "MISSING_CONFIG" },
       { status: 500 }
     );
   }
@@ -124,7 +124,7 @@ export const POST: APIRoute = async ({ request, url }) => {
         dryRun: true,
         message:
           "CHECKOUT_DRY_RUN is enabled. Stripe keys and price configuration validated; no Checkout Session was created.",
-        plan: "professional",
+        plan: "advanced",
         firstTermAmount,
         annualAmount,
         proratedFirstTerm,
@@ -150,7 +150,7 @@ export const POST: APIRoute = async ({ request, url }) => {
       ],
       metadata: {
         flow: "option_c",
-        plan: "professional",
+        plan: "advanced",
         applicant_id: applicant.id,
         resume_token: token,
         recurring_price_id: recurringPriceId,
@@ -192,7 +192,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     return Response.json({
       id: session.id,
       url: session.url,
-      plan: "professional",
+      plan: "advanced",
       firstTermAmount,
       annualAmount,
       proratedFirstTerm,

@@ -23,7 +23,7 @@ import type { FormSchema } from "../types";
 import { emailNZ, integer, max, min, required } from "../validators";
 
 export const schema: FormSchema = {
-  id: "renewAssociate",
+  id: "renewBasic",
   // Content loaded from renewAssociate.content.json at runtime by loadSchema().
   content: {} as FormSchema["content"],
   steps: [

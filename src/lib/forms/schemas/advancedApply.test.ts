@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { schema, COMPETENCY_IDS } from "./professionalApply";
+import { schema, COMPETENCY_IDS } from "./advancedApply";
 import { validate, toRow } from "../runtime";
 import { getTier } from "../tiers";
 
-describe("professionalApply schema", () => {
-  it("matches the tier config for professional", () => {
-    const tier = getTier("professional");
-    expect(tier.applicationSchemaId).toBe("professionalApply");
+describe("advancedApply schema", () => {
+  it("matches the tier config for advanced", () => {
+    const tier = getTier("advanced");
+    expect(tier.applicationSchemaId).toBe("advancedApply");
     expect(schema.id).toBe(tier.applicationSchemaId);
     expect(schema.storage.sheetName).toBe(tier.sheetName);
   });
@@ -112,5 +112,14 @@ describe("professionalApply schema", () => {
     const required = schema.uploads?.docTypes.filter((d) => d.required) ?? [];
     expect(required).toHaveLength(6);
     expect(schema.uploads?.docTypes.find((d) => d.id === "insurance")?.required).toBe(false);
+  });
+
+  it("declares 8 steps in wizard order (about → training → experience → furtherRequirements → competencies → referees → declarations → uploads)", () => {
+    // Phase J1: Step + FieldRenderer walks steps in declaration order. The
+    // wizard UX assumes this order; reorder breaks the visual flow.
+    expect(schema.steps.map((s) => s.id)).toEqual([
+      "about", "training", "experience", "furtherRequirements",
+      "competencies", "referees", "declarations", "uploads",
+    ]);
   });
 });

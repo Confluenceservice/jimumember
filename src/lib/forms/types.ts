@@ -64,7 +64,18 @@ export interface BaseField {
   /** Matches FormData key on the client AND sheet column key on the server. */
   name: string;
   type: FieldType;
+  /**
+   * Enforced by `validate()` regardless of `validators[]` content. Acts as a
+   * safety net for the common slip of pairing `required: true` with format-only
+   * validators (`emailNZ`, `minLength`, etc.) that pass through blank input.
+   * If `validators[]` already contains one of `required`/`conditional`/`ynRadio`/
+   * `jsonArray` (kinds that themselves reject blank), that explicit validator
+   * runs and its message wins. Otherwise the implicit check fires first with
+   * `requiredMessage` (default "Required").
+   */
   required?: boolean;
+  /** Message used when the implicit required check fires. */
+  requiredMessage?: string;
   defaultValue?: string | boolean | number | (() => unknown);
   validators?: Validator[];
   /** Predicate evaluated against current values to decide render-time visibility. */
@@ -156,7 +167,7 @@ export interface FormContent {
 export type RowFactory =
   | "createApplicantRow"
   | "appendRenewal"
-  | "appendAssociateApplication";
+  | "appendBasicApplication";
 
 export interface SheetStorage {
   kind: "sheet";

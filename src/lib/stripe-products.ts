@@ -1,7 +1,16 @@
 import Stripe from "stripe";
-import { getTier, UnknownTierError } from "./forms/tiers";
+import { getTier, listTiers, UnknownTierError } from "./forms/tiers";
 
-export type LookupKey = "pm_renewal_nzd" | "am_renewal_nzd";
+/**
+ * Phase K: LookupKey is now derived from any TierConfig's storageValue
+ * rather than hardcoded to "pm_renewal_nzd" | "am_renewal_nzd". Adding a
+ * third tier to TIERS automatically extends this union.
+ */
+export type LookupKey = `${string}_renewal_nzd`;
+
+function lookupKeyForTier(storageValue: string): LookupKey {
+  return `${storageValue}_renewal_nzd` as LookupKey;
+}
 
 interface CachedPrice {
   priceId: string;
@@ -27,9 +36,11 @@ function getStripe(): Stripe {
 }
 
 function getPriceEnvVar(lookupKey: LookupKey): string | undefined {
-  return lookupKey === "pm_renewal_nzd"
-    ? process.env.STRIPE_PRICE_PROFESSIONAL
-    : process.env.STRIPE_PRICE_ASSOCIATE;
+  const storageValue = lookupKey.replace(/_renewal_nzd$/, "");
+  for (const t of listTiers()) {
+    if (t.storageValue === storageValue) return process.env[t.renewalPriceEnvVar];
+  }
+  return undefined;
 }
 
 export async function resolveRenewalPrice(
@@ -42,7 +53,7 @@ export async function resolveRenewalPrice(
 
   const priceId = getPriceEnvVar(lookupKey);
   if (!priceId) {
-    throw new Error(`MISSING_CONFIG: STRIPE_PRICE_${lookupKey === "pm_renewal_nzd" ? "PROFESSIONAL" : "ASSOCIATE"} not set`);
+    throw new Error(`MISSING_CONFIG: no env var resolves to a price for ${lookupKey}`);
   }
 
   const stripe = getStripe();

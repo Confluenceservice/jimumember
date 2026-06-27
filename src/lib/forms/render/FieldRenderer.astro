@@ -60,7 +60,11 @@ function resolveContent(key: string) {
 
 const { label, help, placeholder, optionLabels } = resolveContent(field.contentKey);
 const inputName = namePrefix ? `${namePrefix}.${field.name}` : field.name;
-const inputId = `f-${inputName.replace(/[^a-zA-Z0-9]/g, "-")}`;
+// Use the field's path as the DOM id (with `.` allowed for nested groups).
+// Earlier versions prefixed with `f-` and replaced dots with hyphens, which
+// broke Phase J1 hydration on professional/apply.astro where old JS used
+// `getElementById("firstName")` — now id === name for top-level fields.
+const inputId = inputName;
 const isRequired = field.required === true;
 const isReadonly = readonly === true;
 const describedById = help ? `${inputId}-help` : undefined;

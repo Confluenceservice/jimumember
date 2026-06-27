@@ -11,8 +11,10 @@ import {
   getSiteBaseUrl,
   type MembershipPlan,
 } from "../../lib/stripe-checkout";
-import { appendAssociateApplication } from "../../lib/google-sheets";
+import { appendBasicApplication } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
+import { validateTier } from "../../lib/forms/runtime";
+import { getTier } from "../../lib/forms/tiers";
 
 type CreateSessionPayload = {
   plan?: MembershipPlan;
@@ -37,7 +39,7 @@ type ExistingCustomerInfo = {
   hasPriorSubscriptions: boolean;
 };
 
-const VALID_PLANS: MembershipPlan[] = ["associate", "professional"];
+const VALID_PLANS: MembershipPlan[] = ["basic", "advanced"];
 
 function badRequest(message: string): Response {
   return Response.json({ error: message }, { status: 400 });
@@ -91,35 +93,33 @@ export const POST: APIRoute = async ({ request }) => {
   const phone = payload.phone?.trim();
   const email = payload.email?.trim().toLowerCase();
   const applicationSource = payload.applicationSource;
-  const isAssociateApply = plan === "associate" && applicationSource === "apply";
-  const fullAddress = payload.fullAddress?.trim() ?? "";
-  const postalAddress = payload.postalAddress?.trim() ?? "";
-  const businessName = payload.businessName?.trim() ?? "";
-  const interestJoining = payload.interestJoining?.trim() ?? "";
-  const trainingDetails = payload.trainingDetails?.trim() ?? "";
-  const listOnPage = payload.listOnPage;
-  const listingDetails = payload.listingDetails?.trim() ?? "";
-  const signature = payload.signature?.trim() ?? "";
-  const applicationDate = payload.applicationDate?.trim() ?? "";
+  const isBasicApply = plan === "basic" && applicationSource === "apply";
 
   if (!firstName) return badRequest("Provide a first name.");
   if (!lastName) return badRequest("Provide a last name.");
   if (!email) return badRequest("Provide an email.");
 
-  if (isAssociateApply) {
-    if (!phone) return badRequest("Provide a phone number.");
-    if (!fullAddress) return badRequest("Provide a full address.");
-    if (!interestJoining) return badRequest("Provide your interest in joining Re:Member.");
-    if (!trainingDetails) return badRequest("Provide your End of Life Doula training details.");
-    if (!listOnPage || (listOnPage !== "yes" && listOnPage !== "no")) {
-      return badRequest("Select whether you want to be listed on the Associate Members page.");
+  // Associate-apply path uses the schema (validateTier). Other plans/flows
+  // fall through with the raw payload — `appendBasicApplication` only
+  // runs for the associate-apply path.
+  let associateValues: Record<string, unknown> | null = null;
+  if (isBasicApply) {
+    const result = await validateTier("basic", payload);
+    if (!result.ok) {
+      const [field, message] = Object.entries(result.errors)[0] ?? ["body", "Invalid input"];
+      return Response.json({ error: message, field }, { status: 400 });
     }
-    if (listOnPage === "yes" && !listingDetails) {
-      return badRequest("Provide listing details for publication.");
-    }
-    if (!signature) return badRequest("Provide your signature.");
-    if (!applicationDate) return badRequest("Provide your application date.");
+    associateValues = result.values as Record<string, unknown>;
   }
+  const fullAddress = (associateValues ? String(associateValues.fullAddress ?? "") : (payload.fullAddress?.trim() ?? ""));
+  const postalAddress = (associateValues ? String(associateValues.postalAddress ?? "") : (payload.postalAddress?.trim() ?? ""));
+  const businessName = (associateValues ? String(associateValues.businessName ?? "") : (payload.businessName?.trim() ?? ""));
+  const interestJoining = (associateValues ? String(associateValues.interestJoining ?? "") : (payload.interestJoining?.trim() ?? ""));
+  const trainingDetails = (associateValues ? String(associateValues.trainingDetails ?? "") : (payload.trainingDetails?.trim() ?? ""));
+  const listOnPage = (associateValues ? String(associateValues.listOnPage ?? "") : (payload.listOnPage ?? ""));
+  const listingDetails = (associateValues ? String(associateValues.listingDetails ?? "") : (payload.listingDetails?.trim() ?? ""));
+  const signature = (associateValues ? String(associateValues.signature ?? "") : (payload.signature?.trim() ?? ""));
+  const applicationDate = (associateValues ? String(associateValues.applicationDate ?? "") : (payload.applicationDate?.trim() ?? ""));
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
@@ -168,7 +168,7 @@ export const POST: APIRoute = async ({ request }) => {
   const proratedFirstTerm = firstTermAmount !== annualAmount;
 
   const renewalMessage = `Then ${formatAmountNzd(annualAmount)} per year starting 1 July.`;
-  const associateApplicationId = isAssociateApply ? crypto.randomUUID() : "";
+  const basicApplicationId = isBasicApply ? crypto.randomUUID() : "";
 
   if (dryRun) {
     logger.info("checkout_session.dry_run_validated", {
@@ -199,7 +199,7 @@ export const POST: APIRoute = async ({ request }) => {
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     success_url:
-      plan === "associate"
+      plan === "basic"
         ? `${siteBaseUrl}/associate-membership?session_id={CHECKOUT_SESSION_ID}`
         : `${siteBaseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${siteBaseUrl}/cancel`,
@@ -210,7 +210,9 @@ export const POST: APIRoute = async ({ request }) => {
           currency: "nzd",
           unit_amount: firstTermAmount,
           product_data: {
-            name: plan === "associate" ? "Associate Membership" : "Professional Membership",
+            // Phase K: tier label resolved via getTier (single source of truth
+            // for "Associate Membership" / "Professional Membership" / future tiers).
+            name: getTier(plan as "basic" | "advanced").label,
             description: renewalMessage,
           },
         },
@@ -234,11 +236,11 @@ export const POST: APIRoute = async ({ request }) => {
       },
     },
   };
-  if (associateApplicationId) {
+  if (basicApplicationId) {
     params.metadata = {
       ...params.metadata,
       application_source: "apply",
-      associate_application_id: associateApplicationId,
+      basic_application_id: basicApplicationId,
       list_on_page: listOnPage ?? "",
     };
   }
@@ -257,10 +259,10 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    if (isAssociateApply && associateApplicationId) {
-      await appendAssociateApplication({
+    if (isBasicApply && basicApplicationId) {
+      await appendBasicApplication({
         submittedAt: new Date().toISOString(),
-        applicationId: associateApplicationId,
+        applicationId: basicApplicationId,
         firstName,
         lastName,
         email,
@@ -289,7 +291,7 @@ export const POST: APIRoute = async ({ request }) => {
       annualAmount,
       proratedFirstTerm,
       billingCycleAnchor,
-      associateApplicationId: associateApplicationId || undefined,
+      basicApplicationId: basicApplicationId || undefined,
     });
 
     return Response.json({

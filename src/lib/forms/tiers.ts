@@ -50,32 +50,32 @@ export interface TierConfig {
   renewalSheetName: string;
 }
 
-export const TIERS: Readonly<Record<string, TierConfig>> = Object.freeze({
-  professional: {
-    slug: "professional",
-    label: "Professional Membership",
-    shortLabel: "Pro",
-    storageValue: "pm",
-    priceEnvVar: "STRIPE_PRICE_PROFESSIONAL",
-    renewalPriceEnvVar: "STRIPE_PRICE_PROFESSIONAL_RENEWAL",
-    applicationSchemaId: "professionalApply",
-    renewalSchemaId: "renewPro",
-    sheetName: "Professional Applications",
+export const TIERS = Object.freeze({
+  advanced: {
+    slug: "advanced",
+    label: "Advanced Membership",
+    shortLabel: "Advanced",
+    storageValue: "adv",
+    priceEnvVar: "STRIPE_PRICE_ADVANCED",
+    renewalPriceEnvVar: "STRIPE_PRICE_ADVANCED_RENEWAL",
+    applicationSchemaId: "advancedApply",
+    renewalSchemaId: "renewAdvanced",
+    sheetName: "Advanced Applications",
     renewalSheetName: "Renewals",
   },
-  associate: {
-    slug: "associate",
-    label: "Associate Membership",
-    shortLabel: "Associate",
-    storageValue: "am",
-    priceEnvVar: "STRIPE_PRICE_ASSOCIATE",
-    renewalPriceEnvVar: "STRIPE_PRICE_ASSOCIATE_RENEWAL",
-    applicationSchemaId: "associateApply",
-    renewalSchemaId: "renewAssociate",
-    sheetName: "Associate Applications",
+  basic: {
+    slug: "basic",
+    label: "Basic Membership",
+    shortLabel: "Basic",
+    storageValue: "basic",
+    priceEnvVar: "STRIPE_PRICE_BASIC",
+    renewalPriceEnvVar: "STRIPE_PRICE_BASIC_RENEWAL",
+    applicationSchemaId: "basicApply",
+    renewalSchemaId: "renewBasic",
+    sheetName: "Basic Applications",
     renewalSheetName: "Renewals",
   },
-});
+} as const);
 
 export class UnknownTierError extends Error {
   constructor(slug: string) {
@@ -85,11 +85,11 @@ export class UnknownTierError extends Error {
 }
 
 export function getTier(slug: string): TierConfig {
-  const tier = TIERS[slug];
+  const tier = (TIERS as Record<string, TierConfig>)[slug];
   if (!tier) throw new UnknownTierError(slug);
   return tier;
 }
 
 export function listTiers(): TierConfig[] {
-  return Object.values(TIERS);
+  return Object.values(TIERS) as TierConfig[];
 }

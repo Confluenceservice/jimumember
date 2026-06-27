@@ -1,6 +1,10 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import Step from "../../lib/forms/render/Step.astro";
+import { schema as pdLogSchema } from "../../lib/forms/schemas/pdLog";
+import pdLogContent from "../../lib/forms/schemas/pdLog.content.json";
 ---
+
 <BaseLayout title="Professional Development Log — Re:Member">
   <div class="max-w-3xl mx-auto p-4 sm:p-8">
 
@@ -19,138 +23,83 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         <p id="member-name" class="text-gray-600"></p>
       </header>
 
-      <section class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-        <h2 class="text-xl font-semibold mb-2">Record of Learning</h2>
-        <p class="text-sm text-gray-600 mb-4">
-          Professional Members must complete at least 10 hours of Professional Development each year.
-          Add all activities you have completed and save when done.
-        </p>
+      <form id="pd-form" data-schema-driven data-schema-id={pdLogSchema.id} novalidate>
+        {pdLogSchema.steps.map((step) => (
+          <Step step={step} content={pdLogContent} values={{}} />
+        ))}
 
-        <div id="pd-entries" class="space-y-4"></div>
+        <div id="error-banner" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+          <p id="error-message" class="text-amber-800"></p>
+        </div>
 
-        <button id="add-row-btn" type="button"
-                class="mt-4 px-4 py-2 border border-blue-600 text-blue-600 rounded-md bg-white text-sm font-medium hover:bg-blue-50">
-          + Add another activity
+        <div id="success-banner" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+          <p class="text-green-800">PD log saved successfully.</p>
+        </div>
+
+        <button id="save-btn" type="button"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2">
+          <span id="save-spinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          <span id="save-btn-label">Save PD Log</span>
         </button>
-      </section>
-
-      <div id="error-banner" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-        <p id="error-message" class="text-amber-800"></p>
-      </div>
-
-      <div id="success-banner" class="hidden bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-        <p class="text-green-800">PD log saved successfully.</p>
-      </div>
-
-      <button id="save-btn" type="button"
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2">
-        <span id="save-spinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-        <span id="save-btn-label">Save PD Log</span>
-      </button>
+      </form>
     </div>
   </div>
 
+  <script id="form-schema" type="application/json" set:html={JSON.stringify(pdLogSchema)}></script>
+
   <script>
-    const ROW_TEMPLATE = `
-      <div class="pd-row border border-gray-200 rounded-xl p-4">
-        <div class="flex justify-between items-center mb-3">
-          <h3 class="font-medium pd-row-title"></h3>
-          <button type="button" class="remove-row-btn hidden px-2 py-1 border border-amber-700 text-amber-800 rounded text-xs font-medium bg-white">Remove</button>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label class="block">
-            <span class="text-sm font-medium text-gray-700">Date completed</span>
-            <input type="date" name="dateCompleted" class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
-          </label>
-          <label class="block">
-            <span class="text-sm font-medium text-gray-700">Activity</span>
-            <input type="text" name="activity" placeholder="e.g. course, webinar, book, PD event"
-                   class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
-          </label>
-          <label class="block">
-            <span class="text-sm font-medium text-gray-700">Total Hours</span>
-            <input type="number" name="totalHours" min="0.5" step="0.5"
-                   class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" required />
-          </label>
-          <label class="block">
-            <span class="text-sm font-medium text-gray-700">Provider (if applicable)</span>
-            <input type="text" name="provider" class="w-full mt-1 px-4 py-3 border border-gray-200 rounded-xl text-lg" />
-          </label>
-        </div>
-      </div>`;
+    // @ts-nocheck — client-side DOM glue; typechecked separately if needed.
+    import { mount, hydrateFromResponse } from "../../lib/forms/render/form-client";
 
-    const token = new URLSearchParams(window.location.search).get("token");
-    const stateLoading = document.getElementById("state-loading")!;
-    const stateError = document.getElementById("state-error")!;
-    const stateErrorMsg = document.getElementById("state-error-msg")!;
-    const stateContent = document.getElementById("state-content")!;
-    const memberName = document.getElementById("member-name")!;
-    const pdEntries = document.getElementById("pd-entries")!;
-    const addRowBtn = document.getElementById("add-row-btn")!;
-    const saveBtn = document.getElementById("save-btn") as HTMLButtonElement;
-    const saveSpinner = document.getElementById("save-spinner")!;
-    const saveBtnLabel = document.getElementById("save-btn-label")!;
-    const errorBanner = document.getElementById("error-banner")!;
-    const errorMessage = document.getElementById("error-message")!;
-    const successBanner = document.getElementById("success-banner")!;
-
-    function showStateError(msg: string) {
-      stateLoading.classList.add("hidden");
-      stateError.classList.remove("hidden");
-      stateErrorMsg.textContent = msg;
+    const form = document.querySelector("form[data-schema-driven]");
+    const schemaEl = document.getElementById("form-schema");
+    if (form?.parentElement && schemaEl?.textContent) {
+      try {
+        const schema = JSON.parse(schemaEl.textContent);
+        mount(form.parentElement, { schema });
+      } catch (err) {
+        console.warn("[pd-log] schema parse failed", err);
+      }
     }
 
-    function showError(msg: string) {
-      successBanner.classList.add("hidden");
-      errorMessage.textContent = msg;
-      errorBanner.classList.remove("hidden");
-      errorBanner.scrollIntoView({ behavior: "smooth", block: "center" });
+    const token = new URLSearchParams(window.location.search).get("token");
+    const stateLoading = document.getElementById("state-loading");
+    const stateError = document.getElementById("state-error");
+    const stateErrorMsg = document.getElementById("state-error-msg");
+    const stateContent = document.getElementById("state-content");
+    const memberName = document.getElementById("member-name");
+    const saveBtn = document.getElementById("save-btn");
+    const saveSpinner = document.getElementById("save-spinner");
+    const saveBtnLabel = document.getElementById("save-btn-label");
+    const errorBanner = document.getElementById("error-banner");
+    const errorMessage = document.getElementById("error-message");
+    const successBanner = document.getElementById("success-banner");
+
+    function showStateError(msg) {
+      if (stateLoading) stateLoading.classList.add("hidden");
+      if (stateError) stateError.classList.remove("hidden");
+      if (stateErrorMsg) stateErrorMsg.textContent = msg;
+    }
+
+    function showError(msg) {
+      if (successBanner) successBanner.classList.add("hidden");
+      if (errorMessage) errorMessage.textContent = msg;
+      if (errorBanner) {
+        errorBanner.classList.remove("hidden");
+        errorBanner.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     }
 
     function showSuccess() {
-      errorBanner.classList.add("hidden");
-      successBanner.classList.remove("hidden");
-      successBanner.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-
-    function refreshRowUi() {
-      const rows = pdEntries.querySelectorAll(".pd-row");
-      rows.forEach((row, i) => {
-        const title = row.querySelector(".pd-row-title") as HTMLElement;
-        if (title) title.textContent = `Activity ${i + 1}`;
-        const btn = row.querySelector(".remove-row-btn") as HTMLButtonElement;
-        if (btn) btn.classList.toggle("hidden", rows.length === 1);
-      });
-    }
-
-    function addRow(data?: { dateCompleted: string; activity: string; totalHours: number; provider: string }) {
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = ROW_TEMPLATE;
-      const row = wrapper.firstElementChild as HTMLElement;
-      if (data) {
-        (row.querySelector('input[name="dateCompleted"]') as HTMLInputElement).value = data.dateCompleted;
-        (row.querySelector('input[name="activity"]') as HTMLInputElement).value = data.activity;
-        (row.querySelector('input[name="totalHours"]') as HTMLInputElement).value = String(data.totalHours);
-        (row.querySelector('input[name="provider"]') as HTMLInputElement).value = data.provider ?? "";
+      if (errorBanner) errorBanner.classList.add("hidden");
+      if (successBanner) {
+        successBanner.classList.remove("hidden");
+        successBanner.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-      row.querySelector(".remove-row-btn")!.addEventListener("click", () => {
-        row.remove();
-        refreshRowUi();
-      });
-      pdEntries.appendChild(row);
-      refreshRowUi();
     }
 
-    function collectEntries() {
-      return Array.from(pdEntries.querySelectorAll(".pd-row")).map((row) => ({
-        dateCompleted: (row.querySelector('input[name="dateCompleted"]') as HTMLInputElement).value,
-        activity: (row.querySelector('input[name="activity"]') as HTMLInputElement).value,
-        totalHours: Number((row.querySelector('input[name="totalHours"]') as HTMLInputElement).value),
-        provider: (row.querySelector('input[name="provider"]') as HTMLInputElement).value,
-      }));
-    }
-
-    function setSaving(saving: boolean) {
+    function setSaving(saving) {
+      if (!saveBtn || !saveSpinner || !saveBtnLabel) return;
       saveBtn.disabled = saving;
       saveBtn.classList.toggle("opacity-70", saving);
       saveBtn.classList.toggle("cursor-not-allowed", saving);
@@ -158,19 +107,34 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       saveBtnLabel.textContent = saving ? "Saving…" : "Save PD Log";
     }
 
-    addRowBtn.addEventListener("click", () => {
-      addRow();
-    });
+    function collectEntries() {
+      if (!form) return [];
+      const rows = form.querySelectorAll("[data-repeatable-row]");
+      return Array.from(rows).map((row) => {
+        const get = (name) => {
+          const el = row.querySelector(`[name$=".${name}"]`);
+          return el ? el.value : "";
+        };
+        const hours = get("totalHours");
+        return {
+          dateCompleted: get("dateCompleted"),
+          activity: get("activity").trim(),
+          totalHours: hours === "" ? 0 : Number(hours),
+          provider: get("provider"),
+        };
+      });
+    }
 
-    saveBtn.addEventListener("click", async () => {
-      errorBanner.classList.add("hidden");
-      successBanner.classList.add("hidden");
+    saveBtn?.addEventListener("click", async () => {
+      errorBanner?.classList.add("hidden");
+      successBanner?.classList.add("hidden");
 
       const entries = collectEntries();
       if (entries.length === 0) { showError("Add at least one activity."); return; }
       for (const e of entries) {
         if (!e.dateCompleted || !e.activity || !e.totalHours || e.totalHours <= 0) {
-          showError("Fill in all required fields (date, activity, hours) for each row."); return;
+          showError("Fill in all required fields (date, activity, hours) for each row.");
+          return;
         }
       }
 
@@ -194,7 +158,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       }
     });
 
-    // Load on mount
     (async () => {
       if (!token) {
         showStateError("No token provided. Use the link from your renewal confirmation email.");
@@ -218,14 +181,27 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           return;
         }
 
-        memberName.textContent = `${json.firstName} ${json.lastName} — ${json.renewalYear} renewal`;
-        stateLoading.classList.add("hidden");
-        stateContent.classList.remove("hidden");
+        if (memberName) memberName.textContent = `${json.firstName} ${json.lastName} — ${json.renewalYear} renewal`;
+        stateLoading?.classList.add("hidden");
+        stateContent?.classList.remove("hidden");
 
-        if (Array.isArray(json.pdEntries) && json.pdEntries.length > 0) {
-          for (const entry of json.pdEntries) addRow(entry);
-        } else {
-          addRow();
+        // Hydrate rows from saved entries. The schema-driven form renders 1
+        // empty row by default; add N-1 more via the add button, then
+        // hydrate every row by field name.
+        const entries = Array.isArray(json.pdEntries) ? json.pdEntries : [];
+        if (entries.length > 1 && form) {
+          const addBtn = form.querySelector("[data-repeatable-add]");
+          for (let i = 1; i < entries.length; i++) addBtn?.click();
+        }
+        if (entries.length > 0 && form) {
+          const flat = {};
+          entries.forEach((e, i) => {
+            flat[`entries.${i}.dateCompleted`] = e.dateCompleted ?? "";
+            flat[`entries.${i}.activity`] = e.activity ?? "";
+            flat[`entries.${i}.totalHours`] = String(e.totalHours ?? "");
+            flat[`entries.${i}.provider`] = e.provider ?? "";
+          });
+          hydrateFromResponse(form, flat);
         }
       } catch {
         showStateError("Failed to load your record. Please refresh the page.");

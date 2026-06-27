@@ -24,54 +24,34 @@
 
 import type { FormSchema } from "../types";
 import { emailNZ, phoneNZ, required } from "../validators";
+import content from "./advancedApply.content.json";
 
 /**
- * Stable competency column ids (plan finding m2). The order in this array
- * IS the production contract — reordering silently breaks every
- * historical column-O value in the Professional Applications sheet.
+ * Grid column ids are derived from the content JSON's `options` map keys —
+ * NOT hardcoded in TS as ELDAA-specific constants. Rationale (Phase L):
+ * the framework must be dynamically composable; the TS file owns the
+ * PATTERN (a grid of column radios), the JSON owns the per-org content
+ * (which competencies + which further-requirements questions).
+ *
+ * The keys remain the production contract (sheet column-O + column-N
+ * keys + order are stable). Reordering the JSON options silently breaks
+ * the historical sheet data — same constraint as before, just expressed
+ * in the editable surface.
  */
-export const COMPETENCY_IDS = [
-  "effectiveCommunication",
-  "advocacyEmpowerment",
-  "culturalSpiritualDiversity",
-  "showsInitiative",
-  "compassionatePresence",
-  "ongoingEducation",
-  "selfCareBoundaries",
-  "knowledgeOfEolOptions",
-  "businessAcumen",
-  "networkingReferrals",
-  "holisticSupport",
-  "illnessJourneyAdvocacy",
-  "legacyLifeReview",
-  "holisticAdvanceCarePlanning",
-  "vigilPlanningSupport",
-  "practicalAssistance",
-  "funeralMemorialPlanning",
-  "bodyCareAfterDeath",
-  "griefBereavementAwareness",
-  "interdisciplinaryCollaboration",
-  "mentorship",
-] as const;
+const FURTHER_REQUIREMENT_IDS = Object.keys(
+  content.steps.furtherRequirements.fields.furtherRequirements.options,
+);
 
 /**
- * Stable column ids for the 8 independent Further-Requirements questions.
- * Column N stores `{<id>: "YES"|"NO", ...}` — like COMPETENCY_IDS, the order
- * + ids are the data contract. Labels live in the content JSON `options` map.
+ * Re-exported for tests + any caller that needs the column-id list. Source
+ * of truth is the content JSON's `options` map keys (see comment above).
  */
-export const FURTHER_REQUIREMENT_IDS = [
-  "agreeDoulaServices",
-  "agreeInterview",
-  "commitProfessionalDev",
-  "willInsurance",
-  "listDirectory",
-  "provideCriminalCheck",
-  "attendMeetings",
-  "workRemotely",
-] as const;
+export const COMPETENCY_IDS = Object.keys(
+  content.steps.competencies.fields.coreCompetencies.options,
+);
 
 export const schema: FormSchema = {
-  id: "professionalApply",
+  id: "advancedApply",
   content: {} as FormSchema["content"], // loaded from .content.json
   steps: [
     // ── Step 1: About You ─────────────────────────────────────────────
@@ -234,7 +214,7 @@ export const schema: FormSchema = {
   ],
   storage: {
     kind: "sheet",
-    sheetName: "Professional Applications",
+    sheetName: "Advanced Applications",
     columnMap: {
       // 31 form-derived columns. Letters mirror `createApplicantRow`'s
       // positional contract in upload-sheet.ts. Managed cells (emailHash,

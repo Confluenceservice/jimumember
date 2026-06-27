@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
-import { formatAmountNzd, getPriceForPlan } from "../../lib/stripe-checkout";
+import { formatAmountNzd, getPriceForPlan, type MembershipPlan } from "../../lib/stripe-checkout";
 import { logger } from "../../lib/logger";
 
 type PriceInfo = {
@@ -8,10 +8,7 @@ type PriceInfo = {
   formatted: string; // e.g. "NZ$50.00"
 };
 
-type PricesResponse = {
-  associate: PriceInfo;
-  professional: PriceInfo;
-};
+type PricesResponse = Partial<Record<MembershipPlan, PriceInfo>>;
 
 export const GET: APIRoute = async ({ request }) => {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
@@ -21,11 +18,8 @@ export const GET: APIRoute = async ({ request }) => {
 
   const stripe = new Stripe(secretKey);
 
-  const plans = ["associate", "professional"] as const;
-  const prices: PricesResponse = {
-    associate: { amount: 0, formatted: "" },
-    professional: { amount: 0, formatted: "" },
-  };
+  const plans: MembershipPlan[] = ["basic", "advanced"];
+  const prices: PricesResponse = {};
 
   for (const plan of plans) {
     const priceId = getPriceForPlan(plan);

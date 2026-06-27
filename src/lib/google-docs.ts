@@ -141,7 +141,7 @@ function buildAssociateContent(data: AssociateApplicationData) {
   return requests;
 }
 
-export async function createAssociateApplicationReviewDoc(
+export async function createBasicApplicationReviewDoc(
   application: AssociateApplicationData,
 ): Promise<string> {
   const docs = getDocsClient();
@@ -411,7 +411,7 @@ function buildContent(applicant: ApplicantInfo, driveFiles: DriveFile[]) {
   return requests;
 }
 
-export async function createApplicationReviewDoc(
+export async function createAdvancedApplicationReviewDoc(
   applicant: ApplicantInfo
 ): Promise<string> {
   const docs = getDocsClient();
@@ -614,7 +614,7 @@ async function listApplicantFolders(
   return (result.data.files ?? []).filter((f) => f.id && f.name).map((f) => ({ id: f.id!, name: f.name! }));
 }
 
-export async function refreshPmIndexDoc(): Promise<void> {
+export async function refreshAdvancedIndexDoc(): Promise<void> {
   const rootFolderId = process.env.GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID?.trim();
   if (!rootFolderId) return;
 
@@ -652,7 +652,7 @@ export async function refreshPmIndexDoc(): Promise<void> {
   logger.info("pm_index_doc_refreshed", { docUrl, entryCount: entries.length });
 }
 
-export async function refreshAmIndexDoc(): Promise<void> {
+export async function refreshBasicIndexDoc(): Promise<void> {
   const rootFolderId = process.env.GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID?.trim();
   if (!rootFolderId) return;
 

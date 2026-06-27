@@ -35,8 +35,8 @@ describe("/api/health", () => {
     vi.clearAllMocks();
     mockProductsList.mockResolvedValue({ data: [] });
     mockResolveRenewalPrice.mockImplementation(async (key: string) => {
-      if (key === "pm_renewal_nzd") return { priceId: "price_pm_150", currency: "nzd", unitAmount: 15000 };
-      return { priceId: "price_am_75", currency: "nzd", unitAmount: 7500 };
+      if (key === "adv_renewal_nzd") return { priceId: "price_adv_150", currency: "nzd", unitAmount: 15000 };
+      return { priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 };
     });
   });
 
@@ -64,8 +64,8 @@ describe("/api/health", () => {
         stripe: "connected",
         email: "connected",
         renewal_prices: {
-          pm: { ok: true, priceId: "price_pm_150", currency: "nzd", unitAmount: 15000 },
-          am: { ok: true, priceId: "price_am_75", currency: "nzd", unitAmount: 7500 },
+          advanced: { ok: true, priceId: "price_adv_150", currency: "nzd", unitAmount: 15000 },
+          basic: { ok: true, priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 },
         },
       });
     });
@@ -183,38 +183,38 @@ describe("/api/health", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.renewal_prices).toBeDefined();
-      expect(body.renewal_prices.pm).toEqual({
+      expect(body.renewal_prices.advanced).toEqual({
         ok: true,
-        priceId: "price_pm_150",
+        priceId: "price_adv_150",
         currency: "nzd",
         unitAmount: 15000,
       });
-      expect(body.renewal_prices.am).toEqual({
+      expect(body.renewal_prices.basic).toEqual({
         ok: true,
-        priceId: "price_am_75",
+        priceId: "price_basic_75",
         currency: "nzd",
         unitAmount: 7500,
       });
     });
 
-    it("reports degraded when PM tier fails to resolve and ok=false for that tier", async () => {
+    it("reports degraded when Basic tier fails to resolve and ok=false for that tier", async () => {
       process.env.STRIPE_SECRET_KEY = "sk_test_ok";
       process.env.MAILGUN_API_KEY = "key-test";
       process.env.MAILGUN_DOMAIN = "mg.example.com";
       process.env.MAILGUN_FROM = "Re:Member <no-reply@mg.example.com>";
 
       mockResolveRenewalPrice.mockImplementation(async (key: string) => {
-        if (key === "pm_renewal_nzd") throw new Error("PRICE_INACTIVE: no active price");
-        return { priceId: "price_am_75", currency: "nzd", unitAmount: 7500 };
+        if (key === "adv_renewal_nzd") throw new Error("PRICE_INACTIVE: no active price");
+        return { priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 };
       });
 
       const GET = await getHandler();
       const res = await GET({} as never);
 
       const body = await res.json();
-      expect(body.renewal_prices.pm.ok).toBe(false);
-      expect(body.renewal_prices.pm.error).toMatch(/PRICE_INACTIVE/);
-      expect(body.renewal_prices.am.ok).toBe(true);
+      expect(body.renewal_prices.advanced.ok).toBe(false);
+      expect(body.renewal_prices.advanced.error).toMatch(/PRICE_INACTIVE/);
+      expect(body.renewal_prices.basic.ok).toBe(true);
       expect(body.status).toBe("degraded");
     });
 
@@ -230,8 +230,8 @@ describe("/api/health", () => {
       const res = await GET({} as never);
 
       const body = await res.json();
-      expect(body.renewal_prices.pm.ok).toBe(false);
-      expect(body.renewal_prices.am.ok).toBe(false);
+      expect(body.renewal_prices.advanced.ok).toBe(false);
+      expect(body.renewal_prices.basic.ok).toBe(false);
       expect(body.status).toBe("degraded");
     });
   });

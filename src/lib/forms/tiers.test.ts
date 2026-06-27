@@ -2,22 +2,22 @@ import { describe, expect, it } from "vitest";
 import { TIERS, getTier, listTiers, UnknownTierError } from "./tiers.js";
 
 describe("TIERS", () => {
-  it("contains both professional + associate", () => {
-    expect(Object.keys(TIERS).sort()).toEqual(["associate", "professional"]);
+  it("contains both advanced + basic", () => {
+    expect(Object.keys(TIERS).sort()).toEqual(["advanced", "basic"]);
   });
 
   it("preserves the legacy 'pm' / 'am' storageValue contract", () => {
-    expect(getTier("professional").storageValue).toBe("pm");
-    expect(getTier("associate").storageValue).toBe("am");
+    expect(getTier("advanced").storageValue).toBe("adv");
+    expect(getTier("basic").storageValue).toBe("basic");
   });
 
   it("wires up env var + schema ids for each tier", () => {
-    expect(getTier("professional").priceEnvVar).toBe("STRIPE_PRICE_PROFESSIONAL");
-    expect(getTier("professional").renewalPriceEnvVar).toBe("STRIPE_PRICE_PROFESSIONAL_RENEWAL");
-    expect(getTier("professional").applicationSchemaId).toBe("professionalApply");
-    expect(getTier("professional").renewalSchemaId).toBe("renewPro");
-    expect(getTier("associate").priceEnvVar).toBe("STRIPE_PRICE_ASSOCIATE");
-    expect(getTier("associate").renewalPriceEnvVar).toBe("STRIPE_PRICE_ASSOCIATE_RENEWAL");
+    expect(getTier("advanced").priceEnvVar).toBe("STRIPE_PRICE_ADVANCED");
+    expect(getTier("advanced").renewalPriceEnvVar).toBe("STRIPE_PRICE_ADVANCED_RENEWAL");
+    expect(getTier("advanced").applicationSchemaId).toBe("advancedApply");
+    expect(getTier("advanced").renewalSchemaId).toBe("renewAdvanced");
+    expect(getTier("basic").priceEnvVar).toBe("STRIPE_PRICE_BASIC");
+    expect(getTier("basic").renewalPriceEnvVar).toBe("STRIPE_PRICE_BASIC_RENEWAL");
   });
 
   it("is frozen at the top level", () => {
@@ -27,8 +27,8 @@ describe("TIERS", () => {
 
 describe("getTier", () => {
   it("returns the right config for known slugs", () => {
-    expect(getTier("professional").label).toBe("Professional Membership");
-    expect(getTier("associate").shortLabel).toBe("Associate");
+    expect(getTier("advanced").label).toBe("Advanced Membership");
+    expect(getTier("basic").shortLabel).toBe("Basic");
   });
 
   it("throws UnknownTierError for unknown slugs", () => {
@@ -40,6 +40,6 @@ describe("getTier", () => {
 describe("listTiers", () => {
   it("returns all registered tiers", () => {
     const slugs = listTiers().map((t) => t.slug).sort();
-    expect(slugs).toEqual(["associate", "professional"]);
+    expect(slugs).toEqual(["advanced", "basic"]);
   });
 });

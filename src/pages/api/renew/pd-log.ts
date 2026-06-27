@@ -2,6 +2,26 @@ import type { APIRoute } from "astro";
 import { getRenewalById, updateRenewalPdEntries } from "../../../lib/renewal-sheet";
 import type { PdEntry } from "../../../lib/renewal-sheet";
 import { logger } from "../../../lib/logger";
+import { validate } from "../../../lib/forms/runtime";
+import { schema as pdLogSchema } from "../../../lib/forms/schemas/pdLog";
+import type { FormSchema } from "../../../lib/forms/types";
+
+/**
+ * Build a per-entry validator schema from pdLogSchema's `entries` itemFields.
+ * `walkFields` treats `repeatable` as a leaf and doesn't descend into
+ * itemFields, so we synthesise a single-step schema from itemFields to
+ * validate each entry individually.
+ */
+const entrySchema: FormSchema = {
+  id: pdLogSchema.id + "_entry",
+  content: pdLogSchema.content,
+  steps: pdLogSchema.steps.map((step) => ({
+    ...step,
+    id: step.id + "_entry",
+    fields: step.fields.flatMap((f) => (f.type === "repeatable" ? f.itemFields : [f])),
+  })),
+  storage: pdLogSchema.storage,
+};
 
 export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
@@ -44,7 +64,7 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { token, entries } = body as { token?: string; entries?: unknown };
+  const { token, entries } = body as { token?: unknown; entries?: unknown };
   if (!token || typeof token !== "string") {
     return Response.json({ error: "Missing token" }, { status: 400 });
   }
@@ -54,24 +74,20 @@ export const POST: APIRoute = async ({ request }) => {
 
   const cleaned: PdEntry[] = [];
   for (const raw of entries) {
-    const o = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-    const totalHours = o.totalHours;
-    if (
-      typeof o.dateCompleted !== "string" ||
-      typeof o.activity !== "string" ||
-      typeof totalHours !== "number" ||
-      totalHours <= 0
-    ) {
+    const r = validate(entrySchema, raw);
+    if (!r.ok) {
+      const first = Object.entries(r.errors)[0];
       return Response.json(
-        { error: "Each entry needs dateCompleted (string), activity (string), totalHours (number > 0)" },
+        { error: `Invalid entry: ${first?.[1] ?? "validation failed"}`, field: first?.[0] },
         { status: 400 },
       );
     }
+    const v = r.values as Record<string, unknown>;
     cleaned.push({
-      dateCompleted: o.dateCompleted as string,
-      activity: o.activity as string,
-      totalHours,
-      provider: typeof o.provider === "string" ? o.provider : "",
+      dateCompleted: String(v.dateCompleted ?? ""),
+      activity: String(v.activity ?? ""),
+      totalHours: Number(v.totalHours ?? 0),
+      provider: String(v.provider ?? ""),
     });
   }
 

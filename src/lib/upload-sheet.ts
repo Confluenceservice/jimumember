@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import crypto from "node:crypto";
 import { logger } from "./logger";
 import { getServiceAccountJwtAuth } from "./google-auth";
+import { TIERS, getTier } from "./forms/tiers";
 
 export const REQUIRED_DOC_TYPES = [
   "training",
@@ -36,7 +37,23 @@ function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-const SHEET_NAME = "Professional Applications";
+/**
+ * Phase M: sheet name resolved from TIERS by applicationSchemaId — keeps
+ * the advancedApply → "Advanced Applications" mapping config-driven. The
+ * legacy upload-sheet.ts was tied to a single tier (advanced); now any
+ * application schema gets its own sheet via `getTier(schemaSlug).sheetName`.
+ */
+function sheetNameForApplicationSchema(schemaSlug: string): string {
+  // Try matching by applicationSchemaId; fall back to the first tier that
+  // matches the slug pattern, then to the advanced tier (preserves the
+  // legacy hardcoded behaviour for the advanced-apply flow).
+  for (const t of Object.values(TIERS)) {
+    if (t.applicationSchemaId === schemaSlug) return t.sheetName;
+  }
+  return getTier("advanced").sheetName;
+}
+
+const DEFAULT_SHEET_NAME = getTier("advanced").sheetName;
 
 // 47 columns: A through AU
 const SHEET_HEADERS = [
@@ -98,7 +115,7 @@ async function ensureSheetExists(sheets: ReturnType<typeof google.sheets>): Prom
   // Check if sheet already exists
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
   const existingSheet = spreadsheet.data.sheets?.find(
-    (s) => s.properties?.title === SHEET_NAME
+    (s) => s.properties?.title === DEFAULT_SHEET_NAME
   );
 
   if (existingSheet) {
@@ -113,7 +130,7 @@ async function ensureSheetExists(sheets: ReturnType<typeof google.sheets>): Prom
         {
           addSheet: {
             properties: {
-              title: SHEET_NAME,
+              title: DEFAULT_SHEET_NAME,
             },
           },
         },
@@ -124,7 +141,7 @@ async function ensureSheetExists(sheets: ReturnType<typeof google.sheets>): Prom
   // Add headers
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${SHEET_NAME}'!A1:AU1`,
+    range: `'${DEFAULT_SHEET_NAME}'!A1:AU1`,
     valueInputOption: "RAW",
     requestBody: {
       values: [SHEET_HEADERS],
@@ -250,7 +267,7 @@ export async function createApplicantRow(
     requestBody: {
       values: [row],
     },
-    range: `'${SHEET_NAME}'!A:AU`,
+    range: `'${DEFAULT_SHEET_NAME}'!A:AU`,
   },);
 }
 
@@ -301,7 +318,7 @@ export async function updateApplicantFormData(
   // Find row by applicant_id
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${DEFAULT_SHEET_NAME}!A:A`,
   });
 
   const rows = result.data.values || [];
@@ -357,7 +374,7 @@ export async function updateApplicantFormData(
   const updates: { range: string; values: string[][] }[] = [];
   for (const [col, val] of Object.entries(colMap)) {
     if (val !== "") {
-      updates.push({ range: `${SHEET_NAME}!${col}${rowIndex}`, values: [[val]] });
+      updates.push({ range: `${DEFAULT_SHEET_NAME}!${col}${rowIndex}`, values: [[val]] });
     }
   }
   if (updates.length === 0) return;
@@ -386,7 +403,7 @@ export async function updateDocCount(
   // Find row by applicant_id
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${DEFAULT_SHEET_NAME}!A:A`,
   });
 
   const rows = result.data.values || [];
@@ -418,7 +435,7 @@ export async function updateDocCount(
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!${col}${rowIndex}`,
+    range: `${DEFAULT_SHEET_NAME}!${col}${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [[count]],
@@ -439,7 +456,7 @@ export async function markComplete(
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${DEFAULT_SHEET_NAME}!A:A`,
   });
 
   const rows = result.data.values || [];
@@ -459,7 +476,7 @@ export async function markComplete(
   // Update columns AP (complete) and AQ (stripe_session)
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!AP${rowIndex}:AQ${rowIndex}`,
+    range: `${DEFAULT_SHEET_NAME}!AP${rowIndex}:AQ${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [["TRUE", stripeSessionId]],
@@ -477,7 +494,7 @@ export async function markPaid(applicantId: string): Promise<void> {
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${DEFAULT_SHEET_NAME}!A:A`,
   });
 
   const rows = result.data.values || [];
@@ -502,11 +519,11 @@ export async function markPaid(applicantId: string): Promise<void> {
       valueInputOption: "RAW",
       data: [
         {
-          range: `${SHEET_NAME}!AR${rowIndex}`,
+          range: `${DEFAULT_SHEET_NAME}!AR${rowIndex}`,
           values: [["TRUE"]],
         },
         {
-          range: `${SHEET_NAME}!AT${rowIndex}`,
+          range: `${DEFAULT_SHEET_NAME}!AT${rowIndex}`,
           values: [[paidAt]],
         },
       ],
@@ -524,7 +541,7 @@ export async function markEmailVerified(applicantId: string): Promise<void> {
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:A`,
+    range: `${DEFAULT_SHEET_NAME}!A:A`,
   });
 
   const rows = result.data.values || [];
@@ -545,7 +562,7 @@ export async function markEmailVerified(applicantId: string): Promise<void> {
   // load) should not fail the user-visible response if this write fails.
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!AU${rowIndex}`,
+    range: `${DEFAULT_SHEET_NAME}!AU${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [["TRUE"]],
@@ -616,7 +633,7 @@ export async function getApplicantByToken(
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:AU`,
+    range: `${DEFAULT_SHEET_NAME}!A:AU`,
   });
 
   const rows = result.data.values || [];
@@ -702,7 +719,7 @@ export async function getApplicantByEmail(
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:AU`,
+    range: `${DEFAULT_SHEET_NAME}!A:AU`,
   });
 
   const rows = result.data.values || [];
@@ -778,7 +795,7 @@ export async function getUploadStatus(
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:AU`,
+    range: `${DEFAULT_SHEET_NAME}!A:AU`,
   });
 
   const rows = result.data.values || [];
@@ -896,7 +913,7 @@ export async function getApplicantById(applicantId: string): Promise<ApplicantIn
 
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A:AU`,
+    range: `${DEFAULT_SHEET_NAME}!A:AU`,
   });
 
   const rows = result.data.values || [];

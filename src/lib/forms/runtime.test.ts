@@ -151,6 +151,85 @@ describe("validate", () => {
   });
 });
 
+describe("validate (implicit required safety net)", () => {
+  // These schemas pair `required: true` with format-only validators (or none),
+  // which previously let empty input pass. The implicit check in validate()
+  // must catch them.
+
+  function schemaWith(field: Partial<FormSchema["steps"][number]["fields"][number]> & { name: string; type: "text" | "email" }): FormSchema {
+    return {
+      id: "implicitRequiredTest",
+      content: { title: "t", steps: { s: { title: "S", fields: {} } } },
+      steps: [{ id: "s", fields: [field as FormSchema["steps"][number]["fields"][number]] }],
+      storage: { kind: "sheet", sheetName: "X", columnMap: {}, rowFactory: "appendRenewal" },
+    };
+  }
+
+  it("rejects empty when required:true with format-only validator (emailNZ)", () => {
+    const s = schemaWith({
+      name: "email",
+      type: "email",
+      required: true,
+      contentKey: "s.email",
+      validators: [{ kind: "email", message: "Valid email required" }],
+    });
+    const r = validate(s, {});
+    expect(r.ok).toBe(false);
+    expect(r.errors.email).toBe("Required");
+  });
+
+  it("rejects empty when required:true with no validators at all", () => {
+    const s = schemaWith({
+      name: "firstName",
+      type: "text",
+      required: true,
+      contentKey: "s.firstName",
+    });
+    const r = validate(s, {});
+    expect(r.ok).toBe(false);
+    expect(r.errors.firstName).toBe("Required");
+  });
+
+  it("accepts empty when required:false with format-only validator (regression guard)", () => {
+    const s = schemaWith({
+      name: "email",
+      type: "email",
+      required: false,
+      contentKey: "s.email",
+      validators: [{ kind: "email", message: "Valid email required" }],
+    });
+    const r = validate(s, {});
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual({});
+  });
+
+  it("honours requiredMessage override", () => {
+    const s = schemaWith({
+      name: "firstName",
+      type: "text",
+      required: true,
+      requiredMessage: "Please enter your first name",
+      contentKey: "s.firstName",
+      validators: [{ kind: "minLength", value: 2, message: "Too short" }],
+    });
+    const r = validate(s, {});
+    expect(r.errors.firstName).toBe("Please enter your first name");
+  });
+
+  it("explicit required validator wins over implicit message", () => {
+    const s = schemaWith({
+      name: "firstName",
+      type: "text",
+      required: true,
+      requiredMessage: "implicit",
+      contentKey: "s.firstName",
+      validators: [{ kind: "required", message: "explicit" }],
+    });
+    const r = validate(s, {});
+    expect(r.errors.firstName).toBe("explicit");
+  });
+});
+
 describe("toRow", () => {
   it("maps field names to column letters and applies serialize rules", () => {
     const row = toRow(schema, {
