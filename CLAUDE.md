@@ -45,6 +45,18 @@ curl -X POST $COGNEE_BASE_URL/api/v1/remember \
 rm -f "$TMP"
 ```
 
+### Upload a skill (SKILL.md with YAML frontmatter)
+Skills use a Markdown body with `name`/`description`/`allowed-tools` frontmatter (same as Claude Code / OpenWolf). They live inside a dataset, scoped to it on recall.
+```bash
+# JSON body, NOT multipart. Field is "skills_text", not "data".
+# Trailing slash on the URL is required (else HTTP 307 redirect).
+curl -X POST $COGNEE_BASE_URL/api/v1/skills/ \
+  -H "X-Api-Key: $COGNEE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"skill_name":"<id>","dataset_name":"remember_club_crm_development","content_type":"skills","skills_text":"---\nname: <id>\ndescription: <when to use>\nallowed-tools: [Bash, Read]\n---\n\n<markdown body>"}'
+```
+**Quirks**: trailing-slash redirect; JSON-only; `skills_text` is the field name; `allowed-tools` is parsed server-side.
+
 ### Retrieve knowledge (recall)
 Before answering questions, check if relevant knowledge exists:
 ```
@@ -55,6 +67,15 @@ Body: {"query": "<user question>", "session_id": "<session-id>"}
 ```
 
 For targeted retrieval, add "search_type" to the recall body — one of: HYBRID_COMPLETION (default), GRAPH_COMPLETION, CHUNKS, GRAPH_SUMMARY_COMPLETION.
+
+**CRITICAL — dataset filter is broken on this proxy.** Sending `"dataset_name":"remember_club_crm_development"` does NOT scope the call. Recall fans out across ALL datasets and returns one result per dataset. Each result is a `GRAPH_COMPLETION` synthesis; without real ingested content the LLM hallucinates plausible-sounding answers — and because completion runs on the query string itself, **non-target datasets often answer the same question**. Observed: 2026-06-27, confirmed on repeated calls. Filed upstream as topoteretes/cognee#3520.
+
+**Required workaround — filter results client-side after every recall:**
+1. Call recall normally (still pass `dataset_name` for forward-compat).
+2. Parse the JSON array of results.
+3. Keep only entries where `dataset_name == "remember_club_crm_development"`.
+4. If the filtered list is empty, treat the recall as "no information" — do NOT trust any non-target result, even if it sounds relevant.
+5. If multiple target-dataset results come back, the first is usually the most relevant; cross-check with the actual codebase / CLAUDE.md / OpenWolf files before acting on it.
 
 ### List datasets
 ```
@@ -70,6 +91,22 @@ Headers: X-Api-Key: $COGNEE_API_KEY
 4. You do NOT need to store after every turn — the session is captured and converted to long-term memory automatically. Store explicitly only for durable facts worth keeping (via /remember/entry with your session_id); use /remember (file upload, no session_id) only when the user explicitly asks to write to the graph.
 5. Keep memory operations quiet — don't narrate routine recalls or saves.
 6. Use the default_dataset unless the user specifies otherwise
+
+## Segmentation Model (verified 2026-06-27)
+
+Cognee exposes these scopes, from outer to inner:
+
+| Scope | Identifier | Purpose |
+|---|---|---|
+| **User / Agent** | `$COGNEE_API_KEY` (or per-agent key from `/api/v1/agents/*`) | Auth principal. Multi-user mode (env `ENABLE_BACKEND_ACCESS_CONTROL`, default ON ≥ v0.5.0) auto-isolates data per user. |
+| **Dataset** | `datasetName` / `datasetId` | **Only top-level container.** Holds data items, skills, proposals, permissions. This is what "project memory" really is. |
+| **Node set** | `node_set` form field on `/remember` | Optional organisational label inside a dataset. |
+| **Session** | `session_id` on `/remember/entry` + `/recall` | **Telemetry axis only.** Groups qa/trace/feedback entries for the dashboard. Does NOT scope recall contents. |
+| **Data item / Skill / Proposal** | per-resource IDs | Children of a dataset. |
+
+**No `project_id`. No `workspace_id`.** If MCP docs mention them, that's a wrapper abstraction — not on the REST API.
+
+**Multi-user caveat for this tenant:** recall returns data from datasets the auth principal has no business seeing. Multi-user isolation is supposed to prevent this server-side. Observed fan-out means this tenant either doesn't enforce `ENABLE_BACKEND_ACCESS_CONTROL`, uses a storage backend that doesn't support it, or has a proxy that bypasses the check. **The client-side filter above is the only reliable isolation in this environment** — do not weaken it.
 
 
 # OpenWolf
