@@ -87,22 +87,11 @@ async function loadCredentials() {
   return JSON.parse(raw);
 }
 
-const auth = new google.auth.JWT({
-  email: credentials.client_email,
-  key: credentials.private_key,
-  scopes: [
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/spreadsheets",
-  ],
-  subject: IMPERSONATE,
-});
-
-const drive = google.drive({ version: "v3", auth });
-const sheets = google.sheets({ version: "v4", auth });
-
 const APPLICATIONS_FOLDER = `${CLIENT_NAME}/applications`;
 const REVIEW_DOCS_FOLDER = `${CLIENT_NAME}/review-docs`;
 const SPREADSHEET_NAME = `${CLIENT_NAME}-member-test`;
+
+let drive, sheets, credentials;
 
 async function findFolder(name, parent) {
   const safeName = name.replace(/'/g, "\\'");
@@ -225,7 +214,19 @@ async function shareWithServiceAccount(fileId, saEmail) {
 
 (async () => {
   try {
-    const credentials = await loadCredentials();
+    credentials = await loadCredentials();
+    const auth = new google.auth.JWT({
+      email: credentials.client_email,
+      key: credentials.private_key,
+      scopes: [
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/spreadsheets",
+      ],
+      subject: IMPERSONATE,
+    });
+    drive = google.drive({ version: "v3", auth });
+    sheets = google.sheets({ version: "v4", auth });
+
     const applicationsFolderId = await ensureFolder(APPLICATIONS_FOLDER, PARENT_FOLDER_ID);
     const reviewDocsFolderId = await ensureFolder(REVIEW_DOCS_FOLDER, PARENT_FOLDER_ID);
     const spreadsheetId = await ensureSpreadsheet(SPREADSHEET_NAME);
