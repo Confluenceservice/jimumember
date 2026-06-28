@@ -21,12 +21,14 @@ In Stripe Dashboard → Products → **Add product**:
 | `<Client> Basic Membership` | Associate-equivalent tier | Annual |
 | `<Client> Advanced Membership` | Professional-equivalent tier | Annual |
 
-For each product, add **two prices**:
+For each product, add **two prices**. The recurring/one-time type is load-bearing — Re:Member's checkout flows depend on it:
 
-| Price | Amount | Recurring? | Use |
+| Price | Amount | Type | Use |
 |---|---|---|---|
-| Application price | e.g. NZD 75.00 | One-time | Charged at first apply; goes into `STRIPE_PRICE_1` or `STRIPE_PRICE_2` |
-| Renewal price | e.g. NZD 75.00 / 150.00 | Annual | Charged at every renewal cycle; goes into `STRIPE_PRICE_<N>_RENEWAL` |
+| Application price | e.g. NZD 75.00 | **Recurring (annual)** | Goes into `STRIPE_PRICE_1` / `STRIPE_PRICE_2`. The application checkout charges a one-time prorated first term, then the webhook creates a deferred subscription using this recurring price. |
+| Renewal price | e.g. NZD 75.00 / 150.00 | **One-time** | Goes into `STRIPE_PRICE_<N>_RENEWAL`. The renewal checkout runs `mode: payment`, which rejects recurring prices. |
+
+> **Common mistake:** making the application price one-time and the renewal price recurring (the intuitive-but-wrong mapping). The application flow needs a recurring price to seed the deferred subscription; the renewal flow needs a one-time price because it's a `mode: payment` checkout. `bin/setup-stripe-test.sh` gets this right automatically — prefer it over manual creation.
 
 Copy each price ID (`price_…`) into a scratch file. They will land in `.env.staging.local` and `.env.production.local` later — and ultimately in Fly secrets (Phase 9).
 

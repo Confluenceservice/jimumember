@@ -450,19 +450,51 @@ Verify: `curl -sS -u "api:$MAILGUN_API_KEY" https://api.mailgun.net/v3/domains/m
 
 Cross-reference: `docs/runbooks/stripe-first-products.md` (full deep-dive).
 
-**Quick path:**
+### Price types matter
 
-1. Use the **client's** Stripe account (the deploying party never shares their own — see Phase 0 tenancy).
-2. Create two products: `<Client> Basic Membership` (associate-equivalent) + `<Client> Advanced Membership` (professional-equivalent). Both annual recurring, currency `nzd`.
-3. For each product, create two prices:
-   - Application price (one-time at apply time) → `STRIPE_PRICE_<N>`
-   - Renewal price (recurring annual) → `STRIPE_PRICE_<N>_RENEWAL`
-4. Capture 4 price IDs.
-5. Create two webhook endpoints (staging + production) — see `stripe-first-products.md §4` for the URL pattern + 6 event types. Capture 2 signing secrets.
+Re:Member depends on a specific price type for each env var — get this wrong and checkouts fail at runtime:
 
-**Numbering:** use the enumerated convention. Phase 0's table maps tier slug → N. For itdocsnow.com with `basic` and `advanced`: `STRIPE_PRICE_1`, `STRIPE_PRICE_2`, plus `_RENEWAL` variants.
+| Env var | Type | Why |
+|---|---|---|
+| `STRIPE_PRICE_1` / `STRIPE_PRICE_2` (application) | **Recurring annual** | The application checkout charges a one-time prorated first term, then the webhook creates a deferred subscription using this recurring price. |
+| `STRIPE_PRICE_1_RENEWAL` / `STRIPE_PRICE_2_RENEWAL` (renewal) | **One-time** | The renewal checkout runs `mode: payment`, which rejects recurring prices. |
 
-Verify: `curl -sS https://itdocsnow-staging.fly.dev/api/health | jq '.renewal_prices'` shows both `advanced` and `basic` with `"ok": true` and the priceId you captured.
+### 7a. Automated (recommended)
+
+Run after `stripe login` (one-time, opens browser, defaults to test mode).
+
+```sh
+stripe login
+
+export ORG_DISPLAY_NAME="ItDocsNow"
+export STAGING_WEBHOOK_URL="https://itdocsnow-staging.fly.dev/api/stripe-webhook"
+export BASIC_AMOUNT=7500       # NZ$75.00 in cents
+export ADVANCED_AMOUNT=15000   # NZ$150.00 in cents
+export CURRENCY=nzd
+
+./bin/setup-stripe-test.sh
+```
+
+Idempotent — prices are keyed by Stripe `lookup_key`, so re-running reuses existing prices. The script creates both products, all 4 prices (correct recurring/one-time types), and the staging webhook endpoint, then prints:
+
+```
+STRIPE_PRICE_1=price_...
+STRIPE_PRICE_2=price_...
+STRIPE_PRICE_1_RENEWAL=price_...
+STRIPE_PRICE_2_RENEWAL=price_...
+WEBHOOK_ENDPOINT_ID=we_...
+STRIPE_WEBHOOK_SECRET=whsec_...      # only shown at creation — capture it now
+```
+
+Capture all of these into BW (`stripe-prices`, `stripe-test-webhook-secret`). The webhook signing secret is only returned once at creation — if you lose it, delete the endpoint and re-run, or roll it in the dashboard.
+
+For production: re-run with live keys (`stripe login` to the live account) + `STAGING_WEBHOOK_URL` pointed at the production domain. The script is mode-agnostic — it uses whatever account the CLI is logged into.
+
+### 7b. Manual (fallback)
+
+See `docs/runbooks/stripe-first-products.md §2-4`. Remember the price types from the table above — application=recurring, renewal=one-time.
+
+Verify (after Phase 12 deploy): `curl -sS https://itdocsnow-staging.fly.dev/api/health | jq '.renewal_prices'` shows both `advanced` and `basic` with `"ok": true` and the priceId you captured.
 
 ---
 
