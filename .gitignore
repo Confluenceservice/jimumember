@@ -26,3 +26,4 @@ coverage/
 .wolf/cron-state.json
 .wolf/token-ledger.json
 .wolf/hooks/_session.json
+sa-key.json
