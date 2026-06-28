@@ -25,10 +25,11 @@
 - **(2026-06-26)** Don't put backticks inside template literals — esbuild transform fails with `Expected ")" but found "schema"`. Use plain words or escape: ``${id} — no schema export in ${tsPath}`` not ``${id} — no `schema` export``.
 - **(2026-06-26)** `ynRadio` validator semantics: blank is invalid (not optional). The presence of "yes" or "no" is required by definition; if blank should be allowed, add `required: false` on the field and let the `required` validator decide. Earlier draft had blank-skipped logic which was wrong.
 - **(2026-06-27)** TierConfig.storageValue vs RenewalInput.tier type mismatch: `storageValue: string` (flexible) vs `tier: "pm" | "am"` (literal). Cast at the boundary: `tierConfig.storageValue as "pm" | "am"` until Phase D tightens TierConfig. Without the cast: `ts(2322)` at the call site.
+- **(2026-06-28)** FieldRenderer + Step emit class names (`.field`, `.field-label`, `.field-help`, `.form-step`, `.step-title`, `.radio-group`, `.radio-option`, `.checkbox-label`, `.field-group`, `.repeatable`, `.field-grid`) that must be styled in `src/styles/global.css`. Without them, schema-driven pages render as the Image #10 "messy" view (unstyled default browser form). The CSS lives in `@layer components` and mirrors the inline Tailwind classes used by `src/pages/advanced/apply.astro` registration section. Any new FieldRenderer variant (e.g. `date` added later) needs both an `.field input[type="X"]` selector AND a `grid-column: 1 / -1` rule if it should span both columns.
 
 ## User Preferences
 
-(none recorded yet)
+- **(2026-06-28)** User wants the Associate form to look identical to the inline-styled ELDAA/form sections (clean 2-column paired fields, full-width textareas/radios, rounded-xl large inputs, "Continue to payment" CTA). When schema-driven forms diverge visually from hand-styled forms, prefer fixing the shared CSS so ALL schema-driven forms (associate, pro/advanced, renewals, PD log) pick up the fix — not bolting per-page styles on each.
 
 ## Key Learnings
 

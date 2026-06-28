@@ -28,3 +28,150 @@
     min-height: 100vh;
   }
 }
+
+@layer components {
+  /* Schema-driven form renderer (FieldRenderer.astro / Step.astro).
+   * Styling mirrors the inline classes used by src/pages/advanced/apply.astro
+   * for the manual registration section so every form rendered through
+   * FieldRenderer looks identical to the hand-rolled ELDAA-style layout. */
+
+  .form-step {
+    @apply bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mt-4;
+  }
+
+  .step-title {
+    @apply text-xl sm:text-2xl font-bold mb-1 text-gray-900;
+  }
+
+  /* Stack fields. textareas + radios + checkboxes + grids + groups +
+   * repeatable rows span both grid columns. */
+  .form-step {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .form-step {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /* Wide content spans both columns inside a 2-col grid. */
+    .form-step > .step-title,
+    .form-step > .field-full,
+    .form-step > textarea,
+    .form-step > .field:has(textarea),
+    .form-step > .field:has(.radio-group),
+    .form-step > .field:has(.checkbox-label),
+    .form-step > .field:has(.field-grid),
+    .form-step > .field:has(.repeatable),
+    .form-step > .field:has(.field-group) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .field {
+    @apply flex flex-col gap-2;
+  }
+
+  .field-label {
+    @apply block font-semibold text-gray-900;
+  }
+
+  .required-mark {
+    @apply text-amber-700 ml-0.5;
+  }
+
+  /* Inputs / textareas / selects inside a .field wrapper get the
+   * rounded-xl large-padding style used by professional/apply.astro. */
+  .field input[type="text"],
+  .field input[type="email"],
+  .field input[type="tel"],
+  .field input[type="date"],
+  .field input[type="number"],
+  .field input:not([type]),
+  .field textarea,
+  .field select {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-xl text-lg bg-white text-gray-900;
+  }
+
+  .field input:focus,
+  .field textarea:focus,
+  .field select:focus {
+    @apply outline-none ring-2 ring-blue-500 border-transparent;
+  }
+
+  .field input:disabled,
+  .field textarea:disabled,
+  .field select:disabled {
+    @apply bg-gray-50 text-gray-500 cursor-not-allowed;
+  }
+
+  .field textarea {
+    @apply min-h-28 resize-y;
+  }
+
+  .field-help {
+    @apply text-sm text-gray-600 mt-1;
+  }
+
+  .field-error {
+    @apply text-sm text-amber-800 mt-1 font-medium;
+  }
+
+  .radio-group {
+    @apply flex flex-col gap-2 mt-1;
+  }
+
+  .radio-option {
+    @apply flex items-center gap-2 cursor-pointer text-gray-900;
+  }
+
+  .radio-option input[type="radio"] {
+    @apply w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500;
+  }
+
+  .checkbox-label {
+    @apply flex items-center gap-2 cursor-pointer text-gray-900;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    @apply w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500;
+  }
+
+  .field-group {
+    @apply border border-gray-200 rounded-xl p-4 flex flex-col gap-4 bg-gray-50;
+  }
+
+  .repeatable {
+    @apply flex flex-col gap-3;
+  }
+
+  .repeatable-row {
+    @apply flex flex-col gap-2 border border-gray-200 rounded-xl p-3 bg-gray-50 relative;
+  }
+
+  [data-repeatable-remove] {
+    @apply self-end text-sm text-amber-800 hover:text-amber-900 font-medium;
+  }
+
+  [data-repeatable-add] {
+    @apply self-start text-sm text-blue-700 hover:text-blue-800 font-medium;
+  }
+
+  .field-grid {
+    @apply w-full border-collapse;
+  }
+
+  .field-grid th {
+    @apply text-left text-sm font-semibold text-gray-700 pb-2;
+  }
+
+  .field-grid td {
+    @apply py-1 pr-3;
+  }
+
+  .field-grid input[type="text"],
+  .field-grid input[type="checkbox"] {
+    @apply px-3 py-2 border border-gray-200 rounded-lg;
+  }
+}
