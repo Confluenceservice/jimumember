@@ -278,7 +278,7 @@ const token = Astro.url.searchParams.get("token");
   </script>
 </BaseLayout>
 
-<script is:inline define:vars={{ token }}>
+<script is:inline define:vars={{ token, advancedApplySchema }}>
   const STEPS = [
     { id: "section-register", label: "Start" },
     { id: "section-1", label: "About You" },
