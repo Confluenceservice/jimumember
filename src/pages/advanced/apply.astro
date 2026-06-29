@@ -380,7 +380,7 @@ const token = Astro.url.searchParams.get("token");
     warning.classList.remove("hidden");
   }
 
-  function showVerifyEmailPanel(email, emailSent) {
+  function showVerifyEmailPanel(email, emailSent, emailError) {
     const panel = document.getElementById("verify-email-panel");
     const addr = document.getElementById("verify-email-address");
     const resend = document.getElementById("verify-email-resend-status");
@@ -391,7 +391,8 @@ const token = Astro.url.searchParams.get("token");
 
     if (resend) {
       if (emailSent === false) {
-        resend.textContent = "We couldn't send the email just now. Please try again in a minute, or contact membership@example.com.";
+        const detail = emailError ? ` (Server: ${emailError})` : "";
+        resend.textContent = `We couldn't send the email just now. Please try again in a minute, or contact membership@example.com.${detail}`;
         resend.classList.remove("hidden");
       } else {
         resend.classList.add("hidden");
@@ -1206,7 +1207,7 @@ const token = Astro.url.searchParams.get("token");
           // the emailed link (the GET path) to continue.
           document.getElementById("section-register").classList.add("hidden");
           setResumeLinkWarning("");
-          showVerifyEmailPanel(email, data.emailSent);
+          showVerifyEmailPanel(email, data.emailSent, data.emailError);
           btn.disabled = false;
           btn.textContent = "Start Application";
           return;

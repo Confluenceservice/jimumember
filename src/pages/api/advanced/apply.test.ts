@@ -267,6 +267,7 @@ describe("POST /api/professional/apply — email verification gate", () => {
       expect(res.status).toBe(200);
       expect(json.requiresVerification).toBe(true);
       expect(json.emailSent).toBe(false);
+      expect(json.emailError).toBe("smtp down");
       expect(mockCaptureMessage).toHaveBeenCalled();
     });
   });
