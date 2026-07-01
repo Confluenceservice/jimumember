@@ -1,6 +1,5 @@
-import { google } from "googleapis";
-import { getServiceAccountJwtAuth } from "./google-auth";
 import { formatMoney } from "./config";
+import { appendToRange, appendRow } from "./google-sheets-helpers";
 
 type CheckoutLogEntry = {
   timestamp: string;
@@ -53,62 +52,7 @@ const ASSOCIATE_APPLICATIONS_HEADERS = [
   "checkout_status",
 ] as const;
 
-function getSheetsClient() {
-  const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
-  return google.sheets({ version: "v4", auth });
-}
-
-async function ensureSheetWithHeaders(
-  sheetName: string,
-  headers: readonly string[],
-): Promise<void> {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
-  if (!spreadsheetId) {
-    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");
-  }
-
-  const sheets = getSheetsClient();
-  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-  const hasSheet = spreadsheet.data.sheets?.some(
-    (sheet) => sheet.properties?.title === sheetName,
-  );
-
-  if (!hasSheet) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [
-          {
-            addSheet: {
-              properties: {
-                title: sheetName,
-              },
-            },
-          },
-        ],
-      },
-    });
-  }
-
-  const headerRangeEnd = String.fromCharCode(64 + headers.length);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `'${sheetName}'!A1:${headerRangeEnd}1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [Array.from(headers)],
-    },
-  });
-}
-
 export async function appendCheckoutLog(entry: CheckoutLogEntry): Promise<void> {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
-  if (!spreadsheetId) {
-    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");
-  }
-
-  const sheets = getSheetsClient();
-
   const amountDisplay = formatMoney(entry.amountPaid);
 
   const row = [
@@ -123,14 +67,7 @@ export async function appendCheckoutLog(entry: CheckoutLogEntry): Promise<void> 
     entry.customerId,
   ];
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: "A1:I1",
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [row],
-    },
-  });
+  await appendToRange("A1:I1", row);
 }
 
 type EmailLogEntry = {
@@ -144,13 +81,6 @@ type EmailLogEntry = {
 };
 
 export async function appendEmailLog(entry: EmailLogEntry): Promise<void> {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
-  if (!spreadsheetId) {
-    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");
-  }
-
-  const sheets = getSheetsClient();
-
   const row = [
     entry.timestamp,
     entry.to,
@@ -161,30 +91,12 @@ export async function appendEmailLog(entry: EmailLogEntry): Promise<void> {
     entry.error ?? "",
   ];
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `'${EMAIL_LOG_SHEET}'!A1:G1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [row],
-    },
-  });
+  await appendToRange(`'${EMAIL_LOG_SHEET}'!A1:G1`, row);
 }
 
 export async function appendBasicApplication(
   entry: AssociateApplicationEntry,
 ): Promise<void> {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
-  if (!spreadsheetId) {
-    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");
-  }
-
-  await ensureSheetWithHeaders(
-    BASIC_APPLICATIONS_SHEET,
-    ASSOCIATE_APPLICATIONS_HEADERS,
-  );
-
-  const sheets = getSheetsClient();
   const row = [
     entry.submittedAt,
     entry.applicationId,
@@ -204,12 +116,5 @@ export async function appendBasicApplication(
     entry.checkoutStatus,
   ];
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `'${BASIC_APPLICATIONS_SHEET}'!A1:P1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [row],
-    },
-  });
+  await appendRow(BASIC_APPLICATIONS_SHEET, ASSOCIATE_APPLICATIONS_HEADERS, row);
 }

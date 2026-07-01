@@ -28,16 +28,26 @@ const mockSpreadsheetsValuesAppend = vi.fn();
 const mockSpreadsheetsValuesUpdate = vi.fn();
 const mockSpreadsheetsValuesBatchUpdate = vi.fn();
 
-function MockJWT() {}
-MockJWT.prototype.authenticate = vi.fn().mockResolvedValue(undefined);
-MockJWT.prototype.authorize = vi.fn().mockResolvedValue(undefined);
-MockJWT.prototype.getAccessToken = vi.fn().mockResolvedValue("mock_token");
-MockJWT.prototype.setCredentials = vi.fn();
+// The implementation explicitly returns an object so `new google.auth.JWT()`
+// uses it directly — `vi.fn()` mock constructors don't preserve a separately
+// assigned `.prototype`, so methods set that way are invisible on the
+// constructed instance (the shared client's `auth.authorize()` call would
+// see `undefined`).
+const mockJwtAuthorize = vi.fn().mockResolvedValue(undefined);
+const mockJwtGetAccessToken = vi.fn().mockResolvedValue("mock_token");
+const MockJWT = vi.fn().mockImplementation(function () {
+  return {
+    authenticate: vi.fn().mockResolvedValue(undefined),
+    authorize: mockJwtAuthorize,
+    getAccessToken: mockJwtGetAccessToken,
+    setCredentials: vi.fn(),
+  };
+});
 
 vi.mock("googleapis", () => ({
   google: {
     auth: {
-      JWT: vi.fn().mockImplementation(MockJWT),
+      JWT: MockJWT,
     },
     sheets: vi.fn().mockReturnValue({
       spreadsheets: {
@@ -147,8 +157,12 @@ function resetSheetData(rows: string[][]) {
 describe("upload-sheet", () => {
   let originalEnv: Record<string, string | undefined>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // The shared client caches the auth-warmed Sheets client across calls;
+    // reset it so each test gets a fresh construction.
+    const { _resetSheetsClientCacheForTesting } = await import("./google-sheets-helpers");
+    _resetSheetsClientCacheForTesting();
     originalEnv = { ...process.env };
     process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "spreadsheet_123";
     process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL = "test@remember.iam.gserviceaccount.com";
