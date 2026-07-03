@@ -22,6 +22,7 @@ Stripe sends webhook events for checkout completion, subscription updates, and i
 - **REQ-SW-005** All side effects non-blocking where possible: email send + doc creation fire-and-forget; sheet update is synchronous (must succeed before 200 response).
 - **REQ-SW-006** Webhook responds 200 within 5s. Slow side effects are offloaded to background work.
 - **REQ-SW-007** Failure logging: any side effect failure logs error via pino with event ID + flow + identifiers.
+- **REQ-SW-008** Membership status transitions are durable across process restarts and deploys; a missing mirror row never causes a status transition to be dropped (upsert semantics, logged as `membership_upsert_on_missing`). The `Memberships` sheet tab is the durable store (spec 000 REQ-OV-003); financial idempotency does not depend on it — subscription creation keeps its Stripe idempotency key.
 
 ## Non-Functional Requirements
 
@@ -48,5 +49,6 @@ Stripe sends webhook events for checkout completion, subscription updates, and i
 ## Related
 
 - `src/pages/api/stripe-webhook.ts` — handler
-- `src/lib/memberships.ts` — in-memory subscription state
+- `src/lib/memberships.ts` — durable subscription-state mirror (`Memberships` sheet tab)
+- `bin/memberships-backfill.js` — rebuilds the mirror from Stripe (idempotent)
 - Specs `005`, `009`, `010` — downstream side effects

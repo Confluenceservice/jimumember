@@ -1,118 +1,104 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Test the logic in isolation by re-implementing the store operations locally
-// This mirrors the logic in memberships.ts so we can test it without
-// module-level file path issues.
+// ---------------------------------------------------------------------------
+// In-memory emulation of the Memberships sheet, behind the shared
+// google-sheets-helpers surface that memberships.ts consumes. Unlike the old
+// test file (which re-implemented the store logic locally), this exercises
+// the REAL module. Transient-retry behaviour is not re-tested here — it
+// lives inside google-sheets-helpers and is covered by
+// google-sheets-helpers.test.ts.
+// ---------------------------------------------------------------------------
 
-type MembershipStatus =
-  | "awaiting_subscription"
-  | "active"
-  | "payment_failed"
-  | "cancelled";
+// vi.hoisted: these are referenced from the vi.mock factory below, which is
+// hoisted above normal const initialisation (TDZ otherwise).
+const { sheet, mockEnsureSheetWithHeaders, mockReadRange, mockUpdateRange, mockAppendToRange } =
+  vi.hoisted(() => {
+    const sheet: { rows: string[][]; ensured: string[] } = { rows: [], ensured: [] };
 
-interface MembershipRecord {
-  customerId: string;
-  plan: string;
-  recurringPriceId: string;
-  status: MembershipStatus;
-  subscriptionId?: string;
-  nextJuly1Epoch: number;
-  joinedAt: string;
-}
+    const mockEnsureSheetWithHeaders = vi.fn(async (name: string, _headers: readonly string[]) => {
+      sheet.ensured.push(name);
+    });
 
-const TEST_DIR = join(process.cwd(), ".test-data-membership");
-const TEST_FILE = join(TEST_DIR, "memberships.json");
+    const mockReadRange = vi.fn(async (range: string): Promise<string[][]> => {
+      if (/!A2:A$/.test(range)) {
+        return sheet.rows.map((r) => [r[0] ?? ""]);
+      }
+      const m = range.match(/!A(\d+):I\1$/);
+      if (m) {
+        const row = sheet.rows[Number(m[1]) - 2];
+        return row ? [row] : [];
+      }
+      throw new Error(`unexpected readRange in test: ${range}`);
+    });
 
-function cleanTestStore() {
-  rmSync(TEST_DIR, { recursive: true, force: true });
-  mkdirSync(TEST_DIR, { recursive: true });
-}
+    const mockUpdateRange = vi.fn(async (range: string, values: unknown[][]) => {
+      const m = range.match(/!A(\d+):I\1$/);
+      if (!m) throw new Error(`unexpected updateRange in test: ${range}`);
+      sheet.rows[Number(m[1]) - 2] = values[0] as string[];
+    });
 
-function readTestStore(): Record<string, MembershipRecord> {
-  try {
-    return JSON.parse(readFileSync(TEST_FILE, "utf-8"));
-  } catch {
-    return {};
-  }
-}
+    const mockAppendToRange = vi.fn(async (_range: string, row: Array<string | number>) => {
+      sheet.rows.push(row.map(String));
+    });
 
-function saveTestStore(store: Record<string, MembershipRecord>) {
-  mkdirSync(TEST_DIR, { recursive: true });
-  writeFileSync(TEST_FILE, JSON.stringify(store, null, 2), "utf-8");
-}
-
-// Mirror the logic from memberships.ts for unit testing
-function setAwaitingSubscription(
-  customerId: string,
-  data: Omit<MembershipRecord, "status" | "customerId">,
-) {
-  const store = readTestStore();
-  store[customerId] = { ...data, customerId, status: "awaiting_subscription" };
-  saveTestStore(store);
-}
-
-function setActive(customerId: string, subscriptionId: string) {
-  const store = readTestStore();
-  if (store[customerId]) {
-    store[customerId].status = "active";
-    store[customerId].subscriptionId = subscriptionId;
-    saveTestStore(store);
-  }
-}
-
-function setPaymentFailed(customerId: string) {
-  const store = readTestStore();
-  if (store[customerId]) {
-    store[customerId].status = "payment_failed";
-    saveTestStore(store);
-  }
-}
-
-function setCancelled(customerId: string) {
-  const store = readTestStore();
-  if (store[customerId]) {
-    store[customerId].status = "cancelled";
-    saveTestStore(store);
-  }
-}
-
-function getMembership(customerId: string): MembershipRecord | null {
-  const store = readTestStore();
-  return store[customerId] ?? null;
-}
-
-function hasActiveSubscription(customerId: string): boolean {
-  const record = getMembership(customerId);
-  return record?.status === "active" && !!record.subscriptionId;
-}
-
-describe("MembershipRecord types", () => {
-  it("defines valid status values", () => {
-    const statuses: MembershipRecord["status"][] = [
-      "awaiting_subscription",
-      "active",
-      "payment_failed",
-      "cancelled",
-    ];
-    expect(statuses).toHaveLength(4);
+    return { sheet, mockEnsureSheetWithHeaders, mockReadRange, mockUpdateRange, mockAppendToRange };
   });
+
+vi.mock("./google-sheets-helpers", () => ({
+  ensureSheetWithHeaders: mockEnsureSheetWithHeaders,
+  readRange: mockReadRange,
+  updateRange: mockUpdateRange,
+  appendToRange: mockAppendToRange,
+}));
+
+const mockWarn = vi.fn();
+vi.mock("./logger", () => ({
+  logger: {
+    warn: (...args: unknown[]) => mockWarn(...args),
+    info: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn(),
+  },
+}));
+
+import {
+  getMembership,
+  setAwaitingSubscription,
+  setActive,
+  setPaymentFailed,
+  setCancelled,
+  hasActiveSubscription,
+  _resetMembershipsCacheForTesting,
+} from "./memberships";
+
+const BASE = {
+  plan: "basic",
+  recurringPriceId: "price_123",
+  nextJuly1Epoch: 1751328000,
+  joinedAt: "2026-03-23T12:00:00.000Z",
+  subscriptionId: "sub_test456",
+};
+
+beforeEach(() => {
+  sheet.rows = [];
+  sheet.ensured = [];
+  vi.clearAllMocks();
+  _resetMembershipsCacheForTesting();
 });
 
 describe("setAwaitingSubscription", () => {
-  it("stores a new membership record with awaiting_subscription status", () => {
-    cleanTestStore();
+  it("lazily ensures the Memberships tab with headers on first-ever write", async () => {
+    await setAwaitingSubscription("cus_test123", BASE, "cs_1");
+    expect(mockEnsureSheetWithHeaders).toHaveBeenCalledWith(
+      "Memberships",
+      expect.arrayContaining(["customer_id", "status", "updated_at", "last_event"]),
+    );
+    expect(sheet.rows).toHaveLength(1);
+  });
 
-    setAwaitingSubscription("cus_test123", {
-      plan: "basic",
-      recurringPriceId: "price_123",
-      nextJuly1Epoch: 1751328000,
-      joinedAt: "2026-03-23T12:00:00.000Z",
-      subscriptionId: "sub_test456",
-    });
-
-    const record = getMembership("cus_test123");
+  it("stores a new record with awaiting_subscription status and provenance", async () => {
+    await setAwaitingSubscription("cus_test123", BASE, "cs_evt_1");
+    const record = await getMembership("cus_test123");
     expect(record).toMatchObject({
       customerId: "cus_test123",
       plan: "basic",
@@ -120,138 +106,162 @@ describe("setAwaitingSubscription", () => {
       status: "awaiting_subscription",
       subscriptionId: "sub_test456",
     });
+    // Column H (updated_at) is a fresh ISO timestamp; column I holds the event.
+    expect(sheet.rows[0][7]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(sheet.rows[0][8]).toBe("cs_evt_1");
   });
 
-  it("returns null for unknown customer", () => {
-    cleanTestStore();
-    expect(getMembership("cus_unknown")).toBeNull();
+  it("overwrites in place (no duplicate row) when the customer already exists", async () => {
+    await setAwaitingSubscription("cus_test123", BASE);
+    await setAwaitingSubscription("cus_test123", { ...BASE, plan: "advanced" });
+    expect(sheet.rows).toHaveLength(1);
+    expect((await getMembership("cus_test123"))?.plan).toBe("advanced");
+  });
+});
+
+describe("getMembership", () => {
+  it("round-trips all fields", async () => {
+    await setAwaitingSubscription("cus_rt", BASE);
+    const r = await getMembership("cus_rt");
+    expect(r).toEqual({
+      customerId: "cus_rt",
+      plan: "basic",
+      recurringPriceId: "price_123",
+      status: "awaiting_subscription",
+      subscriptionId: "sub_test456",
+      nextJuly1Epoch: 1751328000,
+      joinedAt: "2026-03-23T12:00:00.000Z",
+    });
+  });
+
+  it("returns null for unknown customer", async () => {
+    expect(await getMembership("cus_unknown")).toBeNull();
   });
 });
 
 describe("setActive", () => {
-  it("updates status to active and sets subscriptionId", () => {
-    cleanTestStore();
-    // Pre-populate
-    saveTestStore({
-      "cus_test123": {
-        customerId: "cus_test123",
-        plan: "basic",
-        recurringPriceId: "price_123",
-        status: "awaiting_subscription",
-        nextJuly1Epoch: 1751328000,
-        joinedAt: "2026-03-23T12:00:00.000Z",
-      },
-    });
-
-    setActive("cus_test123", "sub_new789");
-
-    const record = getMembership("cus_test123");
+  it("updates status + subscriptionId + updated_at on an existing row", async () => {
+    await setAwaitingSubscription("cus_test123", { ...BASE, subscriptionId: undefined });
+    const before = sheet.rows[0][7];
+    await new Promise((r) => setTimeout(r, 2));
+    await setActive("cus_test123", "sub_new789", "evt_2");
+    const record = await getMembership("cus_test123");
     expect(record?.status).toBe("active");
     expect(record?.subscriptionId).toBe("sub_new789");
+    expect(sheet.rows[0][8]).toBe("evt_2");
+    expect(sheet.rows[0][7] >= before).toBe(true);
+    expect(mockWarn).not.toHaveBeenCalled();
   });
 
-  it("does nothing if customer does not exist", () => {
-    cleanTestStore();
-    setActive("cus_nonexistent", "sub_xyz");
-    expect(getMembership("cus_nonexistent")).toBeNull();
+  it("UPSERTS on a missing row and logs membership_upsert_on_missing (regression: silent drop)", async () => {
+    await setActive("cus_wiped", "sub_xyz", "evt_3");
+    expect(mockWarn).toHaveBeenCalledWith(
+      "membership_upsert_on_missing",
+      expect.objectContaining({ customerId: "cus_wiped", status: "active" }),
+    );
+    const record = await getMembership("cus_wiped");
+    expect(record?.status).toBe("active");
+    expect(record?.subscriptionId).toBe("sub_xyz");
   });
 });
 
 describe("setPaymentFailed", () => {
-  it("updates status to payment_failed", () => {
-    cleanTestStore();
-    saveTestStore({
-      "cus_test123": {
-        customerId: "cus_test123",
-        plan: "advanced",
-        recurringPriceId: "price_456",
-        status: "active",
-        nextJuly1Epoch: 1751328000,
-        joinedAt: "2026-03-23T12:00:00.000Z",
-        subscriptionId: "sub_active",
-      },
-    });
+  it("updates status on an existing row", async () => {
+    await setAwaitingSubscription("cus_test123", BASE);
+    await setActive("cus_test123", "sub_active");
+    await setPaymentFailed("cus_test123", "in_1");
+    expect((await getMembership("cus_test123"))?.status).toBe("payment_failed");
+    // subscriptionId survives a failed-payment transition
+    expect((await getMembership("cus_test123"))?.subscriptionId).toBe("sub_active");
+  });
 
-    setPaymentFailed("cus_test123");
-
-    expect(getMembership("cus_test123")?.status).toBe("payment_failed");
+  it("UPSERTS on a missing row and warns (regression: silent drop)", async () => {
+    await setPaymentFailed("cus_gone", "in_2");
+    expect(mockWarn).toHaveBeenCalledWith(
+      "membership_upsert_on_missing",
+      expect.objectContaining({ customerId: "cus_gone", status: "payment_failed" }),
+    );
+    expect((await getMembership("cus_gone"))?.status).toBe("payment_failed");
   });
 });
 
 describe("setCancelled", () => {
-  it("updates status to cancelled", () => {
-    cleanTestStore();
-    saveTestStore({
-      "cus_test123": {
-        customerId: "cus_test123",
-        plan: "advanced",
-        recurringPriceId: "price_456",
-        status: "active",
-        nextJuly1Epoch: 1751328000,
-        joinedAt: "2026-03-23T12:00:00.000Z",
-        subscriptionId: "sub_active",
-      },
-    });
+  it("updates status on an existing row", async () => {
+    await setAwaitingSubscription("cus_test123", BASE);
+    await setCancelled("cus_test123", "sub_del");
+    expect((await getMembership("cus_test123"))?.status).toBe("cancelled");
+  });
 
-    setCancelled("cus_test123");
-
-    expect(getMembership("cus_test123")?.status).toBe("cancelled");
+  it("UPSERTS on a missing row and warns (regression: silent drop)", async () => {
+    await setCancelled("cus_lost", "sub_del2");
+    expect(mockWarn).toHaveBeenCalledWith(
+      "membership_upsert_on_missing",
+      expect.objectContaining({ customerId: "cus_lost", status: "cancelled" }),
+    );
+    expect((await getMembership("cus_lost"))?.status).toBe("cancelled");
   });
 });
 
 describe("hasActiveSubscription", () => {
-  it("returns true for active status with subscriptionId", () => {
-    cleanTestStore();
-    saveTestStore({
-      "cus_active": {
-        customerId: "cus_active",
-        plan: "basic",
-        recurringPriceId: "price_123",
-        status: "active",
-        nextJuly1Epoch: 1751328000,
-        joinedAt: "2026-03-23T12:00:00.000Z",
-        subscriptionId: "sub_abc",
-      },
-    });
-
-    expect(hasActiveSubscription("cus_active")).toBe(true);
+  it("returns true for active status with subscriptionId", async () => {
+    await setAwaitingSubscription("cus_active", BASE);
+    await setActive("cus_active", "sub_abc");
+    expect(await hasActiveSubscription("cus_active")).toBe(true);
   });
 
-  it("returns false for awaiting_subscription status (no subscriptionId)", () => {
-    cleanTestStore();
-    saveTestStore({
-      "cus_awaiting": {
-        customerId: "cus_awaiting",
-        plan: "basic",
-        recurringPriceId: "price_123",
-        status: "awaiting_subscription",
-        nextJuly1Epoch: 1751328000,
-        joinedAt: "2026-03-23T12:00:00.000Z",
-      },
-    });
-
-    expect(hasActiveSubscription("cus_awaiting")).toBe(false);
+  it("returns false for awaiting_subscription without subscriptionId", async () => {
+    await setAwaitingSubscription("cus_awaiting", { ...BASE, subscriptionId: undefined });
+    expect(await hasActiveSubscription("cus_awaiting")).toBe(false);
   });
 
-  it("returns false for payment_failed status", () => {
-    cleanTestStore();
-    saveTestStore({
-      "cus_failed": {
-        customerId: "cus_failed",
-        plan: "basic",
-        recurringPriceId: "price_123",
-        status: "payment_failed",
-        nextJuly1Epoch: 1751328000,
-        joinedAt: "2026-03-23T12:00:00.000Z",
-        subscriptionId: "sub_failed",
-      },
-    });
-
-    expect(hasActiveSubscription("cus_failed")).toBe(false);
+  it("returns false for payment_failed status", async () => {
+    await setAwaitingSubscription("cus_failed", BASE);
+    await setActive("cus_failed", "sub_f");
+    await setPaymentFailed("cus_failed");
+    expect(await hasActiveSubscription("cus_failed")).toBe(false);
   });
 
-  it("returns false for unknown customer", () => {
-    cleanTestStore();
-    expect(hasActiveSubscription("cus_unknown")).toBe(false);
+  it("returns false for unknown customer", async () => {
+    expect(await hasActiveSubscription("cus_unknown")).toBe(false);
+  });
+});
+
+describe("per-customer write serialisation", () => {
+  it("interleaved writes for one customer run strictly in order", async () => {
+    // Make the first write slow: hold its append until released.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const order: string[] = [];
+    mockAppendToRange.mockImplementationOnce(async (_range, row) => {
+      await gate;
+      order.push("first");
+      sheet.rows.push(row.map(String));
+    });
+
+    const p1 = setAwaitingSubscription("cus_race", BASE, "evt_first");
+    const p2 = setActive("cus_race", "sub_second", "evt_second").then(() =>
+      order.push("second"),
+    );
+
+    // Give the second op a chance to (incorrectly) jump the queue.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(order).toEqual([]);
+
+    release();
+    await Promise.all([p1, p2]);
+    expect(order).toEqual(["first", "second"]);
+    // The second op saw the row the first created — one row, active status.
+    expect(sheet.rows).toHaveLength(1);
+    const record = await getMembership("cus_race");
+    expect(record?.status).toBe("active");
+    expect(record?.subscriptionId).toBe("sub_second");
+    expect(mockWarn).not.toHaveBeenCalled(); // no upsert-on-missing fired
+  });
+
+  it("a failed op does not wedge the customer queue", async () => {
+    mockAppendToRange.mockRejectedValueOnce(new Error("boom"));
+    await expect(setAwaitingSubscription("cus_err", BASE)).rejects.toThrow("boom");
+    await setActive("cus_err", "sub_after_err");
+    expect((await getMembership("cus_err"))?.status).toBe("active");
   });
 });

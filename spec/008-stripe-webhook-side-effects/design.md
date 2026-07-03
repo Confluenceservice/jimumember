@@ -10,7 +10,7 @@ Single endpoint, signature-verified, dispatch by metadata.flow. Idempotent via e
 ## Component Design
 
 1. **`src/pages/api/stripe-webhook.ts`** — handler. Verifies signature, dispatches by event type + flow.
-2. **`src/lib/memberships.ts`** — in-memory subscription state (`Map<customerId, Membership>`).
+2. **`src/lib/memberships.ts`** — durable subscription-state mirror in the `Memberships` sheet tab (Stripe-authoritative; see spec 000 sheet contracts). Status setters are upserts: a missing row is created partially populated and logged (`membership_upsert_on_missing`), never silently dropped. Per-customer write serialisation (promise chain; per-process — revisit before multi-machine scale-out).
 3. **`src/lib/renewal-sheet.ts`** — `markRenewalPaid()`.
 4. **`src/lib/google-docs.ts`** — `createApplicationReviewDoc()`.
 5. **`src/lib/email-sender.ts`** — confirmation + admin notification emails.
