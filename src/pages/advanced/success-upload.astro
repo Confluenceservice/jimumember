@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import PostSubmissionFeedback from "../../components/PostSubmissionFeedback.astro";
 
 const sessionId = Astro.url.searchParams.get("session_id");
 ---
@@ -33,4 +34,6 @@ const sessionId = Astro.url.searchParams.get("session_id");
       <a href="https://example.com" class="text-blue-600 hover:text-blue-700">Return to Re:Member website</a>
     </p>
   </section>
+
+  <PostSubmissionFeedback page="advanced_success_upload" />
 </BaseLayout>

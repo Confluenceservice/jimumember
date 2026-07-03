@@ -55,6 +55,15 @@
 - `google-sheets.ts` (MODIFIED 2026-06-30) — added `readNotificationRules()` (reads `'Notification Rules'!A2:C`, no cache) + self-contained `ensureNotificationRulesSheet()` (writes headers once at creation; NOT the shared `ensureSheetWithHeaders`, which reverts admin edits). Also: appendCheckoutLog/appendEmailLog/appendBasicApplication + JWT auth.
 - `stripe-webhook.ts` (MODIFIED 2026-06-30) — 3 notification sites now resolve recipients via `getRecipientsForEvent` + fire-and-forget forEach instead of hardcoded ADMIN_EMAIL/SUPPORT_EMAIL.
 
+## Feedback system (ported from eldaa PR #27, 2026-07-01)
+
+- `src/lib/feedback-sheet.ts` — `appendFeedback`/`readFeedback`, self-contained sheets-client + retry (mirrors `renewal-sheet.ts`, not the shared-helpers pattern eldaa later grew — re-member never had that module). Lazy-creates "Feedback" tab, headers `timestamp|type|page|reaction|comment|answers`, self-heals header row. (~205 lines)
+- `src/lib/feedback-sheet.test.ts` — 8 tests: append columns/order, JSON answers, tab creation, missing-config throw, read/parse/skip-header, empty sheet, malformed-JSON fallback.
+- `src/pages/api/feedback.ts` — `POST` validates `type`/`page`/`rating`(1-3)/`comment`/`answers`, writes via `appendFeedback`, fires non-blocking `feedback_received` notification email (never blocks response).
+- `src/pages/api/feedback.test.ts` — 10 tests: happy paths (inline + post_submission), all validation rejections, invalid JSON, sheet-write 500, fire-and-forget notify + notify-failure paths.
+- `notification-rules.ts` (MODIFIED) — added `feedback_received` to `NotificationEvent` union.
+- `src/components/FeedbackWidget.astro` — floating bottom-right button + reaction/comment panel, posts `type: "inline"`. Auto-captures `location.pathname+search` + `#step-label` text if present. Wired into `apply.astro`, `advanced/apply.astro`, `renew/[tier].astro`, `renew/pd-log.astro`.
+- `src/components/PostSubmissionFeedback.astro` — 3-question + free-text block, posts `type: "post_submission"`. Wired into `advanced/success-upload.astro` (`page="advanced_success_upload"`) and `associate-membership.astro` (`page="associate_membership"`). `renew/success.astro` deliberately skipped (matches eldaa — only the 2 real success pages get it).
 ## Testing harness (bug-006 regression net)
 
 - `playwright.config.ts` (root) — E2E config. node-standalone build+preview on :4321 via `webServer`; injects `E2E_STUB=1` so Sheets/Mailgun are stubbed server-side. chromium only. (~45 lines, ~500 tok)

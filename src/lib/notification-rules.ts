@@ -12,6 +12,7 @@ export type NotificationEvent =
   | "advanced_payment_received"
   | "basic_payment_received"
   | "advanced_renewal_received"
+  | "feedback_received"
   // Reserved — not yet wired into the webhook:
   | "basic_application_submitted"
   | "advanced_application_submitted"

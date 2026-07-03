@@ -1,0 +1,171 @@
+---
+// Persistent floating feedback button for form pages. Unobtrusive corner
+// button that opens a small reaction + optional-comment panel and posts to
+// POST /api/feedback. Auto-captures page URL and (if present) the visible
+// wizard step label — no per-page wiring needed.
+---
+
+<div
+  id="feedback-widget"
+  class="fixed bottom-4 right-4 z-50"
+  style="pointer-events: none;"
+>
+  <button
+    id="feedback-toggle"
+    type="button"
+    aria-label="Give feedback"
+    aria-expanded="false"
+    class="pointer-events-auto flex items-center gap-1.5 bg-white/90 hover:bg-white text-gray-500 hover:text-gray-700 text-xs font-medium border border-gray-200 rounded-full px-3 py-2 shadow-md transition-colors"
+  >
+    <span aria-hidden="true">💬</span>
+    <span>Feedback</span>
+  </button>
+
+  <div
+    id="feedback-panel"
+    class="pointer-events-auto hidden absolute bottom-12 right-0 w-72 max-w-[85vw] bg-white border border-gray-200 rounded-xl shadow-lg p-4"
+  >
+    <div id="feedback-form-state">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="m-0 text-sm font-semibold text-gray-800">Quick feedback</h2>
+        <button
+          id="feedback-close"
+          type="button"
+          aria-label="Close feedback panel"
+          class="text-gray-400 hover:text-gray-600 text-lg leading-none"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div class="flex justify-center gap-3 mb-3" role="group" aria-label="How is this going?">
+        <button type="button" class="feedback-reaction text-2xl rounded-lg p-1.5 hover:bg-gray-100" data-value="1" aria-label="Not good">😕</button>
+        <button type="button" class="feedback-reaction text-2xl rounded-lg p-1.5 hover:bg-gray-100" data-value="2" aria-label="Okay">😐</button>
+        <button type="button" class="feedback-reaction text-2xl rounded-lg p-1.5 hover:bg-gray-100" data-value="3" aria-label="Good">😊</button>
+      </div>
+
+      <label for="feedback-comment" class="block text-xs font-medium text-gray-600 mb-1">
+        Anything unclear or confusing here?
+      </label>
+      <textarea
+        id="feedback-comment"
+        rows="2"
+        class="w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm resize-y"
+        placeholder="Optional"
+      ></textarea>
+
+      <p id="feedback-error" class="hidden mt-2 text-xs text-amber-800"></p>
+
+      <button
+        id="feedback-submit"
+        type="button"
+        class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-3 py-2 rounded-lg"
+      >
+        Submit
+      </button>
+    </div>
+
+    <div id="feedback-thanks-state" class="hidden text-center py-4">
+      <p class="m-0 text-sm font-semibold text-emerald-700">Thanks!</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const widget = document.getElementById("feedback-widget")!;
+  const toggleBtn = document.getElementById("feedback-toggle") as HTMLButtonElement;
+  const panel = document.getElementById("feedback-panel")!;
+  const closeBtn = document.getElementById("feedback-close") as HTMLButtonElement;
+  const reactionBtns = widget.querySelectorAll<HTMLButtonElement>(".feedback-reaction");
+  const commentEl = document.getElementById("feedback-comment") as HTMLTextAreaElement;
+  const submitBtn = document.getElementById("feedback-submit") as HTMLButtonElement;
+  const errorEl = document.getElementById("feedback-error")!;
+  const formState = document.getElementById("feedback-form-state")!;
+  const thanksState = document.getElementById("feedback-thanks-state")!;
+
+  let selectedReaction: string | null = null;
+
+  function openPanel() {
+    panel.classList.remove("hidden");
+    toggleBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function closePanel() {
+    panel.classList.add("hidden");
+    toggleBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function resetForm() {
+    selectedReaction = null;
+    reactionBtns.forEach((btn) => btn.classList.remove("bg-blue-100"));
+    commentEl.value = "";
+    errorEl.classList.add("hidden");
+    formState.classList.remove("hidden");
+    thanksState.classList.add("hidden");
+  }
+
+  function getPageContext(): string {
+    const stepLabel = document.querySelector("#step-label")?.textContent?.trim();
+    const base = window.location.pathname + window.location.search;
+    return stepLabel ? `${base} (${stepLabel})` : base;
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    if (panel.classList.contains("hidden")) {
+      openPanel();
+    } else {
+      closePanel();
+    }
+  });
+
+  closeBtn.addEventListener("click", closePanel);
+
+  reactionBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedReaction = btn.dataset.value ?? null;
+      reactionBtns.forEach((b) => b.classList.remove("bg-blue-100"));
+      btn.classList.add("bg-blue-100");
+    });
+  });
+
+  submitBtn.addEventListener("click", async () => {
+    errorEl.classList.add("hidden");
+
+    if (!selectedReaction && !commentEl.value.trim()) {
+      errorEl.textContent = "Pick a reaction or add a comment first.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending...";
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "inline",
+          page: getPageContext(),
+          rating: selectedReaction ? Number(selectedReaction) : undefined,
+          comment: commentEl.value.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Feedback submission failed.");
+
+      formState.classList.add("hidden");
+      thanksState.classList.remove("hidden");
+      setTimeout(() => {
+        closePanel();
+        resetForm();
+      }, 1500);
+    } catch {
+      errorEl.textContent = "Could not send feedback. Please try again.";
+      errorEl.classList.remove("hidden");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit";
+    }
+  });
+</script>

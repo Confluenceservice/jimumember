@@ -6,11 +6,21 @@ const mockUpdate = vi.fn().mockResolvedValue({});
 const mockGet = vi.fn().mockResolvedValue({ data: { values: [] } });
 const mockSpreadsheetGet = vi.fn().mockResolvedValue({
   data: {
-    sheets: [{ properties: { title: "Basic Applications" } }],
+    sheets: [{ properties: { title: "Basic Applications", sheetId: 42 } }],
   },
 });
 const mockBatchUpdate = vi.fn().mockResolvedValue({});
-const jwtMock = vi.fn();
+
+// The shared client (google-sheets-helpers.ts) calls `auth.authorize()` to
+// warm the OAuth token before returning the Sheets client, so `new
+// google.auth.JWT(...)` must yield an object with that method. The
+// implementation explicitly returns an object so `new` uses it directly,
+// rather than relying on prototype-chain wiring (which `vi.fn()` mock
+// constructors don't preserve).
+const jwtMock = vi.fn().mockImplementation(function () {
+  return { authorize: vi.fn().mockResolvedValue(undefined) };
+});
+
 const mockSheets = vi.fn().mockReturnValue({
   spreadsheets: {
     get: mockSpreadsheetGet,
@@ -32,8 +42,14 @@ vi.mock("googleapis", () => ({
 }));
 
 describe("google-sheets", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // The shared client caches the auth-warmed Sheets client across calls;
+    // reset it so each test gets a fresh construction (and so tests that
+    // delete required env vars actually exercise the failure path instead of
+    // reusing an already-successful prior test's cached client).
+    const { _resetSheetsClientCacheForTesting } = await import("./google-sheets-helpers");
+    _resetSheetsClientCacheForTesting();
     // Set valid env vars for all tests
     process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL = "test@remember-sheets.iam.gserviceaccount.com";
     process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_KEY = "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----";
