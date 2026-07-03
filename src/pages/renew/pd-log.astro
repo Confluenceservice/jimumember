@@ -1,11 +1,13 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import FeedbackWidget from "../../components/FeedbackWidget.astro";
 import Step from "../../lib/forms/render/Step.astro";
 import { schema as pdLogSchema } from "../../lib/forms/schemas/pdLog";
 import pdLogContent from "../../lib/forms/schemas/pdLog.content.json";
 ---
 
 <BaseLayout title="Professional Development Log — Re:Member">
+  <FeedbackWidget />
   <div class="max-w-3xl mx-auto p-4 sm:p-8">
 
     <!-- Loading state -->

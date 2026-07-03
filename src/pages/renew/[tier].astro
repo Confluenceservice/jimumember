@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import FeedbackWidget from "../../components/FeedbackWidget.astro";
 import FieldRenderer from "../../lib/forms/render/FieldRenderer.astro";
 import Step from "../../lib/forms/render/Step.astro";
 import { schema as renewBasicSchema } from "../../lib/forms/schemas/renewBasic";
@@ -73,6 +74,8 @@ const initialValues: Record<string, unknown> = {
       </button>
     </form>
   </div>
+
+  <FeedbackWidget />
 
   <script define:vars={{ tier }}>
     const payBtn = document.getElementById("pay-btn");

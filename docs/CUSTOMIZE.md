@@ -11,8 +11,8 @@ Set these in `.env` (local) and as Fly secrets in production:
 | Var | Purpose | Default in `.env.example` |
 |-----|---------|---------------------------|
 | `ORG_NAME` | Display name shown in email subjects + bodies | `Re:Member` |
-| `SUPPORT_EMAIL` | Reply-To for transactional emails | `membership@example.com` |
-| `ADMIN_EMAIL` | Recipient for "new application" + renewal notifications | `admin@example.com` |
+| `SUPPORT_EMAIL` | Reply-To for transactional emails; **fallback** recipient for `advanced_payment_received` (see §6a) | `membership@example.com` |
+| `ADMIN_EMAIL` | **Fallback** recipient for application + renewal notifications when no sheet rule matches (see §6a) | `admin@example.com` |
 | `PUBLIC_ORG_URL` | Public website URL shown in member emails | `https://example.com` |
 | `PUBLIC_APP_URL` | App base URL — resume links, PD-log links, redirects | `http://localhost:4321` |
 | `STAGING_APP_URL` | Override staging URL (auto-detected via `STAGING_PREFIX`) | `https://staging.example.com` |
@@ -93,6 +93,52 @@ Mailgun is the sole transactional-email provider (all three vars required):
 > The earlier Gmail OAuth path was removed — Workspace session-control policy
 > reauthed the refresh token every ~24h (`invalid_rapt`), recurrently degrading
 > health. `GMAIL_*` env vars are no longer read by any code.
+
+## 6a. Notification routing (no-deploy, sheet-driven)
+
+Who receives the internal payment/renewal notifications is controlled from a
+**"Notification Rules"** tab in the same Google Sheet (`GOOGLE_SHEETS_SPREADSHEET_ID`),
+not from code. A volunteer admin edits rows and the change takes effect on the
+**next webhook — no redeploy**. The tab auto-creates (empty, with headers) the
+first time a webhook fires.
+
+Columns:
+
+| Col | Header | Meaning |
+|-----|--------|---------|
+| A | `event` | Event key — exact, **case-sensitive** match (see list below) |
+| B | `recipient_email` | Address to notify for this rule |
+| C | `enabled` | The literal `TRUE` enables the row. Anything else — `true`, `FALSE`, blank — disables it. |
+| D | `description` | Free-text note; ignored by code |
+
+Wired event keys:
+
+| `event` value | Fires when | Falls back to |
+|---------------|-----------|---------------|
+| `advanced_payment_received` | A professional application is paid | `SUPPORT_EMAIL` |
+| `basic_payment_received` | An associate application is paid | `ADMIN_EMAIL` |
+| `advanced_renewal_received` | Any renewal is paid | `ADMIN_EMAIL` |
+
+Rules:
+
+- **Multiple recipients:** add several enabled rows with the same `event` — all are notified.
+- **Safety net (fallback):** if the sheet read fails *or* no enabled row matches an
+  event, the notification is sent to the env-var address in the table above, so
+  notifications never silently vanish. To suppress an event entirely you must
+  point its rule at a real inbox (e.g. an archive address) — leaving it
+  disabled falls back to the env var, it does not mute it.
+- **Header row is protected:** the app writes the header once at tab creation and
+  never again, so editing/reordering admin rows is safe. (Don't rename the
+  header cells, though — column order A–D is the contract.)
+
+Reserved-but-unwired event keys (`basic_application_submitted`,
+`advanced_application_submitted`, `document_uploaded`, `resume_link_sent`) are
+declared in `src/lib/notification-rules.ts` for future use; rows for them are
+read but nothing sends on them yet.
+
+**Initial seed:** seed one enabled row per wired event pointing at your real
+addresses so behaviour matches the env-var defaults from day one. Until seeded,
+the fallback covers you.
 
 ## 6b. Localisation constants (currency, timezone, membership year)
 

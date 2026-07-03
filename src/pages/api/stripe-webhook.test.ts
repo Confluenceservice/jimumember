@@ -24,6 +24,7 @@ const mockGetApplicantById = vi.fn();
 const mockMarkApplicantPaid = vi.fn();
 const mockMarkRenewalPaid = vi.fn();
 const mockGetRenewalById = vi.fn();
+const mockGetRecipientsForEvent = vi.fn();
 
 vi.mock("../../lib/email-sender", () => ({
   sendAdvancedConfirmation: mockSendAdvancedConfirmation,
@@ -36,6 +37,10 @@ vi.mock("../../lib/email-sender", () => ({
 
 vi.mock("../../lib/google-sheets", () => ({
   appendCheckoutLog: mockAppendCheckoutLog,
+}));
+
+vi.mock("../../lib/notification-rules", () => ({
+  getRecipientsForEvent: mockGetRecipientsForEvent,
 }));
 
 vi.mock("../../lib/google-docs", () => ({
@@ -179,6 +184,11 @@ describe("stripe-webhook", () => {
     originalEnv = { ...process.env };
     process.env.STRIPE_WEBHOOK_SECRET = WEBHOOK_SECRET;
     process.env.STRIPE_SECRET_KEY = "sk_test_123";
+    // Default: routing resolves to the env-var fallback (matches pre-sheet behavior).
+    mockGetRecipientsForEvent.mockImplementation(
+      (_event: string, fallback?: string) =>
+        Promise.resolve(fallback ? [fallback] : []),
+    );
   });
 
   afterEach(() => {
@@ -563,6 +573,86 @@ describe("stripe-webhook", () => {
       expect(response.status).toBe(200);
       expect(mockMarkRenewalPaid).not.toHaveBeenCalled();
       expect(mockAppendCheckoutLog).not.toHaveBeenCalled();
+    });
+
+    it("routes renewal admin notification to sheet-driven recipients (overrides env fallback)", async () => {
+      // Sheet has two enabled rows for advanced_renewal_received → both notified,
+      // the env-var fallback is NOT used.
+      mockGetRecipientsForEvent.mockImplementation((event: string) =>
+        Promise.resolve(
+          event === "advanced_renewal_received"
+            ? ["committee@club.org", "treasurer@club.org"]
+            : [],
+        ),
+      );
+
+      const session = makeCheckoutSession({
+        id: "cs_renewal_routed",
+        customer: "cus_routed",
+        customer_email: "alice@example.com",
+        payment_intent: "pi_routed",
+        metadata: {
+          flow: "renewal",
+          tier: "adv",
+          renewal_id: "r9",
+          renewal_year: "2026",
+          first_name: "Alice",
+          last_name: "Smith",
+          email: "alice@example.com",
+          phone: "",
+          pd_entries: "[]",
+          amount_cents: "15000",
+        },
+      });
+
+      mockGetRenewalById.mockResolvedValueOnce({
+        renewalId: "r9",
+        tier: "adv",
+        renewalYear: 2026,
+        firstName: "Alice",
+        lastName: "Smith",
+        email: "alice@example.com",
+        phone: "",
+        pdEntries: [],
+        amountPaidCents: 15000,
+        currency: "nzd",
+        paymentStatus: "pending",
+        stripeSession: "cs_renewal_routed",
+        createdAt: "2026-06-23T10:00:00Z",
+        paidAt: "",
+      });
+      mockMarkRenewalPaid.mockResolvedValueOnce(undefined);
+      mockAppendCheckoutLog.mockResolvedValueOnce(undefined);
+
+      const { POST } = await import("../../pages/api/stripe-webhook");
+      const body = JSON.stringify({ type: "checkout.session.completed", data: { object: session } });
+      const req = makeReq(body, buildSignature(body));
+      const response = await POST(req);
+      expect(response.status).toBe(200);
+
+      expect(mockGetRecipientsForEvent).toHaveBeenCalledWith(
+        "advanced_renewal_received",
+        "admin@example.com",
+      );
+      expect(mockSendRenewalAdminNotification).toHaveBeenCalledTimes(2);
+      expect(mockSendRenewalAdminNotification).toHaveBeenCalledWith(
+        "committee@club.org",
+        "adv",
+        "Alice Smith",
+        "alice@example.com",
+        "r9",
+        15000,
+        undefined,
+      );
+      expect(mockSendRenewalAdminNotification).toHaveBeenCalledWith(
+        "treasurer@club.org",
+        "adv",
+        "Alice Smith",
+        "alice@example.com",
+        "r9",
+        15000,
+        undefined,
+      );
     });
   });
 });

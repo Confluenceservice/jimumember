@@ -36,6 +36,18 @@
     "last_seen": "2026-06-26T22:05:00Z"
   },
   {
+    "id": "bug-093",
+    "timestamp": "2026-06-30T09:30:00Z",
+    "error_message": "[vitest] There was an error when mocking a module ... ReferenceError: Cannot access 'mockReadNotificationRules' before initialization",
+    "file": "src/lib/notification-rules.test.ts",
+    "root_cause": "vi.mock() factory is hoisted above the top-level `const mockReadNotificationRules = vi.fn()`, so the const is in the temporal dead zone when the factory runs. The `mock`-prefix auto-allowlist that lets stripe-webhook.test.ts get away with the same pattern did not apply here.",
+    "fix": "Declare shared mock fns via `const { mockReadNotificationRules, mockLoggerError } = vi.hoisted(() => ({ mockReadNotificationRules: vi.fn(), mockLoggerError: vi.fn() }))` so they initialize before the hoisted vi.mock factories reference them.",
+    "tags": ["vitest", "vi.mock", "vi.hoisted", "hoisting", "tdz", "testing"],
+    "related_bugs": [],
+    "occurrences": 1,
+    "last_seen": "2026-06-30T09:30:00Z"
+  },
+  {
     "id": "bug-003",
     "timestamp": "2026-06-29T01:08:00Z",
     "error_message": "Loading overlay stuck on /advanced/apply — spinner never dismissed",

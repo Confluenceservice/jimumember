@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import FeedbackWidget from "../components/FeedbackWidget.astro";
 import Step from "../lib/forms/render/Step.astro";
 import { schema as basicApplySchema } from "../lib/forms/schemas/basicApply";
 import basicApplyContent from "../lib/forms/schemas/basicApply.content.json";
@@ -55,6 +56,8 @@ const initialValues: Record<string, unknown> = {
       <p id="status" class="mt-3 min-h-6 text-amber-800" aria-live="polite"></p>
     </section>
   </form>
+
+  <FeedbackWidget />
 </BaseLayout>
 
 <script id="form-schema" type="application/json" set:html={JSON.stringify(basicApplySchema)}></script>

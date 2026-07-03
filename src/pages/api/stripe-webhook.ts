@@ -16,6 +16,7 @@ import { getRenewalById, markRenewalPaid, getRenewalsSheetUrl } from "../../lib/
 import { getPublicAppUrl } from "../../lib/staging";
 import { createAdvancedApplicationReviewDoc, createBasicApplicationReviewDoc, refreshAdvancedIndexDoc, refreshBasicIndexDoc } from "../../lib/google-docs";
 import { sendAdvancedConfirmation, sendAdvancedApplicationNotification, sendBasicConfirmation, sendBasicApplicationNotification, sendRenewalPdLogLink, sendRenewalAdminNotification } from "../../lib/email-sender";
+import { getRecipientsForEvent } from "../../lib/notification-rules";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -79,17 +80,20 @@ async function handleCheckoutCompleted(
       const fullName = `${renewal.firstName} ${renewal.lastName}`.trim();
       const adminTier = renewal.tier === "basic" ? "basic" : "adv";
       const amountCents = renewal.amountPaidCents;
-      sendRenewalAdminNotification(
-        adminEmail,
-        adminTier,
-        fullName,
-        renewal.email ?? "",
-        renewalId,
-        amountCents,
-        getRenewalsSheetUrl(),
-      ).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("renewal_admin_notification_failed", { err: msg, renewalId });
+      const recipients = await getRecipientsForEvent("advanced_renewal_received", adminEmail);
+      recipients.forEach((to) => {
+        sendRenewalAdminNotification(
+          to,
+          adminTier,
+          fullName,
+          renewal.email ?? "",
+          renewalId,
+          amountCents,
+          getRenewalsSheetUrl(),
+        ).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.error("renewal_admin_notification_failed", { err: msg, renewalId });
+        });
       });
     }
 
@@ -300,12 +304,15 @@ async function handleCheckoutCompleted(
     createAdvancedApplicationReviewDoc(advancedApplicant).then(async (docUrl: string) => {
       const membershipEmail = process.env.SUPPORT_EMAIL?.trim() || "membership@example.com";
       const applicantFullName = `${advancedApplicant.firstName} ${advancedApplicant.lastName}`;
-      sendAdvancedApplicationNotification(membershipEmail, applicantFullName, docUrl, applicantId).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("checkout_completed.internal_notification_failed", {
-          applicantId,
-          sessionId: session.id,
-          error: msg,
+      const recipients = await getRecipientsForEvent("advanced_payment_received", membershipEmail);
+      recipients.forEach((to) => {
+        sendAdvancedApplicationNotification(to, applicantFullName, docUrl, applicantId).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.error("checkout_completed.internal_notification_failed", {
+            applicantId,
+            sessionId: session.id,
+            error: msg,
+          });
         });
       });
       // Refresh PM index doc
@@ -367,17 +374,21 @@ async function handleCheckoutCompleted(
       });
 
       // Send internal committee notification for AM
-      sendBasicApplicationNotification(
-        process.env.ADMIN_EMAIL?.trim() || "admin@example.com",
-        fullName,
-        docUrl,
-        basicApplicationId
-      ).catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error("checkout_completed.associate_internal_notification_failed", {
-          basicApplicationId,
-          sessionId: session.id,
-          error: msg,
+      const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@example.com";
+      const recipients = await getRecipientsForEvent("basic_payment_received", adminEmail);
+      recipients.forEach((to) => {
+        sendBasicApplicationNotification(
+          to,
+          fullName,
+          docUrl,
+          basicApplicationId
+        ).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.error("checkout_completed.associate_internal_notification_failed", {
+            basicApplicationId,
+            sessionId: session.id,
+            error: msg,
+          });
         });
       });
       // Refresh AM index doc
