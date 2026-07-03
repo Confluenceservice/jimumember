@@ -68,7 +68,7 @@ vi.mock("../../../lib/logger", () => ({
 
 import { POST } from "./apply";
 
-const BASE_URL = "https://example.com/api/professional/apply";
+const BASE_URL = "https://example.com/api/advanced/apply";
 
 function makeRequest(body: unknown): Request {
   return new Request(BASE_URL, {
@@ -78,7 +78,7 @@ function makeRequest(body: unknown): Request {
   });
 }
 
-describe("POST /api/professional/apply — email verification gate", () => {
+describe("POST /api/advanced/apply — email verification gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSiteBaseUrl.mockReturnValue("https://example.com");
@@ -126,7 +126,7 @@ describe("POST /api/professional/apply — email verification gate", () => {
       const sendArgs = mockSendResumeLink.mock.calls[0];
       expect(sendArgs[0]).toBe("jane@example.com");
       expect(sendArgs[1]).toBe("Jane Doe");
-      expect(sendArgs[2]).toContain("/professional/apply?token=");
+      expect(sendArgs[2]).toContain("/advanced/apply?token=");
       expect(sendArgs[2]).toContain(createdToken);
     });
 
@@ -168,6 +168,9 @@ describe("POST /api/professional/apply — email verification gate", () => {
       expect(res.status).toBe(200);
       expect(json.requiresVerification).toBe(true);
       expect(json.emailSent).toBe(false);
+      // bug-005: the underlying send error must reach the client so the verify
+      // panel can show a diagnostic instead of a swallowed generic message.
+      expect(json.emailError).toBe("smtp down");
       expect(mockCaptureMessage).toHaveBeenCalled();
     });
 
@@ -226,7 +229,7 @@ describe("POST /api/professional/apply — email verification gate", () => {
       expect(mockSendResumeLink.mock.calls[0][1]).toBe("Jane Doe");
       // Resume link uses the stored token.
       expect(mockSendResumeLink.mock.calls[0][2]).toBe(
-        "https://example.com/professional/apply?token=stored-token-xyz"
+        "https://example.com/advanced/apply?token=stored-token-xyz"
       );
     });
 
@@ -267,6 +270,7 @@ describe("POST /api/professional/apply — email verification gate", () => {
       expect(res.status).toBe(200);
       expect(json.requiresVerification).toBe(true);
       expect(json.emailSent).toBe(false);
+      expect(json.emailError).toBe("smtp down");
       expect(mockCaptureMessage).toHaveBeenCalled();
     });
   });
@@ -337,7 +341,7 @@ describe("POST /api/professional/apply — email verification gate", () => {
       expect(json.success).toBe(true);
       expect(json.applicantId).toBe("app_stored");
       expect(json.existing).toBe(true);
-      expect(json.resumeLink).toBe("https://example.com/professional/apply?token=tok-abc");
+      expect(json.resumeLink).toBe("https://example.com/advanced/apply?token=tok-abc");
       expect(json.requiresVerification).toBeUndefined();
       expect(mockUpdateApplicantFormData).toHaveBeenCalledWith(
         "app_stored",

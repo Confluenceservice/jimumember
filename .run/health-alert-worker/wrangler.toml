@@ -1,4 +1,4 @@
-name = "remember-health-alert"
+name = "itdocsnow-health-alert"
 main = "worker.mjs"
 compatibility_date = "2024-09-23"
 

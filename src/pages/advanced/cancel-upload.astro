@@ -16,7 +16,7 @@ const token = Astro.url.searchParams.get("token");
 
     {token && (
       <p class="mt-6">
-        <a href={`/professional/apply?token=${token}`}
+        <a href={`/advanced/apply?token=${token}`}
           class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg inline-block no-underline">
           Continue Application
         </a>
@@ -24,7 +24,7 @@ const token = Astro.url.searchParams.get("token");
     )}
 
     <p class="mt-6">
-      <a href="/professional/apply" class="text-blue-600 hover:text-blue-700">Start New Application</a>
+      <a href="/advanced/apply" class="text-blue-600 hover:text-blue-700">Start New Application</a>
     </p>
   </section>
 </BaseLayout>

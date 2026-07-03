@@ -1,4 +1,4 @@
-// remember-health-alert (module worker)
+// itdocsnow-health-alert (module worker)
 // Triggered by GitHub Actions cron (every 5 min) via POST /check with bearer auth.
 // Pings the production /api/health endpoint, posts to Slack on failure.
 //
@@ -43,7 +43,7 @@ async function check(target) {
   try {
     const warmup = await fetch(target.baseUrl, {
       signal: AbortSignal.timeout(WARMUP_TIMEOUT_MS),
-      headers: { "User-Agent": "remember-health-alert/1.0 (warmup)" },
+headers: { "User-Agent": "itdocsnow-health-alert/1.0 (warmup)" },
     });
     // Drain body so the connection is released back to the pool.
     try { await warmup.text(); } catch {}
@@ -66,7 +66,7 @@ async function check(target) {
   try {
     const res = await fetch(target.url, {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-      headers: { "User-Agent": "remember-health-alert/1.0" },
+headers: { "User-Agent": "itdocsnow-health-alert/1.0" },
     });
     const body = await res.json();
     return {
@@ -152,7 +152,7 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/") {
       return new Response(
-        "remember-health-alert\n\nPOST /check with Authorization: Bearer <CHECK_TOKEN>\n",
+"itdocsnow-health-alert\n\nPOST /check with Authorization: Bearer <CHECK_TOKEN>\n",
         { status: 200, headers: { "Content-Type": "text/plain" } },
       );
     }

@@ -74,7 +74,7 @@ function makeMultipartRequest(file: File, token = "token-123", docType = "traini
   formData.append("token", token);
   formData.append("docType", docType);
   formData.append("file", file, file.name);
-  return new Request("http://localhost/api/professional/upload-file", {
+  return new Request("http://localhost/api/advanced/upload-file", {
     method: "POST",
     body: formData,
   });
@@ -94,7 +94,7 @@ function makeBinaryRequest(
     mimeType?: string;
   } = {}
 ) {
-  return new Request("http://localhost/api/professional/upload-file", {
+  return new Request("http://localhost/api/advanced/upload-file", {
     method: "POST",
     headers: {
       "content-type": "application/octet-stream",
@@ -134,7 +134,7 @@ function seedFolderCreationCalls() {
     .mockResolvedValueOnce({ data: { id: "doc-folder-id" } });
 }
 
-describe("POST /api/professional/upload-file", () => {
+describe("POST /api/advanced/upload-file", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL = "svc@example.iam.gserviceaccount.com";

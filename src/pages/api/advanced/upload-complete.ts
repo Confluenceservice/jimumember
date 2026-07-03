@@ -134,8 +134,8 @@ export const POST: APIRoute = async ({ request, url }) => {
 
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
-      success_url: `${siteBaseUrl}/professional/success-upload?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBaseUrl}/professional/apply?token=${token}`,
+      success_url: `${siteBaseUrl}/advanced/success-upload?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteBaseUrl}/advanced/apply?token=${token}`,
       line_items: [
         {
           quantity: 1,

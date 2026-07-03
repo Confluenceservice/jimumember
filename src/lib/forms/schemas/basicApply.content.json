@@ -14,7 +14,7 @@
         "postalAddress": { "label": "Postal address (if different)" },
         "businessName": { "label": "Business name (if applicable)" },
         "interestJoining": { "label": "What is your interest in joining Re:Member?" },
-        "trainingDetails": { "label": "Are you training to be an End of Life Doula? If yes, with which organisation and expected completion date?" },
+        "trainingDetails": { "label": "Are you currently in training for this profession? If yes, with which organisation and expected completion date?" },
         "listOnPage": { "label": "Do you wish to be listed on the public directory?" },
         "listingDetails": { "label": "If yes, please provide your name, business name, and location for publication.", "help": "Only required when you opt in to public listing." },
         "signature": { "label": "Your signature (type full name)" },

@@ -30,7 +30,7 @@
       }
     },
     "experience": {
-      "title": "End-of-Life Doula Experience",
+      "title": "Professional Experience",
       "fields": {
         "rows": { "label": "Experience rows" },
         "rows.role": { "label": "Role" },
@@ -51,7 +51,7 @@
             "agreeInterview": "Do you agree to an interview by one or more committee members?",
             "commitProfessionalDev": "Do you agree to submit proof of up to 10 hours of professional development each year?",
             "willInsurance": "Will you take out professional indemnity insurance? (recommended)",
-            "listDirectory": "Do you wish to be listed as a practicing End of Life Doula in our directory?",
+            "listDirectory": "Do you wish to be listed as a practicing member in our public directory?",
             "provideCriminalCheck": "Are you willing to provide a current Ministry of Justice criminal record check?",
             "attendMeetings": "Are you willing to attend regular Re:Member meetings and events, and engage with and support your local Re:Member community?",
             "workRemotely": "Are you willing to work remotely where there is no other available Professional Member in a Client's area?"

@@ -221,7 +221,7 @@ export const POST: APIRoute = async ({ request }) => {
   const uploadRequestId = crypto.randomUUID();
   const requestLogger = typeof logger.child === "function"
     ? logger.child({
-      route: "/api/professional/upload-file",
+      route: "/api/advanced/upload-file",
       uploadRequestId,
     })
     : logger;

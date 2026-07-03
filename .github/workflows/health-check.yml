@@ -1,6 +1,6 @@
 name: Health check
 
-# Triggers the Cloudflare Worker (remember-health-alert) every 5 minutes.
+# Triggers the Cloudflare Worker (itdocsnow-health-alert) every 5 minutes.
 # The Worker probes /api/health on the production Fly app and posts to Slack
 # on failure.
 # Worker URL is public; the CHECK_TOKEN is verified by the Worker.
@@ -20,7 +20,7 @@ jobs:
     # GH token. Without these, the cron fires every 5 min and fails.
     if: ${{ secrets.REMEMBER_HEALTH_CHECK_TOKEN != '' && vars.REMEMBER_HEALTH_ALERT_URL != '' }}
     steps:
-      - name: Trigger remember-health-alert Worker
+- name: Trigger itdocsnow-health-alert Worker
         run: |
           set -euo pipefail
           # Capture body + HTTP status. Don't use -f: we want to print the body

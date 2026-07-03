@@ -61,7 +61,7 @@ export const POST: APIRoute = async ({ request, url }) => {
   }
 
   const siteBaseUrl = getSiteBaseUrl(url.href);
-  const resumeLink = `${siteBaseUrl}/professional/apply?token=${token}`;
+  const resumeLink = `${siteBaseUrl}/advanced/apply?token=${token}`;
 
   const fullName = `${applicant.firstName || ""} ${applicant.lastName || ""}`.trim() || "Applicant";
 

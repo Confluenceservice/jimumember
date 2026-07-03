@@ -34,7 +34,7 @@
  * Two axes, not one (plan finding C1): "tier" and "flow" are orthogonal.
  * The renewal route (one-time payment → 14-col `Renewals` sheet) uses
  * `getTier(slug)` end-to-end. The application/subscription flows
- * (`create-checkout-session.ts`, `create-professional-checkout.ts`)
+ * (`create-checkout-session.ts`, `advanced/upload-complete.ts`)
  * reuse `validateTier` / `toRow` for validation + field mapping only —
  * they keep their own handlers because they write different sheets and
  * run deferred-subscription flows.

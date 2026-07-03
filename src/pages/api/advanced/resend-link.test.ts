@@ -42,14 +42,14 @@ vi.mock("../../../lib/stripe-checkout", () => ({
 import { POST } from "./resend-link";
 
 function makeRequest(body: unknown): Request {
-  return new Request("http://localhost/api/professional/resend-link", {
+  return new Request("http://localhost/api/advanced/resend-link", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-describe("POST /api/professional/resend-link", () => {
+describe("POST /api/advanced/resend-link", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSiteBaseUrl.mockReturnValue("https://example.com");
@@ -66,18 +66,18 @@ describe("POST /api/professional/resend-link", () => {
 
     const res = await POST({
       request: makeRequest({ token: "abc-token" }),
-      url: new URL("https://example.com/api/professional/resend-link"),
+      url: new URL("https://example.com/api/advanced/resend-link"),
     } as any);
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.success).toBe(true);
     expect(json.emailSent).toBe(true);
-    expect(json.resumeLink).toBe("https://example.com/professional/apply?token=abc-token");
+    expect(json.resumeLink).toBe("https://example.com/advanced/apply?token=abc-token");
     expect(mockSendResumeLink).toHaveBeenCalledWith(
       "jane@example.com",
       "Jane Doe",
-      "https://example.com/professional/apply?token=abc-token",
+      "https://example.com/advanced/apply?token=abc-token",
       "applicant-1"
     );
   });
@@ -85,7 +85,7 @@ describe("POST /api/professional/resend-link", () => {
   it("rejects an empty token", async () => {
     const res = await POST({
       request: makeRequest({ token: "" }),
-      url: new URL("https://example.com/api/professional/resend-link"),
+      url: new URL("https://example.com/api/advanced/resend-link"),
     } as any);
     const json = await res.json();
     expect(res.status).toBe(400);
@@ -97,7 +97,7 @@ describe("POST /api/professional/resend-link", () => {
     mockGetApplicantByToken.mockResolvedValue(null);
     const res = await POST({
       request: makeRequest({ token: "missing" }),
-      url: new URL("https://example.com/api/professional/resend-link"),
+      url: new URL("https://example.com/api/advanced/resend-link"),
     } as any);
     const json = await res.json();
     expect(res.status).toBe(404);
@@ -114,7 +114,7 @@ describe("POST /api/professional/resend-link", () => {
     });
     const res = await POST({
       request: makeRequest({ token: "abc" }),
-      url: new URL("https://example.com/api/professional/resend-link"),
+      url: new URL("https://example.com/api/advanced/resend-link"),
     } as any);
     const json = await res.json();
     expect(res.status).toBe(400);
@@ -133,23 +133,23 @@ describe("POST /api/professional/resend-link", () => {
 
     const res = await POST({
       request: makeRequest({ token: "abc-token" }),
-      url: new URL("https://example.com/api/professional/resend-link"),
+      url: new URL("https://example.com/api/advanced/resend-link"),
     } as any);
     const json = await res.json();
 
     expect(res.status).toBe(500);
     expect(json.error).toContain("Could not send");
-    expect(json.resumeLink).toBe("https://example.com/professional/apply?token=abc-token");
+    expect(json.resumeLink).toBe("https://example.com/advanced/apply?token=abc-token");
     expect(mockCaptureException).toHaveBeenCalled();
   });
 
   it("returns 400 for invalid JSON payload", async () => {
-    const req = new Request("http://localhost/api/professional/resend-link", {
+    const req = new Request("http://localhost/api/advanced/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{not json",
     });
-    const res = await POST({ request: req, url: new URL("http://localhost/api/professional/resend-link") } as any);
+    const res = await POST({ request: req, url: new URL("http://localhost/api/advanced/resend-link") } as any);
     const json = await res.json();
     expect(res.status).toBe(400);
     expect(json.error).toContain("Invalid JSON");

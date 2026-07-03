@@ -10,6 +10,11 @@ dist
 .claude/
 coverage/
 
+# Playwright E2E artifacts (regenerated each run).
+test-results/
+playwright-report/
+.playwright/
+
 # Local runtime + secrets in .run/
 .mcp.json
 .run/gmail-oauth-env.sh

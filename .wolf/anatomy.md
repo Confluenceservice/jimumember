@@ -54,3 +54,12 @@
 - `notification-rules.test.ts` — 7 tests: enabled match, multiple recipients, case-sensitive TRUE, fallback-on-miss, fallback-on-throw, empty no-fallback ×2. Uses `vi.hoisted` for mocks. (~95 lines, ~700 tok)
 - `google-sheets.ts` (MODIFIED 2026-06-30) — added `readNotificationRules()` (reads `'Notification Rules'!A2:C`, no cache) + self-contained `ensureNotificationRulesSheet()` (writes headers once at creation; NOT the shared `ensureSheetWithHeaders`, which reverts admin edits). Also: appendCheckoutLog/appendEmailLog/appendBasicApplication + JWT auth.
 - `stripe-webhook.ts` (MODIFIED 2026-06-30) — 3 notification sites now resolve recipients via `getRecipientsForEvent` + fire-and-forget forEach instead of hardcoded ADMIN_EMAIL/SUPPORT_EMAIL.
+
+## Testing harness (bug-006 regression net)
+
+- `playwright.config.ts` (root) — E2E config. node-standalone build+preview on :4321 via `webServer`; injects `E2E_STUB=1` so Sheets/Mailgun are stubbed server-side. chromium only. (~45 lines, ~500 tok)
+- `e2e/apply.spec.ts` — 4 Playwright smokes: Flow A (Start Application reaches real route, verify panel renders — bug-004), Flow B (forcefail@ recipient → emailError diagnostic renders — bug-005), + /apply & /renew/basic load/no-404. (~110 lines, ~900 tok)
+- `src/lib/__guards__/stale-paths.test.ts` — 2 unit guards: no `/professional/` route literal in `src/**`, and every `/api/` path the apply pages fetch maps to a real route file. Excludes itself. (~110 lines, ~900 tok)
+- `.github/workflows/test.yml` — CI gate (PR + push to main): `unit` job (check + vitest) + `e2e` job (playwright install + test:e2e). The fly-deploy*.yml workflows run no tests. (~55 lines, ~400 tok)
+- E2E shims live in `src/lib/upload-sheet.ts` (`makeStubSheetsClient` in `getSheetsClient`) + `src/lib/email-sender.ts` (`E2E_FORCE_EMAIL_FAIL` / `E2E_STUB` + forcefail-recipient guard at top of `sendEmail`).
+- (DELETED 2026-06-29, bug-006) `src/pages/professional.astro` + `src/pages/api/create-professional-checkout.ts` — dead legacy alias + its endpoint; meta-refresh pointed at a non-existent `/professional/apply/`.

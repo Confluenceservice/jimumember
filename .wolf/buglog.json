@@ -1,5 +1,17 @@
 [
   {
+    "id": "bug-005",
+    "timestamp": "2026-06-29T13:55:00Z",
+    "error_message": "\"We couldn't send the email just now\" shown to applicant but the actual Mailgun/SMTP error is swallowed — applicant + admin can't tell whether config is missing, domain unverified, rate-limited, or recipient rejected. Resume link is also unavailable in response when sendResumeLink throws.",
+    "file": "src/pages/api/advanced/apply.ts (POST emailSent branches), src/pages/advanced/apply.astro (showVerifyEmailPanel)",
+    "root_cause": "Both POST email paths caught sendResumeLink errors with logger+Sentry only and returned {success:true, requiresVerification:true, emailSent:false}. No emailError string. Client could only show a generic message. Additional root cause: 2 more stale /professional/ path refs (buildResumeLinkFromToken fallback at apply.astro:408 + Start New Application href at apply.astro:231) survived the rename fix in bug-004 — only the 9 fetch paths + 3 resume links + 1 resend-link were updated.",
+    "fix": "Capture err.message into a local `emailError: string | undefined` in both POST email branches; return it in the response when emailSent is false. showVerifyEmailPanel(email, emailSent, emailError) renders the server message inline. Tests assert emailError string. Also fixed the 2 remaining stale /professional/ URLs in apply.astro (buildResumeLinkFromToken fallback + Start New Application href).",
+    "tags": ["email", "error-propagation", "diagnostics", "stale-path", "rename"],
+    "related_bugs": ["bug-004"],
+    "occurrences": 1,
+    "last_seen": "2026-06-29T13:55:00Z"
+  },
+  {
     "id": "bug-002",
     "timestamp": "2026-06-27T14:00:00Z",
     "error_message": "toRow() writes empty string `''` for hidden (visibleWhen=false) fields whose column is in columnMap. Sheet looks like the user submitted empty; in reality the field was gated off.",
@@ -34,5 +46,41 @@
     "related_bugs": [],
     "occurrences": 1,
     "last_seen": "2026-06-30T09:30:00Z"
+  },
+  {
+    "id": "bug-003",
+    "timestamp": "2026-06-29T01:08:00Z",
+    "error_message": "Loading overlay stuck on /advanced/apply — spinner never dismissed",
+    "file": "src/pages/advanced/apply.astro",
+    "root_cause": "IIFE at line 281 uses `advancedApplySchema` as a JS variable (line 307) but only `token` was in define:vars. Browser throws ReferenceError at line 307, IIFE aborts before overlay-hide code at line 1386.",
+    "fix": "Added `advancedApplySchema` to define:vars: `<script is:inline define:vars={{ token, advancedApplySchema }}>`",
+    "tags": ["spinner", "overlay", "define:vars", "astro-inline-script", "ReferenceError"],
+    "related_bugs": [],
+    "occurrences": 1,
+    "last_seen": "2026-06-29T01:08:00Z"
+  },
+  {
+    "id": "bug-004",
+    "timestamp": "2026-06-29T02:00:00Z",
+    "error_message": "\"Network error.\" on Start Application button at /advanced/apply",
+    "file": "src/pages/advanced/apply.astro, src/pages/api/advanced/apply.ts, src/pages/api/advanced/resend-link.ts",
+    "root_cause": "Page renamed professional→advanced but 9 fetch() calls in apply.astro still targeted /api/professional/* (404). Resume link URLs in api/advanced/apply.ts (3 occurrences) and resend-link.ts (1) still built /professional/apply?token= strings — broken email links.",
+    "fix": "sed replaced all /api/professional/* → /api/advanced/* in apply.astro; replaced /professional/apply?token= → /advanced/apply?token= in both API handlers.",
+    "tags": ["rename", "stale-path", "fetch-404", "network-error", "resume-link"],
+    "related_bugs": ["bug-003"],
+    "occurrences": 1,
+    "last_seen": "2026-06-29T02:00:00Z"
+  },
+  {
+    "id": "bug-006",
+    "timestamp": "2026-06-29T05:20:00Z",
+    "error_message": "Residual /professional/ route literals survived the bug-004 rename fix — broken post-payment Stripe redirect (success_url/cancel_url 404), cancel-page links, and an inaccurate logger route string.",
+    "file": "src/pages/api/advanced/upload-complete.ts, src/pages/advanced/cancel.astro, src/pages/advanced/cancel-upload.astro, src/pages/api/advanced/upload-file.ts",
+    "root_cause": "bug-004's sed only touched apply.astro + two API handlers. It missed Stripe success_url/cancel_url in upload-complete.ts (post-payment 404), the Try again / Continue Application / Start New Application hrefs in cancel.astro + cancel-upload.astro, and the logger child route string in upload-file.ts. The dead professional.astro (meta-refresh to a non-existent /professional/apply/) + its create-professional-checkout.ts endpoint were also still present. Root structural cause: deploy workflows ran NO tests, and .astro string literals had zero coverage, so the whole class was invisible to CI.",
+    "fix": "Repointed all to /advanced/*; deleted professional.astro + create-professional-checkout.ts. Added src/lib/__guards__/stale-paths.test.ts (grep guard + client-to-route contract) so the class fails CI; e2e/apply.spec.ts (Playwright smoke) to catch the 404 + emailError render end-to-end against the real server; E2E_STUB / forcefail-recipient shims in upload-sheet.ts + email-sender.ts to run offline; .github/workflows/test.yml to gate every PR + push on check + test + e2e.",
+    "tags": ["rename", "stale-path", "fetch-404", "resume-link", "testing", "ci", "playwright", "regression-net"],
+    "related_bugs": ["bug-004", "bug-005"],
+    "occurrences": 1,
+    "last_seen": "2026-06-29T05:20:00Z"
   }
 ]

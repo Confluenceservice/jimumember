@@ -97,6 +97,24 @@ export async function sendEmail(
   params: EmailParams,
   meta?: { template: EmailTemplate; applicantId?: string },
 ): Promise<void> {
+  // E2E hooks — no-op in every non-E2E environment (vars unset).
+  // A global E2E_FORCE_EMAIL_FAIL forces every send to throw. Under E2E_STUB a
+  // single built server must drive BOTH the success and failure paths, so a
+  // per-request sentinel is used too: a recipient containing "forcefail" throws
+  // the deterministic error the apply route surfaces as `emailError` (the
+  // bug-005 diagnostics path); any other recipient reports success WITHOUT
+  // touching Mailgun or appendEmailLog (which would hit Google Sheets). All
+  // returns are BEFORE the try/appendEmailLog block by design. See e2e/apply.spec.ts.
+  if (process.env.E2E_FORCE_EMAIL_FAIL === "1") {
+    throw new Error("E2E forced email failure");
+  }
+  if (process.env.E2E_STUB === "1") {
+    if (params.to.toLowerCase().includes("forcefail")) {
+      throw new Error("E2E forced email failure");
+    }
+    return;
+  }
+
   const { domain, from } = getMailgunConfig();
   const mg = getMailgunClient();
   const timestamp = new Date().toISOString();

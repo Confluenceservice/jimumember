@@ -32,7 +32,36 @@ export interface UploadStatus {
   paidAt?: string;
 }
 
+// E2E offline stub. When E2E_STUB=1 the Sheets client is replaced with an
+// in-memory no-op that satisfies every call upload-sheet.ts makes WITHOUT
+// touching Google: spreadsheets.get reports the default sheet already exists
+// (so ensureSheetExists short-circuits), and values.get returns no rows (so
+// getApplicantByEmail/ByToken/ById resolve to null → the "new applicant"
+// path). Reads/writes are accepted and discarded. This is the only way to
+// drive POST /api/advanced/apply end-to-end in a Playwright smoke run, since
+// these are server-side googleapis calls a browser cannot intercept. No-op in
+// every non-E2E environment (the env var is unset). See e2e/apply.spec.ts.
+function makeStubSheetsClient(): ReturnType<typeof google.sheets> {
+  const ok = async () => ({ data: {} });
+  const stub = {
+    spreadsheets: {
+      get: async () => ({
+        data: { sheets: [{ properties: { title: DEFAULT_SHEET_NAME, sheetId: 0 } }] },
+      }),
+      batchUpdate: ok,
+      values: {
+        get: async () => ({ data: { values: [] } }),
+        append: ok,
+        update: ok,
+        batchUpdate: ok,
+      },
+    },
+  };
+  return stub as unknown as ReturnType<typeof google.sheets>;
+}
+
 function getSheetsClient() {
+  if (process.env.E2E_STUB === "1") return makeStubSheetsClient();
   const auth = getServiceAccountJwtAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   return google.sheets({ version: "v4", auth });
 }

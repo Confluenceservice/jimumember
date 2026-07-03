@@ -269,7 +269,7 @@ export const POST: APIRoute = async ({ request, url }) => {
 
       const siteBaseUrl = getSiteBaseUrl(url.href);
       const tokenForResumeLink = existingApplicant.resumeToken || resumeToken;
-      const resumeLink = `${siteBaseUrl}/professional/apply?token=${tokenForResumeLink}`;
+      const resumeLink = `${siteBaseUrl}/advanced/apply?token=${tokenForResumeLink}`;
       return Response.json({
         success: true,
         resumeLink,
@@ -287,10 +287,11 @@ export const POST: APIRoute = async ({ request, url }) => {
       const siteBaseUrl = getSiteBaseUrl(url.href);
 
       let emailSent = false;
+      let emailError: string | undefined;
       if (existingApplicant) {
         // Resend the existing resume link. Do NOT mutate the row — the
         // submitter has not proven they control this email.
-        const resumeLink = `${siteBaseUrl}/professional/apply?token=${existingApplicant.resumeToken}`;
+        const resumeLink = `${siteBaseUrl}/advanced/apply?token=${existingApplicant.resumeToken}`;
         const existingFullName = `${existingApplicant.firstName} ${existingApplicant.lastName}`.trim();
         try {
           await sendResumeLink(
@@ -304,21 +305,22 @@ export const POST: APIRoute = async ({ request, url }) => {
             applicantId: existingApplicant.id,
             email: existingApplicant.email,
           });
-        } catch (emailError) {
-          const msg = emailError instanceof Error ? emailError.message : "Unknown";
+        } catch (err) {
+          emailError = err instanceof Error ? err.message : "Unknown";
           logger.error("resume_email_resend_failed", {
             applicantId: existingApplicant.id,
             email: existingApplicant.email,
-            error: msg,
+            error: emailError,
           });
           Sentry.captureMessage("Failed to resend resume email", {
-            extra: { applicantId: existingApplicant.id, email: existingApplicant.email },
+            extra: { applicantId: existingApplicant.id, email: existingApplicant.email, error: emailError },
           });
         }
         return Response.json({
           success: true,
           requiresVerification: true,
           emailSent,
+          ...(emailSent ? {} : { emailError }),
         });
       }
 
@@ -349,20 +351,20 @@ export const POST: APIRoute = async ({ request, url }) => {
         declarationSignedAt || new Date().toISOString()
       );
 
-      const resumeLink = `${siteBaseUrl}/professional/apply?token=${newResumeToken}`;
+      const resumeLink = `${siteBaseUrl}/advanced/apply?token=${newResumeToken}`;
       try {
         await sendResumeLink(email, fullName, resumeLink, applicantId);
         emailSent = true;
         logger.info("resume_email_sent", { applicantId, email });
-      } catch (emailError) {
-        const msg = emailError instanceof Error ? emailError.message : "Unknown";
+      } catch (err) {
+        emailError = err instanceof Error ? err.message : "Unknown";
         logger.error("resume_email_failed", {
           applicantId,
           email,
-          error: msg,
+          error: emailError,
         });
         Sentry.captureMessage("Failed to send resume email", {
-          extra: { applicantId, email },
+          extra: { applicantId, email, error: emailError },
         });
       }
 
@@ -370,6 +372,7 @@ export const POST: APIRoute = async ({ request, url }) => {
         success: true,
         requiresVerification: true,
         emailSent,
+        ...(emailSent ? {} : { emailError }),
       });
     }
 

@@ -1,0 +1,64 @@
+name: Test
+
+# Gate every PR and every push to main on the full suite. The deploy workflows
+# (fly-deploy*.yml) build and ship but run NO tests — so a green-locally /
+# never-run suite could not catch regressions like bug-004 (stale route → 404)
+# or bug-005 (swallowed email error) before they reached production. This is
+# that gate.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  unit:
+    name: Unit + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+  e2e:
+    name: E2E smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Cache the browser binary keyed on the Playwright version so the ~100MB
+      # chromium download only runs when the version changes. OS deps live
+      # outside the cache, so on a hit we still run the fast `install-deps`.
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+      - name: Install Playwright (browser + OS deps)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Playwright OS deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # External services are neutralised by the E2E_STUB server shim, injected
+      # via playwright.config.ts -> webServer.env. No real secrets required.
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
