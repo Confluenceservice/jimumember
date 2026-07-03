@@ -23,6 +23,10 @@ Open `yourSchema.ts`. Walk through these decisions in order:
   - `emailNZ` — header-injection-safe email regex
   - `phoneNZ` — accepts NZ formats
   - `min(n)` / `max(n)` — numeric bounds
+  - `minLength(n)` / `maxLength(n)` — string length bounds
+  - `integer` — whole numbers only
+  - `ynRadio` — value must be `"yes"` or `"no"` (Y/N grids and radio pairs)
+  - `jsonArray` — value must parse as a JSON array (repeatable-field payloads)
   - `regex(pattern, msg)` — custom regex
   - `conditional(predicate)` — required only when a predicate returns true (e.g. only when another field equals "yes")
 - **Storage.** Set `storage.sheetName` to the tab name (e.g. `"Member Survey Responses"`) and `columnMap` to map each field to a column letter (A, B, C, ...). Empty cells stay managed (set them up in the route, not the schema).

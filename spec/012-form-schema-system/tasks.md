@@ -28,10 +28,10 @@
 - [x] Tier rename: professional→advanced, associate→basic; storage values pm→adv, am→basic
 
 ## Phase 4: Sample Data Abstraction (Phase N+ planned)
-- [ ] Extract all competency IDs + labels into JSON (Phase L landed; option values still in TS)
-- [ ] Extract declaration text into JSON
-- [ ] Extract further-requirement question text into JSON
-- [ ] Engineer-only contract: only types, validators, visibleWhen, column letters remain in TS
+- [x] Extract all competency IDs + labels into JSON — done in Phase L: `COMPETENCY_IDS` is derived via `Object.keys(content.steps.competencies.fields.coreCompetencies.options)`; all 21 options live in `advancedApply.content.json` (verified 2026-07-03)
+- [x] Extract declaration text into JSON — declaration labels live under `content.steps.declarations.fields.*`; TS holds only field names + contentKeys (verified 2026-07-03)
+- [x] Extract further-requirement question text into JSON — `FURTHER_REQUIREMENT_IDS` derived from the content JSON's options map, same pattern as competencies (verified 2026-07-03)
+- [ ] Engineer-only contract: only types, validators, visibleWhen, column letters remain in TS — REMAINING: the 7 upload doc-type labels (`advancedApply.ts` `uploads.docTypes[].label`, e.g. "Certificates of training") are still TS-side; move to content.json to finish
 
 ## Notes
 - Spec approved state gates Phase N+ changes.

@@ -8,13 +8,13 @@ Open `src/lib/forms/tiers.ts` and add a new key to `TIERS`:
 
 ```ts
 export const TIERS = Object.freeze({
-  professional: { /* existing */ },
-  associate:    { /* existing */ },
+  advanced: { /* existing */ },
+  basic:    { /* existing */ },
   student: {                          // ← new
     slug: "student",
     label: "Student Membership",
     shortLabel: "Student",
-    storageValue: "sm",               // ← must match existing Renewals sheet convention (lowercase 2-letter code)
+    storageValue: "student",          // ← written to the Renewals sheet tier column; lowercase, stable forever
     priceEnvVar: "STRIPE_PRICE_STUDENT",
     renewalPriceEnvVar: "STRIPE_PRICE_STUDENT_RENEWAL",
     applicationSchemaId: "studentApply",
@@ -27,7 +27,7 @@ export const TIERS = Object.freeze({
 
 Each field matters:
 
-- `storageValue` is the byte written to the Renewals sheet's `tier` column AND Stripe `metadata.tier`. Pick a 2-3 letter code that doesn't collide with `"pm"` or `"am"`. The reader (`getRenewalById`) is now data-driven — your new value is automatically recognised.
+- `storageValue` is the value written to the Renewals sheet's `tier` column AND Stripe `metadata.tier`. Pick a short lowercase code that doesn't collide with `"adv"` or `"basic"` (or the legacy `"pm"`/`"am"` values, which old rows still carry — `renewal-sheet.ts`'s `legacyTierMap` maps them on read). The reader (`getRenewalById`) is data-driven — your new value is automatically recognised.
 - `priceEnvVar` + `renewalPriceEnvVar` point to the Stripe price IDs you create in step 2.
 - `applicationSchemaId` + `renewalSchemaId` are the schema ids you create in step 3.
 
@@ -42,7 +42,7 @@ Add both env vars to `.env.example` so the next deployer knows about them.
 
 ## 3. Create the schemas
 
-Create `src/lib/forms/schemas/studentApply.{ts,content.json}` and `src/lib/forms/schemas/renewStudent.{ts,content.json}`. Use `renewAssociate` and `associateApply` as templates. The `columnMap` must point at columns in the new sheet (or the shared Renewals sheet, for renewals).
+Create `src/lib/forms/schemas/studentApply.{ts,content.json}` and `src/lib/forms/schemas/renewStudent.{ts,content.json}`. Use `renewBasic` and `basicApply` as templates. The `columnMap` must point at columns in the new sheet (or the shared Renewals sheet, for renewals).
 
 ## 4. Update CUSTOMIZE.md
 
@@ -55,7 +55,7 @@ If you want a `LookupKey`-style alternative (older code paths), see `src/lib/str
 ## 6. Tests
 
 - `src/lib/forms/tiers.test.ts` — add an assertion that `getTier("student")` returns the new config; `listTiers()` now includes 3 entries.
-- `src/lib/forms/schemas/renewStudent.test.ts` — schema-level tests (see `renewAssociate.test.ts` for the pattern).
+- `src/lib/forms/schemas/renewStudent.test.ts` — schema-level tests (see `renewBasic.test.ts` for the pattern).
 - `src/lib/stripe-products.test.ts` — `resolveRenewalPriceByTier("student")` reads `STRIPE_PRICE_STUDENT_RENEWAL`.
 
 ## What's automatic once the entry is added

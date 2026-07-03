@@ -11,7 +11,7 @@
  *   7. Declarations    — 8 confirmation checkboxes
  *   8. Document Upload — multi-file per doc type
  *
- * Content (labels + ordering) lives in `professionalApply.content.json` —
+ * Content (labels + ordering) lives in `advancedApply.content.json` —
  * 21 competency labels + 8 declaration labels + 8 Y/N question labels +
  * doc-type descriptions = 38 string labels editable by non-developers.
  *

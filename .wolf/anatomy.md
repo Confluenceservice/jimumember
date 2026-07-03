@@ -8,7 +8,7 @@
 - `types.ts` — FieldType, FieldDefinition, Step, FormSchema, FormContent. BaseField has `required?: boolean` + `requiredMessage?: string` (Phase F). (~225 lines, ~1600 tok)
 - `validators.ts` — emailNZ (header-injection-safe), phoneNZ, ynRadio, minLength/maxLength, regex, required, conditional, runValidator internals, `isBlank` exported for runtime.ts (~150 lines, ~1100 tok)
 - `runtime.ts` — loadSchema, validate (now enforces field.required as safety net), toRow (now honours visibleWhen), walkFields, mapApiResponseToValues, validateTier (~240 lines, ~1900 tok)
-- `tiers.ts` — TierConfig, TIERS (professional/associate), getTier, listTiers, UnknownTierError (~85 lines, ~700 tok)
+- `tiers.ts` — TierConfig, TIERS (advanced/basic; storageValue adv/basic, legacy pm/am mapped on read), getTier, listTiers, UnknownTierError (~85 lines, ~700 tok)
 - `validators.test.ts` — 20 tests covering EMAIL_RE CR/LF injection, validators, conditional (~110 lines, ~900 tok)
 - `runtime.test.ts` — 14 tests: walkFields, validate, toRow, serialize rules + 5 implicit-required safety-net cases (Phase F) (~225 lines, ~1500 tok)
 - `tiers.test.ts` — 6 tests for TIERS frozen, getTier, listTiers, UnknownTierError (~50 lines, ~400 tok)
@@ -23,17 +23,23 @@
 ## docs/
 
 - `CUSTOMIZE.md` — Section 7 rewritten: 7a schema-driven (edit JSON), 7b engineers-only (TS schema), 7c not-yet-migrated (edit .astro). (~50 line delta)
+- `forms/composing-a-form.md` — THE how-to for adding/editing a form (spec 012). Non-dev surface (content.json: labels/placeholders/help/option labels) vs engineer surface (TS: types/validators/columnMap/visibleWhen). Full 12-validator list. Copy-template = `example.memberSurvey.{ts,content.json}`, smoke page `/_dev/forms/example`. (~95 lines, ~800 tok)
+- `forms/composing-a-tier.md` — adding a membership tier: TIERS entry (advanced/basic + new slug), storageValue rules (avoid adv/basic + legacy pm/am), Stripe products, schema pair, tests, what's automatic. (~65 lines, ~600 tok)
+- `forms/migration-map.md` — column-letter map per sheet (Renewals 14 col, Advanced Applications 47, Basic Applications 16); managed-vs-schema cell split; legacy pm/am tier-value note. Ops triage doc. (~45 lines, ~500 tok)
 
 ## src/lib/forms/schemas/
 
-- `renewAssociate.ts` — Associate renewal schema (4 fields: firstName, lastName, email, year). columnMap: C/D/E/F. rowFactory: appendRenewal. (~55 lines, ~400 tok)
-- `renewAssociate.content.json` — Editable labels/placeholders/autocompletes for the 4 identity fields. (~25 lines, ~150 tok)
-- `renewAssociate.test.ts` — 8 tests for validate/toRow/managed-cell exclusion. (~80 lines, ~550 tok)
+- `renewBasic.ts` (renamed from renewAssociate, Phase K) — Basic renewal schema (4 fields: firstName, lastName, email, year). columnMap: C/D/E/F. rowFactory: appendRenewal. (~55 lines, ~400 tok)
+- `renewBasic.content.json` — Editable labels/placeholders/autocompletes for the 4 identity fields. (~25 lines, ~150 tok)
+- `renewBasic.test.ts` — 8 tests for validate/toRow/managed-cell exclusion. (~80 lines, ~550 tok)
+- `renewAdvanced.{ts,content.json,test.ts}` — Advanced renewal schema (adds phone + pdEntries repeatable). Same pattern.
+- `basicApply.{ts,content.json,test.ts}` / `advancedApply.{ts,content.json,test.ts}` — application schemas (16-col / 47-col). advancedApply derives COMPETENCY_IDS + FURTHER_REQUIREMENT_IDS from content.json option keys (Phase L).
+- `example.memberSurvey.{ts,content.json,test.ts}` — non-production copy-me template exercising every field variant; smoke page /_dev/forms/example.
 - `pdLog.ts` — PD log schema (Phase H: `entries` is repeatable with 4 itemFields; handler synthesises per-entry validation schema). columnMap: H. (~40 lines, ~300 tok)
 - `pdLog.content.json` — Editable labels for entries + nested entries.dateCompleted/activity/totalHours/provider. (~15 lines, ~100 tok)
 - `pdLog.test.ts` — 6 tests: id, structure, validate-empty, validate-array, minRows, columnMap. (~45 lines, ~350 tok)
 
-## src/pages/professional/
+## src/pages/advanced/ (renamed from professional/, Phase K)
 
 - `apply.astro` — Pro application wizard (Phase J1: 1692→1295 lines). Sections 1-7 now Step + FieldRenderer; step 8 (uploads) stays inline for J3. saveFormData is stubbed for J2 (FormData rewrite). (~1295 lines, ~8500 tok)
 
@@ -80,3 +86,15 @@
 - `bin/memberships-backfill.js` — rebuilds the Memberships tab from Stripe (option_c subs). Self-contained plain JS (no src/ imports), idempotent upserts, --dry-run/--limit, 2.5s throttle. (~160 lines, ~1300 tok)
 - `src/pages/api/stripe-webhook.ts` — handleInvoicePaid now records auto-renewals (invoice.payment_succeeded, subscription_cycle only): dedupe via stripe_session, paid Renewals row, admin email, adv PD link, setActive. Membership calls awaited with provenance ids. (~700 lines, ~5400 tok)
 - `src/lib/renewal-sheet.ts` — adds getRenewalByStripeRef (col L lookup, auto-renewal idempotency), RenewalInput.paymentStatus widened to pending|paid + optional paidAt, shared rowToRenewal mapper. (~200 lines, ~1500 tok)
+
+## OSS hygiene pack (2026-07-03)
+
+- `.github/dependabot.yml` — weekly npm (grouped minor+patch, majors solo) + monthly actions bumps. (~25 lines)
+- `.github/workflows/codeql.yml` — CodeQL js/ts scan on PR + push + weekly cron. (~30 lines)
+- `.github/workflows/release.yml` — tag `v*` → npm check+test verify job → GitHub Release with generated notes. The release gate fly-deploy lacks. (~40 lines)
+- `.github/ISSUE_TEMPLATE/` — bug_report.yml (flow dropdown, env mode, no-secrets checkbox), feature_request.yml, config.yml (private-security-report link; YOUR-ORG placeholder). (~120 lines total)
+- `.github/pull_request_template.md` — summary/REQ-IDs/verification checklist incl. live-proof line. (~25 lines)
+- `SECURITY.md` — private vulnerability reporting policy, scope notes (Stripe-hosted cards, per-fork creds). (~25 lines)
+- `CONTRIBUTING.md` — dev setup, 3-step test ladder, gotcha conventions (REQ-IDs, content-vs-schema, shared CSS, route-rename sweep). (~50 lines)
+- `.claude/skills/maintainer/SKILL.md` — single-repo maintenance skill: authorization boundaries, triage classes, decision-ready rule, verification ladder + live-proof gate, release gate, maintainer log. (~110 lines)
+- `docs/DEPLOY.md` §16 — enabling the already-wired dormant Sentry (SENTRY_DSN via fly secrets, OSS plan link).

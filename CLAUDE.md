@@ -41,3 +41,7 @@ Read `docs/CUSTOMIZE.md`. Replace org name, emails, Fly app names, Cloudflare Wo
 > Use the slash commands under `/spec:*` (e.g. `/spec:status`, `/spec:new`) to manage specs. Workflow: `/spec:new <slug>` → fill `requirements.md` → `/spec:approve requirements` → `design.md` → approve → `tasks.md` → approve → `/spec:implement`.
 >
 > REQ-ID convention: `REQ-{SPEC-ID}-{NNN}`. IDs are stable — never reuse, never renumber. Reference REQ-IDs in commit messages (`feat(001): REQ-AA-003 implement Y/N grid`) and PR descriptions.
+
+## Forms (schema-driven — spec 012)
+
+Any form work (add/change a form, field, validator, tier) starts at `docs/forms/composing-a-form.md` (form how-to, non-dev vs engineer surface), `docs/forms/composing-a-tier.md` (new membership tier), and `docs/forms/migration-map.md` (sheet column contracts). Copy-template: `src/lib/forms/schemas/example.memberSurvey.{ts,content.json}`; smoke page `/_dev/forms/example`. Rules that bite: option **values** and column letters are production contracts (never change them — labels are free); `required: true` is enforced by `validate()` even without the `required` validator; every schema ships a co-located `.test.ts`.
