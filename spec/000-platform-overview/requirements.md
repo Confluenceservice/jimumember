@@ -31,6 +31,7 @@ This spec is the **index** — it establishes shared vocabulary (state machine, 
   - **Basic Applications** — 16 columns A–P (identity, 1-step form, checkout status).
   - **Renewals** — 14 columns A–N (shared between tiers; PD entries as JSON in column H).
   - **Drive Files** — 6 columns A–F (one row per uploaded file, lazy-created on first upload).
+  - **Memberships** — 9 columns A–I (one row per Stripe customer; lazy-created on first write, like Drive Files): A `customer_id` · B `plan` · C `recurring_price_id` · D `status` (`awaiting_subscription|active|payment_failed|cancelled`) · E `subscription_id` · F `next_anchor_epoch` · G `joined_at` · H `updated_at` · I `last_event` (Stripe event/session id — provenance). Stripe is the source of truth; this tab is the durable mirror, fully reconstructible via `bin/memberships-backfill.js`.
 - **REQ-OV-004** Resume flow: token-first lookup using the `resume_token` column. Email fallback only when no token supplied. `GET /api/advanced/apply?token=...` returns `applicantId` for reliable hydration.
 - **REQ-OV-005** Email verification: a token link flips column AU (`email_verified`) to `TRUE`. Blank = legacy row, treated as verified. Verified applicants cannot be hijacked by email reuse.
 - **REQ-OV-006** Flag parsing is case-insensitive: `true`, `TRUE`, `True` are all accepted on read for `complete`/`paid`/declaration columns.

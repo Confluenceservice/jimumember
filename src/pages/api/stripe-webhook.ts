@@ -128,8 +128,11 @@ async function handleCheckoutCompleted(
     return;
   }
 
-  // Already processed this checkout session? (idempotency via local record)
-  const existing = getMembership(customerId);
+  // Already processed this checkout session? The durable mirror is a
+  // fast-path guard only — the Stripe idempotency key on subscription
+  // creation below is the real safety mechanism, so a wiped/missing mirror
+  // row can never cause a duplicate subscription.
+  const existing = await getMembership(customerId);
   const alreadyProcessed = !!existing?.subscriptionId;
   if (alreadyProcessed) {
     log.info("checkout_completed.already_processed", {
@@ -223,17 +226,17 @@ async function handleCheckoutCompleted(
       throw err;
     }
 
-    // Record the deferred subscription creation
-    setAwaitingSubscription(customerId, {
+    // Record the deferred subscription creation in the durable mirror
+    await setAwaitingSubscription(customerId, {
       plan: plan || "",
       recurringPriceId,
       nextJuly1Epoch,
       joinedAt: new Date().toISOString(),
       subscriptionId,
-    });
+    }, session.id);
 
     // Mark as active since subscription is now set up
-    setActive(customerId, subscriptionId);
+    await setActive(customerId, subscriptionId, session.id);
   }
 
   // Mark professional applicant paid/complete in the application sheet.
@@ -406,12 +409,12 @@ async function handleInvoicePaid(
     typeof invoice.customer === "string" ? invoice.customer : undefined;
   if (!customerId) return;
 
-  if (hasActiveSubscription(customerId)) {
+  if (await hasActiveSubscription(customerId)) {
     log.info("invoice.paid.renewal_skip", { customerId, invoiceId: invoice.id });
     return;
   }
 
-  const membership = getMembership(customerId);
+  const membership = await getMembership(customerId);
   if (!membership) {
     log.warn("invoice.paid.no_membership_record", {
       customerId,
@@ -431,7 +434,7 @@ async function handleInvoicePaymentFailed(
     typeof invoice.customer === "string" ? invoice.customer : undefined;
   if (!customerId) return;
 
-  setPaymentFailed(customerId);
+  await setPaymentFailed(customerId, invoice.id ?? undefined);
   log.warn("invoice.payment_failed", { customerId, invoiceId: invoice.id });
 }
 
@@ -446,7 +449,7 @@ async function handleSubscriptionUpdated(
   if (!customerId) return;
 
   if (subscription.status === "canceled" || subscription.status === "unpaid") {
-    setCancelled(customerId);
+    await setCancelled(customerId, subscription.id);
     log.info("subscription.updated.cancelled", {
       customerId,
       subscriptionId: subscription.id,
@@ -471,7 +474,7 @@ async function handleSubscriptionDeleted(
     typeof subscription.customer === "string" ? subscription.customer : undefined;
   if (!customerId) return;
 
-  setCancelled(customerId);
+  await setCancelled(customerId, subscription.id);
   log.info("subscription.deleted", { customerId, subscriptionId: subscription.id });
 }
 

@@ -69,8 +69,9 @@ vi.mock("@sentry/node", () => ({
   captureException: vi.fn(),
 }));
 
+const mockSubscriptionsCreate = vi.fn().mockResolvedValue({ id: "sub_test_123" });
+
 vi.mock("stripe", () => {
-  const mockSubscriptionsCreate = vi.fn().mockResolvedValue({ id: "sub_test_123" });
   const mockPaymentIntentsRetrieve = vi.fn().mockResolvedValue({
     payment_method: "pm_test_123",
   });
@@ -344,7 +345,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetPaymentFailed).toHaveBeenCalledWith("cus_123");
+      expect(mockSetPaymentFailed).toHaveBeenCalledWith("cus_123", "in_123");
     });
   });
 
@@ -357,7 +358,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
     });
 
     it("calls setCancelled when subscription is unpaid", async () => {
@@ -368,7 +369,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
     });
 
     it("does not call setCancelled for active subscription", async () => {
@@ -392,7 +393,40 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+    });
+  });
+
+  describe("wiped-mirror resilience (bug-scan #6)", () => {
+    it("proceeds with subscription creation when the mirror row is missing, keeping the Stripe idempotency key", async () => {
+      // Simulates the post-wipe state: Stripe replays checkout.session.completed
+      // but the mirror has no record. Creation must proceed AND stay safe via
+      // the Stripe-side idempotency key (the mirror is only a fast-path guard).
+      mockGetMembership.mockResolvedValue(null);
+      mockSetAwaitingSubscription.mockResolvedValue(undefined);
+      mockSetActive.mockResolvedValue(undefined);
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+      mockGetApplicantById.mockResolvedValue(null);
+      mockAppendCheckoutLog.mockResolvedValue(undefined);
+
+      const { POST } = await import("../../pages/api/stripe-webhook");
+      const session = makeCheckoutSession();
+      const body = JSON.stringify({ type: "checkout.session.completed", data: { object: session } });
+      const req = makeReq(body, buildSignature(body));
+      const res = await POST(req);
+
+      expect(res.status).toBe(200);
+      expect(mockSubscriptionsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ customer: "cus_123" }),
+        expect.objectContaining({ idempotencyKey: "option_c_sub_cs_test_123" }),
+      );
+      // The durable mirror is (re)populated with provenance.
+      expect(mockSetAwaitingSubscription).toHaveBeenCalledWith(
+        "cus_123",
+        expect.objectContaining({ subscriptionId: "sub_test_123" }),
+        "cs_test_123",
+      );
+      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_test_123", "cs_test_123");
     });
   });
 
