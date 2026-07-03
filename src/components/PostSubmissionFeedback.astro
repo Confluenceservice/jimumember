@@ -1,0 +1,148 @@
+---
+// Optional post-submission feedback block for success/thank-you pages.
+// Non-blocking: success is already shown to the user, this just collects
+// a few extra data points via POST /api/feedback.
+interface Props {
+  page: string;
+}
+
+const { page } = Astro.props;
+---
+
+<section class="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 mt-4" id="post-submission-feedback" data-page={page}>
+  <div id="psf-form-state">
+    <h2 class="m-0 mb-1 text-lg font-semibold">Quick feedback</h2>
+    <p class="text-gray-600 text-sm mb-4">
+      A few optional questions to help us improve this process.
+    </p>
+
+    <fieldset class="mb-4">
+      <legend class="text-sm font-semibold mb-2">Was it clear what information we needed from you?</legend>
+      <div class="flex flex-wrap gap-4">
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-clarity" value="Yes" /> Yes
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-clarity" value="Mostly" /> Mostly
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-clarity" value="No" /> No
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="mb-4">
+      <legend class="text-sm font-semibold mb-2">How easy was the form to complete?</legend>
+      <div class="flex flex-wrap gap-4">
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-ease" value="Easy" /> Easy
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-ease" value="OK" /> OK
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-ease" value="Difficult" /> Difficult
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="mb-4">
+      <legend class="text-sm font-semibold mb-2">How smooth was the payment process?</legend>
+      <div class="flex flex-wrap gap-4">
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-payment" value="Smooth" /> Smooth
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-payment" value="Some friction" /> Some friction
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="psf-payment" value="Problems" /> Problems
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="mb-4">
+      <label for="psf-comment" class="block text-sm font-semibold mb-1.5">Anything else?</label>
+      <textarea
+        id="psf-comment"
+        rows="3"
+        class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base resize-y"
+        placeholder="Optional"
+      ></textarea>
+    </div>
+
+    <p id="psf-error" class="hidden mb-3 text-sm text-amber-800"></p>
+
+    <button
+      id="psf-submit"
+      type="button"
+      class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-lg"
+    >
+      Submit feedback
+    </button>
+  </div>
+
+  <div id="psf-thanks-state" class="hidden">
+    <p class="m-0 text-emerald-700 font-semibold">Thanks for the feedback!</p>
+  </div>
+</section>
+
+<script>
+  const root = document.getElementById("post-submission-feedback")!;
+  const page = root.dataset.page ?? window.location.pathname;
+  const submitBtn = document.getElementById("psf-submit") as HTMLButtonElement;
+  const commentEl = document.getElementById("psf-comment") as HTMLTextAreaElement;
+  const errorEl = document.getElementById("psf-error")!;
+  const formState = document.getElementById("psf-form-state")!;
+  const thanksState = document.getElementById("psf-thanks-state")!;
+
+  function getRadioValue(name: string): string {
+    const selected = root.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`);
+    return selected?.value ?? "";
+  }
+
+  submitBtn.addEventListener("click", async () => {
+    errorEl.classList.add("hidden");
+
+    const clarity = getRadioValue("psf-clarity");
+    const ease = getRadioValue("psf-ease");
+    const payment = getRadioValue("psf-payment");
+    const comment = commentEl.value.trim();
+
+    if (!clarity && !ease && !payment && !comment) {
+      errorEl.textContent = "Answer at least one question or add a comment.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending...";
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "post_submission",
+          page,
+          comment: comment || undefined,
+          answers: {
+            clarity,
+            ease,
+            payment,
+          },
+        }),
+      });
+
+      if (!res.ok) throw new Error("Feedback submission failed.");
+
+      formState.classList.add("hidden");
+      thanksState.classList.remove("hidden");
+    } catch {
+      errorEl.textContent = "Could not send feedback right now. That's okay — thanks anyway!";
+      errorEl.classList.remove("hidden");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit feedback";
+    }
+  });
+</script>

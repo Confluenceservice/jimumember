@@ -3,16 +3,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mock googleapis before importing the module under test
 const mockAppend = vi.fn().mockResolvedValue({});
 const mockUpdate = vi.fn().mockResolvedValue({});
+const mockGet = vi.fn().mockResolvedValue({ data: { values: [] } });
 const mockSpreadsheetGet = vi.fn().mockResolvedValue({
   data: {
     sheets: [{ properties: { title: "Basic Applications", sheetId: 42 } }],
   },
 });
 const mockBatchUpdate = vi.fn().mockResolvedValue({});
-// Header self-heal check (ensureSheetWithHeaders reads A1:A1 before deciding
-// whether to (re)write headers). Empty by default so appendBasicApplication's
-// test exercises the "header missing, backfill it" branch.
-const mockValuesGet = vi.fn().mockResolvedValue({ data: { values: [] } });
 
 // The shared client (google-sheets-helpers.ts) calls `auth.authorize()` to
 // warm the OAuth token before returning the Sheets client, so `new
@@ -31,7 +28,7 @@ const mockSheets = vi.fn().mockReturnValue({
     values: {
       append: mockAppend,
       update: mockUpdate,
-      get: mockValuesGet,
+      get: mockGet,
     },
   },
 });
@@ -392,6 +389,98 @@ describe("google-sheets", () => {
           ]],
         },
       });
+    });
+  });
+
+  describe("readNotificationRules", () => {
+    async function getReadNotificationRules() {
+      const mod = await import("./google-sheets");
+      return mod.readNotificationRules;
+    }
+
+    it("parses rows and drops those missing event or recipient", async () => {
+      mockSpreadsheetGet.mockResolvedValueOnce({
+        data: { sheets: [{ properties: { title: "Notification Rules" } }] },
+      });
+      mockGet.mockResolvedValueOnce({
+        data: {
+          values: [
+            ["advanced_payment_received", "membership@club.org", "TRUE", "PM committee"],
+            ["basic_payment_received", "admin@club.org", "FALSE", "disabled"],
+            ["", "orphan@club.org", "TRUE", "no event — dropped"],
+            ["advanced_renewal_received", "", "TRUE", "no recipient — dropped"],
+          ],
+        },
+      });
+
+      const readNotificationRules = await getReadNotificationRules();
+      const rules = await readNotificationRules();
+
+      expect(rules).toEqual([
+        { event: "advanced_payment_received", recipient_email: "membership@club.org", enabled: "TRUE" },
+        { event: "basic_payment_received", recipient_email: "admin@club.org", enabled: "FALSE" },
+      ]);
+    });
+
+    it("returns an empty array when the tab has no data rows", async () => {
+      mockSpreadsheetGet.mockResolvedValueOnce({
+        data: { sheets: [{ properties: { title: "Notification Rules" } }] },
+      });
+      mockGet.mockResolvedValueOnce({ data: { values: null } });
+
+      const readNotificationRules = await getReadNotificationRules();
+      expect(await readNotificationRules()).toEqual([]);
+    });
+
+    it("does NOT rewrite headers when the tab already exists (preserves admin edits)", async () => {
+      mockSpreadsheetGet.mockResolvedValueOnce({
+        data: { sheets: [{ properties: { title: "Notification Rules" } }] },
+      });
+      mockGet.mockResolvedValueOnce({ data: { values: [] } });
+
+      const readNotificationRules = await getReadNotificationRules();
+      await readNotificationRules();
+
+      expect(mockBatchUpdate).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it("creates the tab and writes headers exactly once when missing", async () => {
+      // Default mockSpreadsheetGet returns only "Basic Applications" → tab missing.
+      mockGet.mockResolvedValueOnce({ data: { values: [] } });
+
+      const readNotificationRules = await getReadNotificationRules();
+      await readNotificationRules();
+
+      expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          range: "'Notification Rules'!A1:D1",
+          requestBody: {
+            values: [["event", "recipient_email", "enabled", "description"]],
+          },
+        }),
+      );
+    });
+
+    it("swallows the 'already exists' race when two webhooks create the tab", async () => {
+      // Tab missing per default spreadsheet.get, but batchUpdate loses the create race.
+      mockBatchUpdate.mockRejectedValueOnce(
+        new Error("Add sheet failed: A sheet with the name already exists."),
+      );
+      mockGet.mockResolvedValueOnce({
+        data: { values: [["advanced_payment_received", "membership@club.org", "TRUE", ""]] },
+      });
+
+      const readNotificationRules = await getReadNotificationRules();
+      const rules = await readNotificationRules();
+
+      // Header write skipped (the other webhook wrote it); rows still parsed.
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(rules).toEqual([
+        { event: "advanced_payment_received", recipient_email: "membership@club.org", enabled: "TRUE" },
+      ]);
     });
   });
 });
