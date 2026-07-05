@@ -19,7 +19,7 @@ jobs:
     # after the token is set. Set repo var FLY_DEPLOY_ENABLED=true to enable.
     if: ${{ vars.FLY_DEPLOY_ENABLED == 'true' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.ref }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
