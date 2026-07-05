@@ -16,19 +16,29 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    # Self-disable until Phase 8 sets the Worker URL + Phase 10 sets the
-    # GH token. Without these, the cron fires every 5 min and fails.
-    if: ${{ secrets.REMEMBER_HEALTH_CHECK_TOKEN != '' && vars.REMEMBER_HEALTH_ALERT_URL != '' }}
+    # Self-disable until Phase 8 sets the Worker URL. Gate on a repo
+    # VARIABLE, not a secret: the `secrets` context isn't reliable in
+    # job-level `if` (see fly-deploy.yml) — a `secrets.* != ''` guard can
+    # evaluate empty even after the token is set, so the job never runs.
+    # The token's presence is checked at runtime inside the step instead.
+    if: ${{ vars.REMEMBER_HEALTH_ALERT_URL != '' }}
     steps:
       - name: Trigger remember-health-alert Worker
+        env:
+          REMEMBER_HEALTH_ALERT_URL: ${{ vars.REMEMBER_HEALTH_ALERT_URL }}
+          REMEMBER_HEALTH_CHECK_TOKEN: ${{ secrets.REMEMBER_HEALTH_CHECK_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${REMEMBER_HEALTH_CHECK_TOKEN:-}" ]; then
+            echo "::error::REMEMBER_HEALTH_CHECK_TOKEN secret not set"
+            exit 1
+          fi
           # Capture body + HTTP status. Don't use -f: we want to print the body
           # on errors, then fail the step ourselves on any non-2xx so a broken
           # token or undelivered Slack alert (worker 502) turns the run red.
           response=$(curl -sS -X POST \
-            "${REMEMBER_HEALTH_ALERT_URL:-https://remember-health-alert.workers.dev}/check" \
-            -H "Authorization: Bearer ${{ secrets.REMEMBER_HEALTH_CHECK_TOKEN }}" \
+            "${REMEMBER_HEALTH_ALERT_URL}/check" \
+            -H "Authorization: Bearer ${REMEMBER_HEALTH_CHECK_TOKEN}" \
             -w $'\n%{http_code}')
           http_code=$(printf '%s' "$response" | tail -n1)
           body=$(printf '%s' "$response" | sed '$d')
