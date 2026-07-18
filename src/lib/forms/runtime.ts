@@ -17,9 +17,6 @@
  * stay byte-identical; this layer is an adapter, not a replacement.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 import type {
   FieldDefinition,
   FieldValues,
@@ -28,6 +25,22 @@ import type {
   Step,
 } from "./types.js";
 import { runValidator, isBlank } from "./validators.js";
+
+// Schemas are imported statically (not loaded from disk at runtime) so the
+// production bundle includes them. A dynamic import of a computed `.ts` path
+// resolves in dev via Vite but is absent from the compiled node server build.
+import { schema as basicApplySchema } from "./schemas/basicApply.js";
+import basicApplyContent from "./schemas/basicApply.content.json";
+import { schema as advancedApplySchema } from "./schemas/advancedApply.js";
+import advancedApplyContent from "./schemas/advancedApply.content.json";
+import { schema as renewBasicSchema } from "./schemas/renewBasic.js";
+import renewBasicContent from "./schemas/renewBasic.content.json";
+import { schema as renewAdvancedSchema } from "./schemas/renewAdvanced.js";
+import renewAdvancedContent from "./schemas/renewAdvanced.content.json";
+import { schema as pdLogSchema } from "./schemas/pdLog.js";
+import pdLogContent from "./schemas/pdLog.content.json";
+import { schema as exampleMemberSurveySchema } from "./schemas/example.memberSurvey.js";
+import exampleMemberSurveyContent from "./schemas/example.memberSurvey.content.json";
 
 export interface ValidationResult {
   ok: boolean;
@@ -44,45 +57,35 @@ export class SchemaNotFoundError extends Error {
   }
 }
 
-// -- schema loader -------------------------------------------------------------
-
-const SCHEMA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "schemas");
-
-/** Resolve a schema file by id. The .ts file must `export const schema: FormSchema`. */
-function resolveSchemaPath(id: string): { tsPath: string; jsonPath: string } {
-  return {
-    tsPath: resolve(SCHEMA_DIR, `${id}.ts`),
-    jsonPath: resolve(SCHEMA_DIR, `${id}.content.json`),
-  };
-}
+// -- schema registry -----------------------------------------------------------
 
 /**
- * Load a schema by id. Reads sibling `.ts` (TS structure) + `.content.json`
- * (editable content) and freezes the merged object. Implemented as a
- * dynamic import + JSON read so the runtime can pick the schema by id
- * without forcing callers to import every form's TS file up front.
+ * Every form schema, keyed by id. Static imports (above) ensure the bundler
+ * emits the schema + content into the production build — adding a form is one
+ * entry here plus its two co-located schema files.
+ */
+const SCHEMA_REGISTRY: Record<string, { schema: FormSchema; content: FormContent }> = {
+  basicApply: { schema: basicApplySchema, content: basicApplyContent as FormContent },
+  advancedApply: { schema: advancedApplySchema, content: advancedApplyContent as FormContent },
+  renewBasic: { schema: renewBasicSchema, content: renewBasicContent as FormContent },
+  renewAdvanced: { schema: renewAdvancedSchema, content: renewAdvancedContent as FormContent },
+  pdLog: { schema: pdLogSchema, content: pdLogContent as FormContent },
+  "example.memberSurvey": { schema: exampleMemberSurveySchema, content: exampleMemberSurveyContent as FormContent },
+};
+
+/**
+ * Load a schema by id: look it up in the static registry and freeze the merged
+ * TS-structure + JSON-content object. Kept async so existing `await loadSchema`
+ * callers are unaffected.
  *
- * Throws `SchemaNotFoundError` if either file is missing.
+ * Throws `SchemaNotFoundError` for an unknown id.
  */
 export async function loadSchema(id: string): Promise<FormSchema> {
-  const { tsPath, jsonPath } = resolveSchemaPath(id);
-  let mod: Record<string, unknown>;
-  try {
-    mod = (await import(tsPath)) as Record<string, unknown>;
-  } catch (cause) {
-    throw new SchemaNotFoundError(`${id} (${tsPath})`);
+  const entry = SCHEMA_REGISTRY[id];
+  if (!entry) {
+    throw new SchemaNotFoundError(id);
   }
-  const tsSchema = mod.schema ?? mod.default;
-  if (!tsSchema || typeof tsSchema !== "object") {
-    throw new SchemaNotFoundError(`${id} — no schema export in ${tsPath}`);
-  }
-  let content: FormContent;
-  try {
-    content = JSON.parse(readFileSync(jsonPath, "utf8")) as FormContent;
-  } catch (cause) {
-    throw new SchemaNotFoundError(`${id} (${jsonPath})`);
-  }
-  return Object.freeze({ ...(tsSchema as FormSchema), content }) as FormSchema;
+  return Object.freeze({ ...entry.schema, content: entry.content }) as FormSchema;
 }
 
 // -- field walker --------------------------------------------------------------
@@ -256,13 +259,21 @@ export function mapApiResponseToValues(
 /**
  * Tier-aware entry point: looks up the schema for a tier slug and
  * validates the body against it. Throws `UnknownTierError` if the slug
- * is not registered. Used by the dynamic `/api/renew/checkout/[tier]`
- * route (Phase B2+).
+ * is not registered.
+ *
+ * `formKind` selects which of the tier's two schemas to validate against:
+ * `"renewal"` (default — the `/api/renew/checkout/[tier]` route) or
+ * `"application"` (the associate-apply path in `create-checkout-session`).
  */
-export async function validateTier(tierSlug: string, body: unknown): Promise<ValidationResult> {
+export async function validateTier(
+  tierSlug: string,
+  body: unknown,
+  formKind: "application" | "renewal" = "renewal",
+): Promise<ValidationResult> {
   const { getTier } = await import("./tiers.js");
   const tier = getTier(tierSlug);
-  const schema = await loadSchema(tier.renewalSchemaId);
+  const schemaId = formKind === "application" ? tier.applicationSchemaId : tier.renewalSchemaId;
+  const schema = await loadSchema(schemaId);
   return validate(schema, body);
 }
 

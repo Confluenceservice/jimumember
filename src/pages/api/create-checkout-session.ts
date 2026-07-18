@@ -86,7 +86,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const plan = payload.plan;
   if (!plan || !VALID_PLANS.includes(plan)) {
-    return badRequest("Invalid plan. Use 'associate' or 'professional'.");
+    return badRequest("Invalid plan. Use 'basic' or 'advanced'.");
   }
 
   const firstName = payload.firstName?.trim();
@@ -105,7 +105,7 @@ export const POST: APIRoute = async ({ request }) => {
   // runs for the associate-apply path.
   let associateValues: Record<string, unknown> | null = null;
   if (isBasicApply) {
-    const result = await validateTier("basic", payload);
+    const result = await validateTier("basic", payload, "application");
     if (!result.ok) {
       const [field, message] = Object.entries(result.errors)[0] ?? ["body", "Invalid input"];
       return Response.json({ error: message, field }, { status: 400 });

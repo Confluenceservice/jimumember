@@ -110,7 +110,7 @@ const initialValues: Record<string, unknown> = {
     setStatus("Creating your secure checkout session...");
 
     try {
-      const payload = { plan: "associate", applicationSource: "apply", ...collectValues() };
+      const payload = { plan: "basic", applicationSource: "apply", ...collectValues() };
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
