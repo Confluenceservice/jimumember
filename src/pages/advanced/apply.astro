@@ -545,7 +545,11 @@ const token = Astro.url.searchParams.get("token");
     // Auto-mark previous step complete when advancing
     if (n > currentStep && currentStep > 0) markStepComplete(currentStep);
 
-    document.querySelectorAll("section").forEach(s => s.classList.add("hidden"));
+    // Only toggle the top-level step containers. Step.astro (Phase J1) wraps
+    // each step's fields in an inner <section class="form-step"> — excluding it
+    // here keeps those fields visible; a blanket `section` selector would hide
+    // them and leave every step showing an empty card.
+    document.querySelectorAll("section:not(.form-step)").forEach(s => s.classList.add("hidden"));
     const section = document.getElementById(STEPS[n].id);
     if (section) section.classList.remove("hidden");
 
@@ -746,6 +750,18 @@ const token = Astro.url.searchParams.get("token");
   // saveFormData uses. Both share window.__buildPayload__.
   window.__buildPayload__ = buildPayload;
   window.__serializeRepeatable__ = serializeRepeatable;
+
+  // Competency column order (sheet contract) comes from the server-rendered
+  // `competency-order` island. buildPayload reads window.__competencyOrder__ to
+  // serialise the grid in this exact order — without it the grid saved as an
+  // empty array (competencies were silently dropped). Also drives resume
+  // hydration below.
+  try {
+    const orderEl = document.getElementById("competency-order");
+    window.__competencyOrder__ = orderEl?.textContent ? JSON.parse(orderEl.textContent) : [];
+  } catch {
+    window.__competencyOrder__ = [];
+  }
 
   document.querySelectorAll("[data-next]").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -1353,11 +1369,17 @@ const token = Astro.url.searchParams.get("token");
         } catch {}
 
         try {
+          // coreCompetencies is stored as a positional yes/no array in
+          // competency-order; the grid renders one radio per competency named
+          // coreCompetencies.<id> (value="true"). Check the "yes" ones.
           const comps = JSON.parse(data.coreCompetencies || "[]");
-          // Phase J1: competencyStates is gone; the schema-driven grid renders
-          // once at page load and the field names (coreCompetencies.{col})
-          // are stable for hydration. J2 will hydrate the grid radios here.
-          void comps;
+          const order = window.__competencyOrder__ || [];
+          comps.forEach((val, i) => {
+            const id = order[i];
+            if (!id || String(val).toLowerCase() !== "yes") return;
+            const el = document.querySelector(`input[name="coreCompetencies.${id}"]`);
+            if (el) el.checked = true;
+          });
         } catch {}
 
         // Schema-driven render (Phase J1) emits referee inputs under the
