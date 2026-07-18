@@ -157,6 +157,80 @@ export function attachRepeatable(container: HTMLElement): void {
 }
 
 // ----------------------------------------------------------------------------
+// Repeatable resume hydration — reconstructs saved rows on load (the piece the
+// attachRepeatable/hydrateFromResponse skeletons deferred to "Phase C"). The
+// GET-by-token response ships each repeatable as an array of row objects. We
+// grow the live-row set to match, renumber to dense indices, then fill each
+// row's inputs by their trailing subkey (`qualifications.<i>.name` → key
+// "name"). Reuses attachRepeatable's Add button when wired; falls back to
+// cloning the <template> so hydration never depends on attach order.
+// ----------------------------------------------------------------------------
+
+export function hydrateRepeatable(
+  container: HTMLElement,
+  rows: unknown[],
+): void {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  const tmpl = container.querySelector<HTMLTemplateElement>(
+    "template[data-repeatable-template]",
+  );
+  const addBtn = container.querySelector<HTMLButtonElement>(
+    "[data-repeatable-add]",
+  );
+  // Template content is inert (a DocumentFragment, not in the DOM tree), so
+  // this counts live rows only.
+  const liveRows = () =>
+    Array.from(container.querySelectorAll<HTMLElement>("[data-repeatable-row]"));
+
+  const cloneRow = (): boolean => {
+    if (!tmpl) return false;
+    const frag = tmpl.content.cloneNode(true) as DocumentFragment;
+    const row = frag.querySelector<HTMLElement>("[data-repeatable-row]");
+    if (!row) return false;
+    container.insertBefore(row, addBtn ?? null);
+    return true;
+  };
+
+  while (liveRows().length < rows.length) {
+    const before = liveRows().length;
+    if (addBtn) addBtn.click();
+    if (liveRows().length === before && !cloneRow()) break;
+  }
+
+  // Renumber to dense zero-based indices — idempotent when attachRepeatable
+  // already did it, required for manually-cloned rows still carrying [ROW].
+  const domRows = liveRows();
+  domRows.forEach((row, idx) => {
+    row
+      .querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        "input, textarea, select",
+      )
+      .forEach((el) => {
+        if (!el.name) return;
+        el.name = el.name.replace(/\.\[ROW\]/g, `.${idx}`).replace(/\.\d+(?=\.|$)/g, `.${idx}`);
+      });
+  });
+
+  rows.forEach((rowData, i) => {
+    const row = domRows[i];
+    if (!row || rowData === null || typeof rowData !== "object") return;
+    for (const [key, value] of Object.entries(rowData as Record<string, unknown>)) {
+      if (value === null || value === undefined) continue;
+      const el = row.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        `[name$=".${key}"]`,
+      );
+      if (!el) continue;
+      if (el instanceof HTMLInputElement && el.type === "checkbox") {
+        el.checked = Boolean(value);
+      } else {
+        el.value = String(value);
+      }
+    }
+  });
+}
+
+// ----------------------------------------------------------------------------
 // VisibleWhen — show/hide fields via the schema's `visibleWhen` predicates.
 // Phase A skeleton: re-evaluates on every input/blur. Phase C throttles and
 // also handles nested groups + repeatable-row scoping.
@@ -472,6 +546,17 @@ export function mount(root: HTMLElement, options: MountOptions): {
   if (options.initialValues) hydrateFromResponse(form, options.initialValues);
   attachVisibleWhen(form, options.schema);
   root.querySelectorAll<HTMLElement>("[data-repeatable-name]").forEach(attachRepeatable);
+
+  // Expose repeatable resume hydration for the page's inline script (which
+  // owns the token-fetch flow), mirroring __hydrateSignature__ below.
+  (window as unknown as {
+    __hydrateRepeatable__?: (name: string, rows: unknown[]) => void;
+  }).__hydrateRepeatable__ = (name, rows) => {
+    const container = root.querySelector<HTMLElement>(
+      `.repeatable[data-repeatable-name="${name}"]`,
+    );
+    if (container) hydrateRepeatable(container, rows);
+  };
 
   const signatureHydrators = Array.from(
     root.querySelectorAll<HTMLElement>("[data-signature]"),

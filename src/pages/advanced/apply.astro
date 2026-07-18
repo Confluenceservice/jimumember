@@ -783,9 +783,11 @@ const token = Astro.url.searchParams.get("token");
     if (n === 1) return true;
     if (n === 2) return true;
     if (n === 4) {
+      // Schema-driven grid (Phase J1): each requirement row is a radio named
+      // furtherRequirements.<col> (value="true" when agreed).
       const required = ["agreeMemberServices", "agreeInterview", "commitProfessionalDev", "listDirectory", "provideCriminalCheck", "attendMeetings", "workRemotely"];
-      for (const id of required) {
-        const el = document.getElementById(id);
+      for (const col of required) {
+        const el = document.querySelector(`input[name="furtherRequirements.${col}"]`);
         if (el && !el.checked) {
           alert("Please answer all required questions.");
           return false;
@@ -795,9 +797,10 @@ const token = Astro.url.searchParams.get("token");
     }
     if (n === 5) return true;
     if (n === 6) {
-      const fields = ["ref1Name", "ref1Role", "ref1Email", "ref1Phone", "ref2Name", "ref2Role", "ref2Email", "ref2Phone"];
-      for (const id of fields) {
-        const el = document.getElementById(id);
+      // Referee inputs render under the `referees` group → dotted ids.
+      const fields = ["referee1Name", "referee1Role", "referee1Email", "referee1Phone", "referee2Name", "referee2Role", "referee2Email", "referee2Phone"];
+      for (const name of fields) {
+        const el = document.getElementById(`referees.${name}`);
         if (el && !el.value.trim()) {
           alert("Please fill in all referee fields.");
           return false;
@@ -806,7 +809,7 @@ const token = Astro.url.searchParams.get("token");
       return true;
     }
     if (n === 7) {
-      const decls = ["declAccuracy", "declEthics", "declScope", "declMemberServices", "declInterview", "declProfessionalDev", "declCriminalCheck", "declMeetings"];
+      const decls = ["declarationAccuracy", "declarationEthics", "declarationScope", "declarationMemberServices", "declarationInterview", "declarationProfessionalDev", "declarationCriminalCheck", "declarationMeetings"];
       for (const id of decls) {
         const el = document.getElementById(id);
         if (el && !el.checked) {
@@ -829,6 +832,13 @@ const token = Astro.url.searchParams.get("token");
   }
 
   function saveStepData(n) {}
+
+  // Resume hydration for schema-driven repeatable groups lives in form-client
+  // (hydrateRepeatable), exposed on window by mount() — mirrors
+  // __hydrateSignature__. This wrapper no-ops safely if mount hasn't run.
+  function hydrateRepeatable(name, rows) {
+    if (window.__hydrateRepeatable__) window.__hydrateRepeatable__(name, rows);
+  }
 
   function renderDocuments() {
     const uploaded = ensureDocsUploadedStore();
@@ -1319,30 +1329,27 @@ const token = Astro.url.searchParams.get("token");
         document.getElementById("step-indicator").classList.remove("hidden");
 
         try {
-          const quals = JSON.parse(data.qualifications || "[]");
-          quals.forEach(q => addCourseRow(q));
+          hydrateRepeatable("qualifications", JSON.parse(data.qualifications || "[]"));
         } catch {}
 
         try {
-          const exps = JSON.parse(data.experience || "[]");
-          exps.forEach(e => addExperienceRow(e));
+          hydrateRepeatable("experience", JSON.parse(data.experience || "[]"));
         } catch {}
 
         try {
+          // furtherRequirements renders as a grid of single radios named
+          // furtherRequirements.<col> (value="true"). Stored as a YES/NO map.
           const fr = JSON.parse(data.furtherRequirements || "{}");
-          const setRadio = (name, val) => {
-            if (!val) return;
-            const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
-            if (radio) radio.checked = true;
+          const setRequirement = (col) => {
+            if (String(fr[col] || "").toUpperCase() !== "YES") return;
+            const el = document.querySelector(`input[name="furtherRequirements.${col}"]`);
+            if (el) el.checked = true;
           };
-          setRadio("agreeMemberServices", fr.agreeMemberServices);
-          setRadio("agreeInterview", fr.agreeInterview);
-          setRadio("commitProfessionalDev", fr.commitProfessionalDev);
-          setRadio("willInsurance", fr.willInsurance);
-          setRadio("listDirectory", fr.listDirectory);
-          setRadio("provideCriminalCheck", fr.provideCriminalCheck);
-          setRadio("attendMeetings", fr.attendMeetings);
-          setRadio("workRemotely", fr.workRemotely);
+          [
+            "agreeMemberServices", "agreeInterview", "commitProfessionalDev",
+            "willInsurance", "listDirectory", "provideCriminalCheck",
+            "attendMeetings", "workRemotely",
+          ].forEach(setRequirement);
         } catch {}
 
         try {
@@ -1353,35 +1360,45 @@ const token = Astro.url.searchParams.get("token");
           void comps;
         } catch {}
 
+        // Schema-driven render (Phase J1) emits referee inputs under the
+        // `referees` group, so their DOM ids are dotted (referees.referee1Name).
+        // Guard every lookup — an unmatched id must not throw and abort the
+        // whole hydration (which would fall through to showStep(0), hiding all
+        // stages on resume).
+        const setFieldValue = (id, val) => {
+          const el = document.getElementById(id);
+          if (el) el.value = val || "";
+        };
         if (data.referee1) {
-          document.getElementById("ref1Name").value = data.referee1.name || "";
-          document.getElementById("ref1Role").value = data.referee1.role || "";
-          document.getElementById("ref1Email").value = data.referee1.email || "";
-          document.getElementById("ref1Phone").value = data.referee1.phone || "";
+          setFieldValue("referees.referee1Name", data.referee1.name);
+          setFieldValue("referees.referee1Role", data.referee1.role);
+          setFieldValue("referees.referee1Email", data.referee1.email);
+          setFieldValue("referees.referee1Phone", data.referee1.phone);
         }
         if (data.referee2) {
-          document.getElementById("ref2Name").value = data.referee2.name || "";
-          document.getElementById("ref2Role").value = data.referee2.role || "";
-          document.getElementById("ref2Email").value = data.referee2.email || "";
-          document.getElementById("ref2Phone").value = data.referee2.phone || "";
+          setFieldValue("referees.referee2Name", data.referee2.name);
+          setFieldValue("referees.referee2Role", data.referee2.role);
+          setFieldValue("referees.referee2Email", data.referee2.email);
+          setFieldValue("referees.referee2Phone", data.referee2.phone);
         }
 
-        try {
-          const exps = JSON.parse(data.experience || "[]");
-          if (exps[0]?.description) document.getElementById("example1").value = exps[0].description;
-          if (exps[1]?.description) document.getElementById("example2").value = exps[1].description;
-          if (exps[2]?.description) document.getElementById("example3").value = exps[2].description;
-        } catch {}
-
+        // Declaration checkboxes render with flat ids matching the schema field
+        // names (declarationAccuracy, ...). Guard each lookup so a missing node
+        // can't throw and abort hydration.
         const isTrueFlag = (value) => String(value || "").toUpperCase() === "TRUE";
-        if (isTrueFlag(data.declarationAccuracy)) document.getElementById("declAccuracy").checked = true;
-        if (isTrueFlag(data.declarationEthics)) document.getElementById("declEthics").checked = true;
-        if (isTrueFlag(data.declarationScope)) document.getElementById("declScope").checked = true;
-        if (isTrueFlag(data.declarationMemberServices)) document.getElementById("declMemberServices").checked = true;
-        if (isTrueFlag(data.declarationInterview)) document.getElementById("declInterview").checked = true;
-        if (isTrueFlag(data.declarationProfessionalDev)) document.getElementById("declProfessionalDev").checked = true;
-        if (isTrueFlag(data.declarationCriminalCheck)) document.getElementById("declCriminalCheck").checked = true;
-        if (isTrueFlag(data.declarationMeetings)) document.getElementById("declMeetings").checked = true;
+        const checkDeclaration = (id, val) => {
+          if (!isTrueFlag(val)) return;
+          const el = document.getElementById(id);
+          if (el) el.checked = true;
+        };
+        checkDeclaration("declarationAccuracy", data.declarationAccuracy);
+        checkDeclaration("declarationEthics", data.declarationEthics);
+        checkDeclaration("declarationScope", data.declarationScope);
+        checkDeclaration("declarationMemberServices", data.declarationMemberServices);
+        checkDeclaration("declarationInterview", data.declarationInterview);
+        checkDeclaration("declarationProfessionalDev", data.declarationProfessionalDev);
+        checkDeclaration("declarationCriminalCheck", data.declarationCriminalCheck);
+        checkDeclaration("declarationMeetings", data.declarationMeetings);
 
         // Signature (schema-driven field) — hydrate via the form-client hook.
         if (window.__hydrateSignature__ && data.signature) {
