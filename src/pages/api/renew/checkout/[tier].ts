@@ -46,7 +46,7 @@ function getStripe(): Stripe {
   if (!stripeInstance) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error("MISSING_CONFIG: STRIPE_SECRET_KEY");
-    stripeInstance = new Stripe(key, { apiVersion: "2026-02-25.clover" as Stripe.LatestApiVersion });
+    stripeInstance = new Stripe(key, { apiVersion: "2026-06-24.dahlia" as Stripe.LatestApiVersion });
   }
   return stripeInstance;
 }

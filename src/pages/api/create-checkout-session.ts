@@ -130,7 +130,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
-  const stripe = new Stripe(secretKey, { apiVersion: "2026-02-25.clover" });
+  const stripe = new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
   const dryRun = isCheckoutDryRunEnabled();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   const recurringPriceId = getPriceForPlan(plan);
