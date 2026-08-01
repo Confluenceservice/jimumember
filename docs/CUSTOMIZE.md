@@ -118,6 +118,12 @@ Wired event keys:
 | `advanced_payment_received` | A professional application is paid | `SUPPORT_EMAIL` |
 | `basic_payment_received` | An associate application is paid | `ADMIN_EMAIL` |
 | `advanced_renewal_received` | Any renewal is paid | `ADMIN_EMAIL` |
+| `feedback_received` | A visitor submits site feedback | *(none — see note)* |
+
+> **`feedback_received` has no fallback.** Unlike the payment events, the feedback
+> caller passes no env-var safety net: if the sheet read fails or no enabled row
+> matches, **no feedback email is sent** (the submission is still saved). Add at
+> least one enabled `feedback_received` row if you want feedback notifications.
 
 Rules:
 

@@ -4,6 +4,19 @@
 
 ---
 
+## Who receives internal notifications (routing)
+
+Recipients for the internal payment, renewal, and feedback notifications are
+**not hardcoded** — they are resolved at send time from an admin-editable
+**"Notification Rules"** tab in the Google Sheet, via `getRecipientsForEvent()`
+(`src/lib/notification-rules.ts`). A volunteer admin changes who is notified,
+adds multiple recipients, or disables an event without a redeploy.
+
+See **`docs/CUSTOMIZE.md` §6a** for the column contract, the wired event keys,
+the env-var fallbacks, and the `feedback_received` no-fallback caveat.
+
+---
+
 ## Currently Implemented
 
 ### 1. Resume Link Email
@@ -40,25 +53,13 @@ JimuMember
 
 ---
 
-## Planned / Not Yet Implemented
-
-The following notifications are described in the UI but **not yet implemented**:
-
-| Notification | UI Copy | Trigger Location | Status |
-|---|---|---|---|
-| Document verification confirmation | "You will receive confirmation once your documents have been verified" | `success-upload.astro` | Not implemented |
-| Membership activation confirmation | "You will receive confirmation once your membership has been activated" | `associate-membership.astro` | Not implemented |
-| Payment receipt | — | — | **Stripe handles it** — JimuMember passes `receipt_email` in the Checkout Session API call, which overrides Dashboard automatic receipt settings. Stripe sends its own branded receipt directly to that address. |
-| Subscription renewal reminder | — | — | Not implemented |
-| Application review completion | — | — | Not implemented |
-
 ### 2. Payment Confirmation (Applicant Email)
 
 **Trigger:** `checkout.session.completed` webhook event for professional membership
 
 **To:** Applicant's email address (from sheet)
 
-**Template:** `sendProfessionalConfirmation(toEmail, fullName, applicantId?)` in `src/lib/email-sender.ts`
+**Template:** `sendAdvancedConfirmation(toEmail, fullName, applicantId?)` in `src/lib/email-sender.ts`
 
 ```
 Subject: Your JimuMember Professional Membership Application
@@ -81,11 +82,11 @@ JimuMember Committee
 
 ### 3. Internal Application Notification (JimuMember Membership Team)
 
-**Trigger:** After `createApplicationReviewDoc()` completes successfully for professional membership
+**Trigger:** After `createAdvancedApplicationReviewDoc()` completes successfully for professional membership
 
-**To:** `membership@example.com` (hardcoded)
+**To:** Resolved at send time via `getRecipientsForEvent("advanced_payment_received", SUPPORT_EMAIL)` — the admin-editable "Notification Rules" sheet, falling back to `SUPPORT_EMAIL`. See `docs/CUSTOMIZE.md` §6a.
 
-**Template:** `sendProfessionalApplicationNotification(toEmail, applicantName, docUrl, applicantId?)` in `src/lib/email-sender.ts`
+**Template:** `sendAdvancedApplicationNotification(toEmail, applicantName, docUrl, applicantId?)` in `src/lib/email-sender.ts`
 
 ```
 Subject: New Professional Membership Application — {applicantName}
@@ -108,13 +109,13 @@ JimuMember
 
 ### 4. Associate Membership Confirmation (Applicant Email)
 
-**Trigger:** After `createAssociateApplicationReviewDoc()` completes for associate membership
+**Trigger:** After `createBasicApplicationReviewDoc()` completes for associate membership
 
 **To:** Applicant's email address
 
 **Reply-To:** `membership@example.com`
 
-**Template:** `sendAssociateConfirmation(toEmail, fullName, listOnPage, associateApplicationId?)` in `src/lib/email-sender.ts`
+**Template:** `sendBasicConfirmation(toEmail, fullName, listOnPage, associateApplicationId?)` in `src/lib/email-sender.ts`
 
 ```
 Subject: Welcome to JimuMember — Associate Membership Confirmed
@@ -149,12 +150,54 @@ JimuMember Committee
 
 ---
 
+### 4b. Internal Associate Application Notification (Committee)
+
+**Trigger:** After `createBasicApplicationReviewDoc()` completes for associate membership (associate twin of §3)
+
+**To:** Resolved at send time via `getRecipientsForEvent("basic_payment_received", ADMIN_EMAIL)` — the admin-editable "Notification Rules" sheet, falling back to `ADMIN_EMAIL`. See `docs/CUSTOMIZE.md` §6a.
+
+**Template:** `sendBasicApplicationNotification(toEmail, associateName, docUrl, basicApplicationId?)` in `src/lib/email-sender.ts`
+
+```
+Subject: New Basic Membership Application — {associateName}
+
+A new associate membership application has been received and the review document is ready.
+
+Applicant: {associateName}
+Review document: {docUrl}
+
+Please log in to review the application and continue the membership process.
+
+{orgName}
+```
+
+**Delivery:** Non-blocking — failures are logged but do not fail webhook processing.
+
+**Audit:** Notification emails are logged to the `Email log` sheet (template `basic_application_notification`).
+
+---
+
 ### 5. Stripe Payment Receipt
 
 **Trigger:** Stripe Checkout — JimuMember passes `receipt_email` in the Checkout Session API call, which overrides Dashboard automatic receipt settings. Stripe sends its own branded receipt directly to the applicant.
 
 - **With `receipt_email` in the API call:** Stripe sends a receipt to that specific address regardless of Dashboard settings
 - **Without `receipt_email`:** Stripe uses the Dashboard setting (automatic receipts on/off)
+
+---
+
+## Planned / Not Yet Implemented
+
+The following are described in the UI but **not yet implemented**:
+
+| Notification | UI Copy | Trigger Location | Status |
+|---|---|---|---|
+| Document verification confirmation | "You will receive confirmation once your documents have been verified" | `success-upload.astro` | Not implemented |
+| Membership activation confirmation | "You will receive confirmation once your membership has been activated" | `associate-membership.astro` | Not implemented |
+| Subscription renewal reminder | — | — | Not implemented |
+| Application review completion | — | — | Not implemented |
+
+(The Stripe payment receipt is **not** in this list — Stripe handles it directly; see §5 above.)
 
 ---
 
