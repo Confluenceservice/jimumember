@@ -1,0 +1,8 @@
+{
+  "scriptId": "REPLACE_WITH_STANDALONE_SCRIPT_ID",
+  "rootDir": "",
+  "scriptExtensions": [".js", ".gs"],
+  "jsonExtensions": [".json"],
+  "filePushOrder": [],
+  "skipSubdirectories": false
+}

@@ -102,7 +102,7 @@ sync: appendRenewal({ …, payment_status:'paid', stripe_session: invoice.id })
    ├─async─► sendRenewalAdminNotification(renewal)
    ├─async─► if tier === 'adv': sendRenewalPdLogLink(renewal)
    ├─async─► setActive(customerId, sub.id, invoice.id)   // durable mirror
-   └─(016)─► recordPaymentInXero(payment)                // when adapter lands
+   └─await──► pushToXero(flow: 'auto_renewal')           // spec 016, no-op when disabled
 ```
 
 Handle `invoice.payment_succeeded` ONLY — never also `invoice.paid` (fires

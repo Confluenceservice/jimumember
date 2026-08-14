@@ -29,7 +29,7 @@ Read `docs/CUSTOMIZE.md`. Replace org name, emails, Fly app names, Cloudflare Wo
 
 ## Domain specification
 
-> Domain specification lives at `spec/000-platform-overview/` (index) and `spec/001-…` through `spec/015-…` (features + cross-cutting). The application-states state machine, sheet column contracts, API endpoint inventory, post-payment side effects, testing checklist, checkout-flow resilience notes, and dry-run behaviour have all been migrated into REQ-IDs across these spec files.
+> Domain specification lives at `spec/000-platform-overview/` (index) and `spec/001-…` through `spec/016-…` (features + cross-cutting). The application-states state machine, sheet column contracts, API endpoint inventory, post-payment side effects, testing checklist, checkout-flow resilience notes, and dry-run behaviour have all been migrated into REQ-IDs across these spec files.
 >
 > Use the slash commands under `/spec:*` (e.g. `/spec:status`, `/spec:new`) to manage specs. Workflow: `/spec:new <slug>` → fill `requirements.md` → `/spec:approve requirements` → `design.md` → approve → `tasks.md` → approve → `/spec:implement`.
 >
