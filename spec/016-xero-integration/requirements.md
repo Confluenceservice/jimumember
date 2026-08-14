@@ -50,6 +50,13 @@ tab; the retry mechanism is an external hourly GET.
   written verbatim to the sheet and are a production contract.
 - **REQ-XI-008** The Xero push is **awaited** inside the webhook handler, never
   fire-and-forget (the machine may stop immediately after the response).
+- **REQ-XI-008a** Every paid `option_c` session of a known tier is pushed
+  exactly once, whether or not it carries an application id. `applicant_id` is
+  set only by the advanced upload flow and `basic_application_id` only by
+  `/apply`; a direct purchase from the landing page carries neither, and
+  `internal_id` falls back to the Stripe session id. Gating on those ids would
+  take the money and never enqueue a row — which the sweeper cannot recover,
+  because it only re-drives rows that exist.
 - **REQ-XI-009** The push never propagates an error to the webhook route. A
   Xero outage costs a `pending` row and nothing else — a 500 would make Stripe
   replay the event and re-fire non-idempotent side effects (review Doc,
@@ -153,3 +160,12 @@ tab; the retry mechanism is an external hourly GET.
 - Sales-tax-registered orgs (see `docs/CUSTOMIZE.md` §6c).
 - Same-name Contact disambiguation — Xero's uniqueness behaviour on `Name` is
   unverified against a live org; see the in-code note in `pushOne`.
+- **The pre-Xero replay window.** Both renewal handlers return early on their
+  own ledger idempotency check (`renewal.paymentStatus === "paid"`,
+  `getRenewalByStripeRef(invoiceId)`), and those checks sit *before* the Xero
+  push. A process death between the ledger write and `appendPending` means the
+  Stripe replay returns early and the payment is never enqueued. REQ-XI-013
+  guarantees replays do not *duplicate*; it does not guarantee they recover
+  this window. Detection is reconciliation-side: the clearing account does not
+  net to zero. Closing it would mean moving the Xero push ahead of the ledger
+  idempotency gates, which trades a rare miss for a common double-push.

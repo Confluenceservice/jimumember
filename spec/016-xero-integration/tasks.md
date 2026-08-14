@@ -27,6 +27,7 @@
 
 ## Phase 4: Wiring
 - [x] `pushToXero` awaited at all four webhook call sites — REQ-XI-007, REQ-XI-008
+- [x] Application-id-free direct purchases still enqueue — REQ-XI-008a
 - [x] Never propagates an error to the route — REQ-XI-009
 - [x] Environment guard before append — REQ-XI-003
 - [x] `/api/xero/` rate-limiter exemption — REQ-XI-026
@@ -55,6 +56,8 @@ connection with it. Set `XERO_ALLOW_LIVE=false`.
       `XERO_TAX_TYPE` accordingly.
 - [ ] Test payment per flow (`advanced_new`, `basic_new`, `renewal`,
       `auto_renewal`) → invoice total equals Stripe gross to the cent.
+- [ ] Direct landing-page purchase (no application id) → row written with the
+      session id as `internal_id` (REQ-XI-008a).
 - [ ] Invoice date equals the balance-transaction date, not today.
 - [ ] Replay the same Stripe event → no second row, no second invoice.
 - [ ] Live-mode event against the Demo Company → guard refuses, nothing written.

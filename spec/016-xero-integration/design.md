@@ -75,6 +75,10 @@ Layer 3 is what makes it safe for `markDone` to swallow its write failure: a
 row left `pending` but done in Xero is re-driven into a no-op. **Do not keep
 `markDone` swallowing if the resume path is ever removed.**
 
+The one window these layers do not cover is a process death between a renewal
+ledger write and `appendPending` — the replay hits the handler's own early
+return and never reaches Xero. Recorded in requirements Out of Scope.
+
 ## Failure classification
 
 | Class | Examples | Row outcome |

@@ -978,6 +978,55 @@ describe("stripe-webhook", () => {
       );
     });
 
+    it("enqueues a direct membership purchase that carries no application id", async () => {
+      // /index.astro posts a bare {plan} — neither applicant_id nor
+      // basic_application_id is set. Gating Xero on those ids would take the
+      // money and never write a row.
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      const session = makeCheckoutSession({
+        id: "cs_direct_1",
+        customer_email: "direct@example.com",
+        amount_total: 7500,
+        metadata: {
+          flow: "option_c",
+          plan: "basic",
+          recurring_price_id: "price_123",
+          next_july1_epoch: "1751328000",
+          first_name: "Cara",
+          last_name: "Loe",
+        },
+      } as Partial<Stripe.Checkout.Session>);
+
+      await post(checkoutEvent(session));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledTimes(1);
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeId: "cs_direct_1",
+          flow: "basic_new",
+          // Falls back to the session id so the invoice still joins to Stripe.
+          internalId: "cs_direct_1",
+          email: "direct@example.com",
+          contactName: "Cara Loe",
+          amountCents: 7500,
+        }),
+      );
+    });
+
+    it("enqueues once, not twice, for an advanced application", async () => {
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue({
+        email: "jane@example.com",
+        firstName: "Jane",
+        lastName: "Doe",
+      });
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+
+      await post(checkoutEvent(makeCheckoutSession()));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledTimes(1);
+    });
+
     it("enqueues a renewal record for a manual renewal", async () => {
       const session = makeCheckoutSession({
         id: "cs_renewal_x",

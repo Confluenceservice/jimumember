@@ -359,25 +359,6 @@ async function handleCheckoutCompleted(
       });
     }
 
-    // Falls back to session metadata when the applicant row could not be
-    // read — a missing sheet row must not also cost us the Xero invoice.
-    await pushToXero(
-      stripe,
-      session,
-      {
-        eventType: "checkout.session.completed",
-        flow: "advanced_new",
-        internalId: applicantId,
-        email: advancedApplicant?.email ?? session.customer_email ?? "",
-        contactName: advancedApplicant
-          ? `${advancedApplicant.firstName ?? ""} ${advancedApplicant.lastName ?? ""}`
-          : `${session.metadata?.first_name ?? ""} ${session.metadata?.last_name ?? ""}`,
-        amountCents: session.amount_total ?? 0,
-        currency: session.currency ?? CURRENCY,
-        livemode,
-      },
-      log,
-    );
   }
 
   // Log to Google Sheets (async — don't fail the webhook if this errors)
@@ -511,22 +492,40 @@ async function handleCheckoutCompleted(
         error: msg,
       });
     });
+  }
 
+  // Spec 016 — one call for every paid option_c session, deliberately NOT
+  // nested inside the application branches above. `basic_application_id` is
+  // only set when checkout came from /apply, and `applicant_id` only when it
+  // came from the advanced upload flow; a direct membership purchase from the
+  // landing page carries neither. Gating on them would take the money and
+  // never write a Xero Sync row — and the sweeper cannot recover a payment
+  // that was never enqueued. The Stripe session id is the fallback
+  // internal_id, which still joins the invoice back to Stripe.
+  const xeroFlow: XeroSyncFlow | null =
+    plan === "advanced" ? "advanced_new" : plan === "basic" ? "basic_new" : null;
+  if (xeroFlow) {
     await pushToXero(
       stripe,
       session,
       {
         eventType: "checkout.session.completed",
-        flow: "basic_new",
-        internalId: basicApplicationId,
-        email: associateDocData.email,
-        contactName: `${associateDocData.firstName} ${associateDocData.lastName}`,
+        flow: xeroFlow,
+        internalId: applicantId ?? basicApplicationId ?? session.id,
+        // Falls back to session metadata when the applicant row could not be
+        // read — a missing sheet row must not also cost us the Xero invoice.
+        email: advancedApplicant?.email ?? session.customer_email ?? "",
+        contactName: advancedApplicant
+          ? `${advancedApplicant.firstName ?? ""} ${advancedApplicant.lastName ?? ""}`
+          : `${session.metadata?.first_name ?? ""} ${session.metadata?.last_name ?? ""}`,
         amountCents: session.amount_total ?? 0,
         currency: session.currency ?? CURRENCY,
         livemode,
       },
       log,
     );
+  } else if (isXeroEnabled()) {
+    log.warn("xero.skip_unknown_plan", { plan: plan ?? "<unset>", sessionId: session.id });
   }
 }
 
