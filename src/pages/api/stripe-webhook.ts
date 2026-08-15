@@ -19,6 +19,10 @@ import { getPublicAppUrl } from "../../lib/staging";
 import { createAdvancedApplicationReviewDoc, createBasicApplicationReviewDoc, refreshAdvancedIndexDoc, refreshBasicIndexDoc } from "../../lib/google-docs";
 import { sendAdvancedConfirmation, sendAdvancedApplicationNotification, sendBasicConfirmation, sendBasicApplicationNotification, sendRenewalPdLogLink, sendRenewalAdminNotification } from "../../lib/email-sender";
 import { getRecipientsForEvent } from "../../lib/notification-rules";
+import { enqueueAndPush, isXeroEnabled } from "../../lib/xero-sync";
+import { getPaymentFacts } from "../../lib/stripe-payment-facts";
+import { CURRENCY } from "../../lib/config";
+import type { XeroSyncFlow } from "../../lib/xero-sync-sheet";
 
 // Initialize Sentry lazily — only when DSN is present
 function getSentry() {
@@ -26,6 +30,67 @@ function getSentry() {
     Sentry.init({ dsn: process.env.SENTRY_DSN });
   }
   return Sentry;
+}
+
+/**
+ * Records a payment for Xero (spec 016).
+ *
+ * Awaited, never fire-and-forget: fly.toml sets min_machines_running = 0,
+ * so a promise left running after the response may simply be killed.
+ *
+ * Wrapped in try/catch even though enqueueAndPush is contractually
+ * non-rejecting. Throwing here would return 500, Stripe would replay the
+ * event, and the side effects above would re-fire — a second Google Doc, a
+ * second confirmation email, a second admin notification. Belt and braces on
+ * the one rule that must not break.
+ *
+ * A no-op unless XERO_ENABLED is set, so forks that do not use Xero pay
+ * nothing but this call.
+ */
+async function pushToXero(
+  stripe: Stripe,
+  source: Stripe.Checkout.Session | Stripe.Invoice,
+  base: {
+    eventType: string;
+    flow: XeroSyncFlow;
+    internalId: string;
+    email: string;
+    contactName: string;
+    amountCents: number;
+    currency: string;
+    livemode: boolean;
+  },
+  log: ReturnType<typeof logger.child>,
+): Promise<void> {
+  // Checked here as well as inside enqueueAndPush: getPaymentFacts costs a
+  // Stripe API round-trip, and a fork that never sets XERO_ENABLED should not
+  // pay it on every payment.
+  if (!isXeroEnabled()) return;
+
+  try {
+    const stripeId = source.id ?? "";
+    if (!stripeId) {
+      log.warn("xero.skip_missing_stripe_id", { flow: base.flow });
+      return;
+    }
+    const facts = await getPaymentFacts(stripe, source);
+    if (facts.fallback) {
+      // The date is a guess, so the Stripe feed line may not auto-match.
+      log.warn("xero.payment_facts_fallback", { stripeId, flow: base.flow });
+    }
+    await enqueueAndPush({
+      ...base,
+      stripeId,
+      // ContactNumber is keyed on this, so it must be stable.
+      email: base.email.trim().toLowerCase(),
+      contactName: base.contactName.trim(),
+      paidAt: facts.paidAt,
+      feeCents: facts.feeCents,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error("xero.enqueue_failed_swallowed", { flow: base.flow, error: msg });
+  }
 }
 
 /**
@@ -38,6 +103,7 @@ async function handleCheckoutCompleted(
   stripe: Stripe,
   session: Stripe.Checkout.Session,
   log: ReturnType<typeof logger.child>,
+  livemode: boolean,
 ): Promise<void> {
   // Renewal flow: one-time payment, no subscription
   if (session.metadata?.flow === "renewal") {
@@ -109,6 +175,22 @@ async function handleCheckoutCompleted(
         log.error("renewal_pd_log_email_failed", { err: msg, renewalId });
       });
     }
+
+    await pushToXero(
+      stripe,
+      session,
+      {
+        eventType: "checkout.session.completed",
+        flow: "renewal",
+        internalId: renewalId,
+        email: renewal.email ?? "",
+        contactName: `${renewal.firstName ?? ""} ${renewal.lastName ?? ""}`,
+        amountCents: renewal.amountPaidCents ?? session.amount_total ?? 0,
+        currency: session.currency ?? CURRENCY,
+        livemode,
+      },
+      log,
+    );
 
     return;
   }
@@ -276,6 +358,7 @@ async function handleCheckoutCompleted(
         sessionId: session.id,
       });
     }
+
   }
 
   // Log to Google Sheets (async — don't fail the webhook if this errors)
@@ -410,6 +493,40 @@ async function handleCheckoutCompleted(
       });
     });
   }
+
+  // Spec 016 — one call for every paid option_c session, deliberately NOT
+  // nested inside the application branches above. `basic_application_id` is
+  // only set when checkout came from /apply, and `applicant_id` only when it
+  // came from the advanced upload flow; a direct membership purchase from the
+  // landing page carries neither. Gating on them would take the money and
+  // never write a Xero Sync row — and the sweeper cannot recover a payment
+  // that was never enqueued. The Stripe session id is the fallback
+  // internal_id, which still joins the invoice back to Stripe.
+  const xeroFlow: XeroSyncFlow | null =
+    plan === "advanced" ? "advanced_new" : plan === "basic" ? "basic_new" : null;
+  if (xeroFlow) {
+    await pushToXero(
+      stripe,
+      session,
+      {
+        eventType: "checkout.session.completed",
+        flow: xeroFlow,
+        internalId: applicantId ?? basicApplicationId ?? session.id,
+        // Falls back to session metadata when the applicant row could not be
+        // read — a missing sheet row must not also cost us the Xero invoice.
+        email: advancedApplicant?.email ?? session.customer_email ?? "",
+        contactName: advancedApplicant
+          ? `${advancedApplicant.firstName ?? ""} ${advancedApplicant.lastName ?? ""}`
+          : `${session.metadata?.first_name ?? ""} ${session.metadata?.last_name ?? ""}`,
+        amountCents: session.amount_total ?? 0,
+        currency: session.currency ?? CURRENCY,
+        livemode,
+      },
+      log,
+    );
+  } else if (isXeroEnabled()) {
+    log.warn("xero.skip_unknown_plan", { plan: plan ?? "<unset>", sessionId: session.id });
+  }
 }
 
 /**
@@ -431,6 +548,7 @@ async function handleInvoicePaid(
   stripe: Stripe,
   invoice: Stripe.Invoice,
   log: ReturnType<typeof logger.child>,
+  livemode: boolean,
 ): Promise<void> {
   // D2 — only real anchor-date cycle invoices are renewals. Skips the $0
   // subscription_create invoice Stripe raises when the trialing subscription
@@ -581,8 +699,22 @@ async function handleInvoicePaid(
     });
   });
 
-  // Spec 016 hook lands here when the Xero adapter ships:
-  // recordPaymentInXero(mapInvoiceToLedgerPayment(invoice, tier, year)) — F&F.
+  // Spec 016 — awaited, not fire-and-forget (see pushToXero's header).
+  await pushToXero(
+    stripe,
+    invoice,
+    {
+      eventType: "invoice.payment_succeeded",
+      flow: "auto_renewal",
+      internalId: renewalId,
+      email: invoice.customer_email ?? "",
+      contactName: fullName,
+      amountCents: invoice.amount_paid ?? 0,
+      currency: invoice.currency ?? CURRENCY,
+      livemode,
+    },
+    log,
+  );
 }
 
 async function handleInvoicePaymentFailed(
@@ -676,6 +808,7 @@ export const POST: APIRoute = async ({ request }) => {
           stripe,
           event.data.object as Stripe.Checkout.Session,
           log,
+          event.livemode === true,
         );
         break;
       // D7 — invoice.payment_succeeded ONLY. Do not also subscribe to
@@ -684,7 +817,12 @@ export const POST: APIRoute = async ({ request }) => {
       // doing silent work forever. Update the Stripe dashboard webhook
       // endpoint's event list to match.
       case "invoice.payment_succeeded":
-        await handleInvoicePaid(stripe, event.data.object as Stripe.Invoice, log);
+        await handleInvoicePaid(
+          stripe,
+          event.data.object as Stripe.Invoice,
+          log,
+          event.livemode === true,
+        );
         break;
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(

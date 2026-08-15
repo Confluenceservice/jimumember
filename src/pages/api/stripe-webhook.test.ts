@@ -27,6 +27,9 @@ const mockGetRenewalById = vi.fn();
 const mockGetRenewalByStripeRef = vi.fn();
 const mockAppendRenewal = vi.fn();
 const mockGetRecipientsForEvent = vi.fn();
+const mockEnqueueAndPush = vi.fn();
+const mockIsXeroEnabled = vi.fn();
+const mockGetPaymentFacts = vi.fn();
 
 vi.mock("../../lib/email-sender", () => ({
   sendAdvancedConfirmation: mockSendAdvancedConfirmation,
@@ -70,6 +73,15 @@ vi.mock("../../lib/renewal-sheet", () => ({
   getRenewalByStripeRef: mockGetRenewalByStripeRef,
   appendRenewal: mockAppendRenewal,
   getRenewalsSheetUrl: vi.fn().mockReturnValue(undefined),
+}));
+
+vi.mock("../../lib/xero-sync", () => ({
+  enqueueAndPush: mockEnqueueAndPush,
+  isXeroEnabled: mockIsXeroEnabled,
+}));
+
+vi.mock("../../lib/stripe-payment-facts", () => ({
+  getPaymentFacts: mockGetPaymentFacts,
 }));
 
 vi.mock("@sentry/node", () => ({
@@ -223,6 +235,16 @@ describe("stripe-webhook", () => {
       (_event: string, fallback?: string) =>
         Promise.resolve(fallback ? [fallback] : []),
     );
+    // Xero defaults: OFF, matching an unconfigured fork. The Xero suite
+    // below turns it on explicitly.
+    mockIsXeroEnabled.mockReturnValue(false);
+    mockEnqueueAndPush.mockResolvedValue(undefined);
+    mockGetPaymentFacts.mockResolvedValue({
+      paidAt: "2026-07-15T02:00:00.000Z",
+      feeCents: 378,
+      netCents: 11622,
+      fallback: false,
+    });
   });
 
   afterEach(() => {
@@ -826,6 +848,273 @@ describe("stripe-webhook", () => {
         15000,
         undefined,
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Xero sync wiring (spec 016)
+  // -------------------------------------------------------------------------
+  describe("Xero sync", () => {
+    beforeEach(() => {
+      mockIsXeroEnabled.mockReturnValue(true);
+
+      // vi.clearAllMocks() clears recorded calls but NOT queued
+      // mockResolvedValueOnce implementations, so leftover "once" values from
+      // earlier tests leak in and get consumed here. Reset the ones these
+      // tests drive before re-establishing them.
+      for (const m of [
+        mockGetMembership,
+        mockGetRenewalById,
+        mockGetRenewalByStripeRef,
+        mockGetApplicantById,
+        mockMarkApplicantPaid,
+        mockMarkRenewalPaid,
+        mockAppendRenewal,
+      ]) {
+        m.mockReset();
+      }
+
+      // These are all called as `fn(...).catch(...)` / `.then(...)` in the
+      // handler, so a bare vi.fn() returning undefined throws a TypeError and
+      // 500s the webhook before Xero is ever reached.
+      mockSendAdvancedConfirmation.mockResolvedValue(undefined);
+      mockSendBasicConfirmation.mockResolvedValue(undefined);
+      mockSendRenewalPdLogLink.mockResolvedValue(undefined);
+      mockSendRenewalAdminNotification.mockResolvedValue(undefined);
+      mockCreateAdvancedApplicationReviewDoc.mockResolvedValue("https://doc");
+      mockCreateBasicApplicationReviewDoc.mockResolvedValue("https://doc");
+      mockAppendCheckoutLog.mockResolvedValue(undefined);
+      mockSetActive.mockResolvedValue(undefined);
+    });
+
+    async function post(body: string) {
+      const { POST } = await import("../../pages/api/stripe-webhook");
+      return POST(makeReq(body, buildSignature(body)));
+    }
+
+    function checkoutEvent(session: unknown, livemode = true) {
+      return JSON.stringify({
+        type: "checkout.session.completed",
+        livemode,
+        data: { object: session },
+      });
+    }
+
+    it("enqueues an advanced_new record for an advanced application", async () => {
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue({
+        email: "Jane@Example.COM ",
+        firstName: "Jane",
+        lastName: "Doe",
+      });
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+
+      const res = await post(checkoutEvent(makeCheckoutSession({ currency: "usd" })));
+
+      expect(res.status).toBe(200);
+      expect(mockEnqueueAndPush).toHaveBeenCalledTimes(1);
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeId: "cs_test_123",
+          flow: "advanced_new",
+          internalId: "app_123",
+          // Normalised: ContactNumber is keyed on this.
+          email: "jane@example.com",
+          contactName: "Jane Doe",
+          amountCents: 5000,
+          currency: "usd",
+          livemode: true,
+          paidAt: "2026-07-15T02:00:00.000Z",
+          feeCents: 378,
+        }),
+      );
+    });
+
+    it("still enqueues when the applicant row could not be read", async () => {
+      // A missing sheet row must not also cost the Xero invoice.
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue(null);
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+
+      await post(checkoutEvent(makeCheckoutSession()));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flow: "advanced_new",
+          email: "jane@example.com",
+          contactName: "Jane Doe",
+        }),
+      );
+    });
+
+    it("enqueues a basic_new record for a basic application", async () => {
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      const session = makeCheckoutSession({
+        id: "cs_basic_1",
+        customer_email: "assoc@example.com",
+        amount_total: 3000,
+        metadata: {
+          flow: "option_c",
+          plan: "basic",
+          recurring_price_id: "price_123",
+          next_july1_epoch: "1751328000",
+          first_name: "Bob",
+          last_name: "Roe",
+          basic_application_id: "assoc_9",
+        },
+      } as Partial<Stripe.Checkout.Session>);
+
+      await post(checkoutEvent(session));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeId: "cs_basic_1",
+          flow: "basic_new",
+          internalId: "assoc_9",
+          email: "assoc@example.com",
+          contactName: "Bob Roe",
+          amountCents: 3000,
+        }),
+      );
+    });
+
+    it("enqueues a direct membership purchase that carries no application id", async () => {
+      // /index.astro posts a bare {plan} — neither applicant_id nor
+      // basic_application_id is set. Gating Xero on those ids would take the
+      // money and never write a row.
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      const session = makeCheckoutSession({
+        id: "cs_direct_1",
+        customer_email: "direct@example.com",
+        amount_total: 7500,
+        metadata: {
+          flow: "option_c",
+          plan: "basic",
+          recurring_price_id: "price_123",
+          next_july1_epoch: "1751328000",
+          first_name: "Cara",
+          last_name: "Loe",
+        },
+      } as Partial<Stripe.Checkout.Session>);
+
+      await post(checkoutEvent(session));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledTimes(1);
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeId: "cs_direct_1",
+          flow: "basic_new",
+          // Falls back to the session id so the invoice still joins to Stripe.
+          internalId: "cs_direct_1",
+          email: "direct@example.com",
+          contactName: "Cara Loe",
+          amountCents: 7500,
+        }),
+      );
+    });
+
+    it("enqueues once, not twice, for an advanced application", async () => {
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue({
+        email: "jane@example.com",
+        firstName: "Jane",
+        lastName: "Doe",
+      });
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+
+      await post(checkoutEvent(makeCheckoutSession()));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledTimes(1);
+    });
+
+    it("enqueues a renewal record for a manual renewal", async () => {
+      const session = makeCheckoutSession({
+        id: "cs_renewal_x",
+        customer_email: "alice@example.com",
+        metadata: { flow: "renewal", renewal_id: "r1" },
+      } as Partial<Stripe.Checkout.Session>);
+      mockGetRenewalById.mockResolvedValue({
+        renewalId: "r1",
+        tier: "adv",
+        firstName: "Alice",
+        lastName: "Smith",
+        email: "alice@example.com",
+        amountPaidCents: 15000,
+        paymentStatus: "pending",
+      });
+      mockMarkRenewalPaid.mockResolvedValue(undefined);
+
+      await post(checkoutEvent(session));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeId: "cs_renewal_x",
+          flow: "renewal",
+          internalId: "r1",
+          email: "alice@example.com",
+          contactName: "Alice Smith",
+          amountCents: 15000,
+        }),
+      );
+    });
+
+    it("enqueues an auto_renewal record for a subscription-cycle invoice", async () => {
+      mockGetRenewalByStripeRef.mockResolvedValue(null);
+      mockAppendRenewal.mockResolvedValue(undefined);
+
+      const body = JSON.stringify({
+        type: "invoice.payment_succeeded",
+        livemode: true,
+        data: { object: makeCycleInvoice() },
+      });
+      const res = await post(body);
+
+      expect(res.status).toBe(200);
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stripeId: "in_cycle_1",
+          flow: "auto_renewal",
+          email: "jane@example.com",
+          contactName: "Jane van Doe",
+          amountCents: 15000,
+          livemode: true,
+        }),
+      );
+    });
+
+    it("propagates test-mode livemode so the environment guard can reject it", async () => {
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue(null);
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+
+      await post(checkoutEvent(makeCheckoutSession(), false));
+
+      expect(mockEnqueueAndPush).toHaveBeenCalledWith(
+        expect.objectContaining({ livemode: false }),
+      );
+    });
+
+    it("returns 200 when the Xero push throws", async () => {
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue(null);
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+      mockEnqueueAndPush.mockRejectedValue(new Error("Xero exploded"));
+
+      const res = await post(checkoutEvent(makeCheckoutSession()));
+
+      expect(res.status).toBe(200);
+    });
+
+    it("skips Stripe fee lookup entirely when XERO_ENABLED is unset", async () => {
+      mockIsXeroEnabled.mockReturnValue(false);
+      mockGetMembership.mockResolvedValue({ subscriptionId: "sub_existing" });
+      mockGetApplicantById.mockResolvedValue(null);
+      mockMarkApplicantPaid.mockResolvedValue(undefined);
+
+      await post(checkoutEvent(makeCheckoutSession()));
+
+      expect(mockGetPaymentFacts).not.toHaveBeenCalled();
+      expect(mockEnqueueAndPush).not.toHaveBeenCalled();
     });
   });
 });

@@ -24,6 +24,16 @@ const RATE_LIMIT_EXEMPT_PATHS = new Set<string>([
   "/api/health",
 ]);
 
+// Prefixes exempt from IP rate limiting. Every /api/xero/ route is
+// machine-to-machine and arrives from egress the counter handles badly: the
+// OAuth callback comes from Xero's IP, the sweeper from an Apps Script IP
+// pool, and any caller without a forwarded-for header lands in the single
+// "unknown" bucket alongside every other such caller. 30 requests / 15 min
+// would throttle the sweeper and could burn the one-shot consent callback.
+// Each route is gated on its own high-entropy shared secret (or, for the
+// callback, a single-use state nonce), which is the real access control.
+const RATE_LIMIT_EXEMPT_PREFIXES = ["/api/xero/"];
+
 function getClientIp(request: Request): string {
   return (
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
@@ -56,7 +66,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // RATE_LIMIT_EXEMPT_PATHS). Both still receive security headers.
   if (
     !url.pathname.startsWith("/api/") ||
-    RATE_LIMIT_EXEMPT_PATHS.has(url.pathname)
+    RATE_LIMIT_EXEMPT_PATHS.has(url.pathname) ||
+    RATE_LIMIT_EXEMPT_PREFIXES.some((p) => url.pathname.startsWith(p))
   ) {
     const response = await next();
     // Apply security headers to all responses
