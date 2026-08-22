@@ -52,6 +52,8 @@
     "vitest": "^4.1.0"
   },
   "overrides": {
-    "axios": "^1.18.0"
+    "axios": "^1.18.0",
+    "brace-expansion": "^2.1.4",
+    "js-yaml": "^4.3.1"
   }
 }
