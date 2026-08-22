@@ -125,13 +125,31 @@ jobs:
           # per CVE with VulnCheck, against 6s once an unkeyed NVD run passes
           # 75 CVEs. NIST_API_KEY stays wired as the fallback if this is ever
           # turned off.
-          use-vulncheck: true
+          # Driven by whether the key is actually readable, not hardcoded.
+          #
+          # Dependabot-triggered runs cannot see ordinary Actions secrets —
+          # GitHub keeps Dependabot's in a separate store — so on those runs
+          # these resolve to empty. Hardcoding `use-vulncheck: true` made the
+          # action refuse to start at all ("use-vulncheck requires
+          # vulncheck-api-key"), failing the gate on every Dependabot PR.
+          #
+          # Adding VULNCHECK_API_KEY and NIST_API_KEY under Settings > Secrets
+          # and variables > Dependabot restores the full-strength path with no
+          # workflow change.
+          use-vulncheck: ${{ secrets.VULNCHECK_API_KEY != '' }}
           # VulnCheck KEV instead of CISA KEV: broader exploited-in-the-wild
           # coverage, so it can only widen what returns as P1+, never narrow
           # it. Verified against a nine-CVE sample on 2026-08-22 — every CVE
           # scored identically under both sources, so this is extra coverage
           # rather than a change in behaviour on anything seen so far.
-          use-vulncheck-kev: true
+          use-vulncheck-kev: ${{ secrets.VULNCHECK_API_KEY != '' }}
+          # With neither key readable the run falls back to unkeyed NVD, which
+          # rate-limits at 5 requests per 30s and silently drops CVEs it could
+          # not score. The action refuses to gate on a partial result, so this
+          # downgrades that shortfall to a warning rather than failing the job.
+          # Scheduled runs and human-opened PRs read the secrets normally and
+          # still gate at full strength.
+          allow-partial: ${{ secrets.VULNCHECK_API_KEY == '' && secrets.NIST_API_KEY == '' }}
           vulncheck-api-key: ${{ secrets.VULNCHECK_API_KEY }}
           nist-api-key: ${{ secrets.NIST_API_KEY }}
 
