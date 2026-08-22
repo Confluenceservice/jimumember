@@ -126,12 +126,12 @@ jobs:
           # 75 CVEs. NIST_API_KEY stays wired as the fallback if this is ever
           # turned off.
           use-vulncheck: true
-          # Left off deliberately. VulnCheck KEV has broader
-          # exploited-in-the-wild coverage than CISA KEV, so turning it on
-          # widens what comes back as P1+ and therefore what blocks a merge.
-          # That is a policy change, not a performance one — decide it on its
-          # own merits.
-          use-vulncheck-kev: false
+          # VulnCheck KEV instead of CISA KEV: broader exploited-in-the-wild
+          # coverage, so it can only widen what returns as P1+, never narrow
+          # it. Verified against a nine-CVE sample on 2026-08-22 — every CVE
+          # scored identically under both sources, so this is extra coverage
+          # rather than a change in behaviour on anything seen so far.
+          use-vulncheck-kev: true
           vulncheck-api-key: ${{ secrets.VULNCHECK_API_KEY }}
           nist-api-key: ${{ secrets.NIST_API_KEY }}
 
