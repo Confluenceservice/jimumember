@@ -32,6 +32,27 @@ jobs:
         with:
           fetch-depth: 1
 
+      # The lockfile must resolve entirely from the public registry. A stray
+      # private-registry URL makes `npm ci` impossible on a clean runner while
+      # still working locally from a warm cache, so it goes unnoticed until CI
+      # breaks on something apparently unrelated — which is exactly how it
+      # played out in the sibling repo junban-desk. It returns any time someone
+      # runs `npm install` on a machine pointed at another registry.
+      - name: Check the lockfile resolves from public npm
+        run: |
+          set -euo pipefail
+          if ! jq -e '[.packages[].resolved // empty]
+                      | all(startswith("https://registry.npmjs.org/"))' \
+                 package-lock.json > /dev/null; then
+            echo "::error file=package-lock.json::Lockfile has a resolved URL outside registry.npmjs.org:"
+            jq -r '.packages | to_entries[]
+                   | select(.value.resolved
+                            and (.value.resolved | startswith("https://registry.npmjs.org/") | not))
+                   | "  \(.key) -> \(.value.resolved)"' package-lock.json
+            exit 1
+          fi
+          echo "Lockfile resolves from registry.npmjs.org."
+
       - uses: actions/setup-node@v7
         with:
           node-version: 22
