@@ -39,21 +39,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The FULL tree, deliberately not --omit=dev.
+      # --omit=dev matches the image: the Dockerfile's runner stage copies
+      # node_modules from prod-deps, which is `npm ci --omit=dev`. vitest,
+      # playwright and typescript never reach production, so a CVE in one of
+      # them must not block a merge.
       #
-      # The Dockerfile runs an unpruned `npm ci` in the deps stage and the
-      # runner stage then does `COPY --from=build /app/node_modules ./node_modules`,
-      # so development dependencies are shipped in the production image. Scoping
-      # this scan to production dependencies would under-report what actually
-      # runs on Fly: measured at 327 components prod-only against 515 for the
-      # full tree.
-      #
-      # If a prune stage is ever added to the Dockerfile, re-scope this to
-      # --omit=dev to match.
-      - name: Generate SBOM (full installed tree)
+      # This scan is only as accurate as that stage. If the runner ever goes
+      # back to copying the build stage's node_modules, drop --omit=dev here
+      # and in sbom.yml to match.
+      - name: Generate SBOM (production dependencies only)
         run: |
           mkdir -p cve-scan
-          npm sbom --sbom-format cyclonedx > cve-scan/sbom.cyclonedx.json
+          npm sbom --sbom-format cyclonedx --omit=dev > cve-scan/sbom.cyclonedx.json
 
       # exit-code 0 is deliberate: Trivy is the inventory here, not the gate.
       # Failing on its severity would defeat the point of prioritizing.
