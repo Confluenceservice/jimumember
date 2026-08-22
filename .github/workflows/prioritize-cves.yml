@@ -90,12 +90,11 @@ jobs:
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "Found $count unique CVE IDs, plus $ghsa GHSA-only advisories this gate cannot judge."
 
-      # NIST_API_KEY is strongly recommended, not optional at this tree size.
-      # NVD rate-limits to 5 requests per 30s without one, and the action
-      # refuses to gate on a partially-scored run rather than reporting a
-      # rate-limited result as clean. Until the secret exists this job would
-      # fail on that guard, so allow-partial keeps it advisory — flip it to
-      # false once a key is in place.
+      # allow-partial is left at its default of false: the action refuses to
+      # gate on a run where some CVEs could not be scored, rather than
+      # reporting a rate-limited result as clean. With VulnCheck supplying
+      # CVSS that shortfall should not happen — if this job starts failing on
+      # the guard, the key is the first thing to check, not the threshold.
       - name: Prioritize CVEs
         id: prio
         if: steps.extract.outputs.count != '0'
@@ -104,7 +103,18 @@ jobs:
           cve-file: cve-scan/cves.txt
           output-file: cve-scan/cve-priorities.csv
           fail-on: P1 # blocks the merge on P1 and P1+ only
-          allow-partial: true
+          # CVSS comes from NVD++ rather than NVD: the tool throttles to 0.25s
+          # per CVE with VulnCheck, against 6s once an unkeyed NVD run passes
+          # 75 CVEs. NIST_API_KEY stays wired as the fallback if this is ever
+          # turned off.
+          use-vulncheck: true
+          # Left off deliberately. VulnCheck KEV has broader
+          # exploited-in-the-wild coverage than CISA KEV, so turning it on
+          # widens what comes back as P1+ and therefore what blocks a merge.
+          # That is a policy change, not a performance one — decide it on its
+          # own merits.
+          use-vulncheck-kev: false
+          vulncheck-api-key: ${{ secrets.VULNCHECK_API_KEY }}
           nist-api-key: ${{ secrets.NIST_API_KEY }}
 
       - name: Report a clean tree
