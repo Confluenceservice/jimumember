@@ -122,6 +122,51 @@ jobs:
           echo "No CVEs in the installed tree. Nothing to prioritize." \
             >> "$GITHUB_STEP_SUMMARY"
 
+      # Trivy also reports advisories that carry no CVE ID. Those never reach
+      # the prioritizer: EPSS and CISA KEV are both keyed on CVE, so there is
+      # nothing to score them against, and GitHub often publishes only a
+      # severity label rather than a numeric CVSS. They cannot be gated on —
+      # but a green check should not hide them either.
+      #
+      # This repo carried ten of them before #61, two rated HIGH, none with a
+      # CVE alias to fall back on.
+      - name: Report advisories the gate cannot judge
+        if: always()
+        run: |
+          set -euo pipefail
+          present=""
+          for f in cve-scan/trivy.json; do
+            [ -f "$f" ] && present="$present $f"
+          done
+          [ -n "$present" ] || exit 0
+          # gsub strips pipes and newlines so a package name cannot break the
+          # table it is rendered into.
+          rows=$(jq -s -r '
+            [ .[] | .Results[]?.Vulnerabilities[]?
+              | select(.VulnerabilityID | startswith("GHSA-")) ]
+            | unique_by(.VulnerabilityID)
+            | sort_by({CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3}[.Severity] // 4)
+            | .[]
+            | [ .VulnerabilityID, "\(.PkgName)@\(.InstalledVersion)",
+                .Severity, (.FixedVersion // "none") ]
+            | map(gsub("[|\r\n]"; " "))
+            | "| " + join(" | ") + " |"
+          ' $present)
+          {
+            echo "### Advisories without a CVE ID"
+            echo
+            if [ -n "$rows" ]; then
+              echo "**Not gated.** EPSS and CISA KEV are keyed on CVE, so these cannot be"
+              echo "prioritized and this job will not fail on them. Review by hand."
+              echo
+              echo "| Advisory | Package | Severity | Fixed in |"
+              echo "|---|---|---|---|"
+              echo "$rows"
+            else
+              echo "None."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Runs even when the gate failed — the results are most useful precisely
       # when the job went red.
       - name: Upload scan results
