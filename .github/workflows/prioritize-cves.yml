@@ -1,0 +1,126 @@
+name: Prioritized CVE gate
+
+# Trivy tells us which CVEs are in the dependency tree that ships in the
+# container. The CVE Prioritizer tells us which of them are worth acting on
+# today, by combining CVSS with EPSS (probability of exploitation) and CISA KEV
+# (known exploited).
+#
+# Severity alone over-reports: a CRITICAL with a 0.02% exploit probability and
+# no KEV listing is not a reason to block a PR, while a MEDIUM that is being
+# actively exploited is. This job gates on that judgement, not on severity.
+#
+# Complements codeql.yml rather than overlapping it: CodeQL analyses our own
+# code, this analyses what we depend on.
+on:
+  pull_request:
+  schedule:
+    - cron: '17 5 * * 1' # weekly Monday, staggered off CodeQL's 05:31
+  workflow_dispatch:
+
+concurrency:
+  group: cve-gate-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prioritize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The FULL tree, deliberately not --omit=dev.
+      #
+      # The Dockerfile runs an unpruned `npm ci` in the deps stage and the
+      # runner stage then does `COPY --from=build /app/node_modules ./node_modules`,
+      # so development dependencies are shipped in the production image. Scoping
+      # this scan to production dependencies would under-report what actually
+      # runs on Fly: measured at 327 components prod-only against 515 for the
+      # full tree.
+      #
+      # If a prune stage is ever added to the Dockerfile, re-scope this to
+      # --omit=dev to match.
+      - name: Generate SBOM (full installed tree)
+        run: |
+          mkdir -p cve-scan
+          npm sbom --sbom-format cyclonedx > cve-scan/sbom.cyclonedx.json
+
+      # exit-code 0 is deliberate: Trivy is the inventory here, not the gate.
+      # Failing on its severity would defeat the point of prioritizing.
+      # ignore-unfixed is deliberately NOT set — a KEV-listed CVE with no patch
+      # available is exactly what we want surfaced.
+      - name: Scan the SBOM with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'sbom'
+          scan-ref: 'cve-scan/sbom.cyclonedx.json'
+          format: 'json'
+          output: 'cve-scan/trivy.json'
+          exit-code: '0'
+
+      # Trivy reports GHSA and CVE identifiers; the prioritizer only understands
+      # CVEs, so GHSA-only advisories are dropped here and this gate cannot see
+      # them. A green gate is not the same as "no known advisories" — check the
+      # uploaded trivy.json for the full picture.
+      - name: Extract unique CVE IDs
+        id: extract
+        run: |
+          set -euo pipefail
+          if ! jq -e 'has("Results")' cve-scan/trivy.json > /dev/null 2>&1; then
+            echo "::error::Trivy produced no usable report; refusing to treat that as a clean tree."
+            exit 1
+          fi
+          # grep exits 1 when nothing matches, which is a legitimate clean
+          # result under `set -e`, so it is tolerated here and only here.
+          jq -r '.Results[]?.Vulnerabilities[]?.VulnerabilityID' cve-scan/trivy.json \
+            | { grep -E '^CVE-' || true; } | sort -u > cve-scan/cves.txt
+          ghsa=$(jq -r '.Results[]?.Vulnerabilities[]?.VulnerabilityID' cve-scan/trivy.json \
+            | { grep -c '^GHSA-' || true; })
+          count=$(wc -l < cve-scan/cves.txt | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Found $count unique CVE IDs, plus $ghsa GHSA-only advisories this gate cannot judge."
+
+      # NIST_API_KEY is strongly recommended, not optional at this tree size.
+      # NVD rate-limits to 5 requests per 30s without one, and the action
+      # refuses to gate on a partially-scored run rather than reporting a
+      # rate-limited result as clean. Until the secret exists this job would
+      # fail on that guard, so allow-partial keeps it advisory — flip it to
+      # false once a key is in place.
+      - name: Prioritize CVEs
+        id: prio
+        if: steps.extract.outputs.count != '0'
+        uses: Confluenceservice/cve-prioritizer-action@v1
+        with:
+          cve-file: cve-scan/cves.txt
+          output-file: cve-scan/cve-priorities.csv
+          fail-on: P1 # blocks the merge on P1 and P1+ only
+          allow-partial: true
+          nist-api-key: ${{ secrets.NIST_API_KEY }}
+
+      - name: Report a clean tree
+        if: steps.extract.outputs.count == '0'
+        run: |
+          echo "### CVE Prioritizer results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "No CVEs in the installed tree. Nothing to prioritize." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      # Runs even when the gate failed — the results are most useful precisely
+      # when the job went red.
+      - name: Upload scan results
+        if: always() && steps.extract.outputs.count != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: cve-priorities
+          path: cve-scan/
+          if-no-files-found: warn
