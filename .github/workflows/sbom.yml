@@ -1,0 +1,71 @@
+name: SBOM
+
+# Publishes a Software Bill of Materials for the dependency tree that ships in
+# the container. Unlike a Marketplace app, this one is not distributed as
+# software — the SBOM exists as internal supply-chain evidence, the kind an
+# audit or an incident retrospective asks for.
+#
+# This is separate from prioritize-cves.yml, which generates its own SBOM
+# inline and throws it away. That one is a gate; this one is an artifact.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write # required to upload release assets
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The FULL tree, deliberately not --omit=dev — matching the scoping in
+      # prioritize-cves.yml and for the same reason. The Dockerfile runs an
+      # unpruned `npm ci` and the runner stage copies node_modules wholesale,
+      # so development dependencies are shipped in the production image. An
+      # SBOM scoped to production dependencies would describe an image that is
+      # not the one running on Fly.
+      #
+      # If a prune stage is ever added to the Dockerfile, re-scope this to
+      # --omit=dev to match.
+      - name: Generate SBOMs (full installed tree)
+        run: |
+          mkdir -p sbom
+          npm sbom --sbom-format cyclonedx > sbom/sbom.cyclonedx.json
+          npm sbom --sbom-format spdx      > sbom/sbom.spdx.json
+
+      # No package.json-versus-tag check here, unlike a Marketplace app: this
+      # repo's release tags are calendar-based (v2026.07.03) and deliberately
+      # unrelated to the package.json version, which stays at 0.1.0 because the
+      # package is private and never published.
+      - name: Report SBOM contents
+        run: |
+          components=$(jq '[.components[]] | length' sbom/sbom.cyclonedx.json)
+          echo "components: $components (full tree, including dev)"
+
+      - name: Attach SBOMs to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passed via env rather than inlined into the script: a tag name is
+          # user-supplied text and must never be interpolated into a shell
+          # command directly.
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" sbom/*.json --clobber
+
+      - name: Upload SBOMs as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: sbom/
