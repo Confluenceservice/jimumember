@@ -30,20 +30,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The FULL tree, deliberately not --omit=dev — matching the scoping in
-      # prioritize-cves.yml and for the same reason. The Dockerfile runs an
-      # unpruned `npm ci` and the runner stage copies node_modules wholesale,
-      # so development dependencies are shipped in the production image. An
-      # SBOM scoped to production dependencies would describe an image that is
-      # not the one running on Fly.
-      #
-      # If a prune stage is ever added to the Dockerfile, re-scope this to
-      # --omit=dev to match.
-      - name: Generate SBOMs (full installed tree)
+      # --omit=dev matches the image, and matches prioritize-cves.yml. The
+      # Dockerfile's runner stage copies node_modules from prod-deps, which is
+      # `npm ci --omit=dev`, so an SBOM of the full tree would describe an
+      # image that is not the one running on Fly.
+      - name: Generate SBOMs (production dependencies only)
         run: |
           mkdir -p sbom
-          npm sbom --sbom-format cyclonedx > sbom/sbom.cyclonedx.json
-          npm sbom --sbom-format spdx      > sbom/sbom.spdx.json
+          npm sbom --sbom-format cyclonedx --omit=dev > sbom/sbom.cyclonedx.json
+          npm sbom --sbom-format spdx      --omit=dev > sbom/sbom.spdx.json
 
       # No package.json-versus-tag check here, unlike a Marketplace app: this
       # repo's release tags are calendar-based (v2026.07.03) and deliberately
@@ -52,7 +47,7 @@ jobs:
       - name: Report SBOM contents
         run: |
           components=$(jq '[.components[]] | length' sbom/sbom.cyclonedx.json)
-          echo "components: $components (full tree, including dev)"
+          echo "components: $components (production dependencies only)"
 
       - name: Attach SBOMs to the release
         if: github.event_name == 'release'
