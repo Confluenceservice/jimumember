@@ -18,6 +18,15 @@ updates:
         update-types: ["minor", "patch"]
     # Majors arrive as individual PRs (stripe/googleapis majors need reading
     # the changelog — see .claude/skills/maintainer/SKILL.md).
+    ignore:
+      # TypeScript 7 is blocked upstream: @astrojs/check (0.9.10, latest) still
+      # peers typescript@"^5.0.0 || ^6.0.0", so `npm ci` fails with ERESOLVE on
+      # every TS 7 bump — before any CI step runs. Drop this rule once
+      # @astrojs/check widens the range. typescript is a devDependency and the
+      # CVE gate builds its SBOM from production deps only, so holding majors
+      # back here does not blind the security scan.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
