@@ -1,5 +1,13 @@
 import { formatMoney } from "./config";
-import { appendToRange, appendRow, getSheetsClient, getSpreadsheetId } from "./google-sheets-helpers";
+import {
+  appendToRange,
+  appendRow,
+  columnLetter,
+  getSheetsClient,
+  getSpreadsheetId,
+  readRange,
+  updateRange,
+} from "./google-sheets-helpers";
 
 type CheckoutLogEntry = {
   timestamp: string;
@@ -124,6 +132,30 @@ export async function appendBasicApplication(
   ];
 
   await appendRow(BASIC_APPLICATIONS_SHEET, ASSOCIATE_APPLICATIONS_HEADERS, row);
+}
+
+/**
+ * Update the checkout_status column of a basic application row, located by
+ * application_id. Returns true if a row was updated, false if no matching
+ * application_id was found. Called from the Stripe webhook on
+ * checkout.session.completed so the sheet advances past "checkout_requested"
+ * (appendBasicApplication only ever writes the initial status).
+ */
+export async function updateBasicApplicationStatus(
+  applicationId: string,
+  checkoutStatus: string,
+): Promise<boolean> {
+  const idCol = columnLetter(ASSOCIATE_APPLICATIONS_HEADERS.indexOf("application_id") + 1);
+  const statusCol = columnLetter(ASSOCIATE_APPLICATIONS_HEADERS.indexOf("checkout_status") + 1);
+
+  const ids = await readRange(`'${BASIC_APPLICATIONS_SHEET}'!${idCol}2:${idCol}`);
+  const matchIndex = ids.findIndex((r) => (r[0] ?? "") === applicationId);
+  if (matchIndex === -1) return false;
+
+  // +2: data starts at row 2 (row 1 is headers), findIndex is 0-based.
+  const rowNumber = matchIndex + 2;
+  await updateRange(`'${BASIC_APPLICATIONS_SHEET}'!${statusCol}${rowNumber}`, [[checkoutStatus]]);
+  return true;
 }
 
 /**

@@ -8,7 +8,7 @@ import {
   setCancelled,
   setPaymentFailed,
 } from "../../lib/memberships";
-import { appendCheckoutLog } from "../../lib/google-sheets";
+import { appendCheckoutLog, updateBasicApplicationStatus } from "../../lib/google-sheets";
 import { logger } from "../../lib/logger";
 import { getApplicantById, markApplicantPaid } from "../../lib/upload-sheet";
 import { appendRenewal, getRenewalById, getRenewalByStripeRef, markRenewalPaid, getRenewalsSheetUrl } from "../../lib/renewal-sheet";
@@ -344,6 +344,26 @@ async function handleCheckoutCompleted(
   const basicApplicationId = session.metadata?.basic_application_id;
   const associateListOnPage = session.metadata?.list_on_page ?? "";
   if (plan === "basic" && basicApplicationId) {
+    // Flip the sheet row's checkout_status from "checkout_requested" to
+    // "paid". Replay-safe (fixed-state write) and non-blocking.
+    updateBasicApplicationStatus(basicApplicationId, "paid")
+      .then((updated) => {
+        log.info(
+          updated
+            ? "checkout_completed.basic_application_marked_paid"
+            : "checkout_completed.basic_application_not_found",
+          { basicApplicationId, sessionId: session.id },
+        );
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error("checkout_completed.basic_application_update_failed", {
+          basicApplicationId,
+          sessionId: session.id,
+          error: msg,
+        });
+      });
+
     const associateDocData = {
       applicationId: basicApplicationId,
       submittedAt: "",

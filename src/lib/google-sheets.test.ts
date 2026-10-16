@@ -392,6 +392,37 @@ describe("google-sheets", () => {
     });
   });
 
+  describe("updateBasicApplicationStatus", () => {
+    it("writes the status to column P of the row matching application_id", async () => {
+      const { updateBasicApplicationStatus } = await import("./google-sheets");
+      mockGet.mockResolvedValueOnce({ data: { values: [["app_001"], ["app_123"]] } });
+
+      const updated = await updateBasicApplicationStatus("app_123", "paid");
+
+      expect(updated).toBe(true);
+      expect(mockGet).toHaveBeenCalledWith({
+        spreadsheetId: "1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8",
+        range: "'Basic Applications'!B2:B",
+      });
+      expect(mockUpdate).toHaveBeenCalledWith({
+        spreadsheetId: "1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8",
+        range: "'Basic Applications'!P3",
+        valueInputOption: "RAW",
+        requestBody: { values: [["paid"]] },
+      });
+    });
+
+    it("returns false and writes nothing when application_id is not found", async () => {
+      const { updateBasicApplicationStatus } = await import("./google-sheets");
+      mockGet.mockResolvedValueOnce({ data: { values: [["app_001"]] } });
+
+      const updated = await updateBasicApplicationStatus("app_missing", "paid");
+
+      expect(updated).toBe(false);
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+  });
+
   describe("readNotificationRules", () => {
     async function getReadNotificationRules() {
       const mod = await import("./google-sheets");
