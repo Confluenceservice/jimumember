@@ -14,6 +14,20 @@ interface ImportMetaEnv {
   readonly MAILGUN_API_KEY?: string;
   readonly MAILGUN_DOMAIN?: string;
   readonly MAILGUN_FROM?: string;
+  // Xero integration — see docs/runbooks/xero-connect.md and spec/016.
+  readonly XERO_ENABLED?: string;
+  readonly XERO_AUTH_MODE?: "custom" | "authcode";
+  readonly XERO_CLIENT_ID?: string;
+  readonly XERO_CLIENT_SECRET?: string;
+  readonly XERO_TENANT_ID?: string;
+  readonly XERO_ALLOW_LIVE?: string;
+  readonly XERO_SALES_ACCOUNT_CODE?: string;
+  readonly XERO_STRIPE_FEED_ACCOUNT_ID?: string;
+  readonly XERO_TAX_TYPE?: string;
+  readonly XERO_REDIRECT_URI?: string;
+  readonly XERO_SYNC_SECRET?: string;
+  /** Separate from XERO_SYNC_SECRET: passed as a query param, so it lands in access logs. */
+  readonly XERO_CONSENT_SECRET?: string;
 }
 
 interface ImportMeta {

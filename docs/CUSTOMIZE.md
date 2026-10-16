@@ -184,6 +184,36 @@ it would orphan in-flight sessions across a deploy) and the `nextJuly1Epoch`
 field on the membership record. Both are functionally anchor-agnostic; leave
 them.
 
+## 6c. Xero accounting sync (optional, off by default)
+
+Every completed Stripe payment can be pushed to Xero as a Contact plus a paid
+`ACCREC` invoice booked against a Stripe clearing account. It is **inert
+unless `XERO_ENABLED` is truthy** — an unconfigured fork pays nothing for it,
+not even the extra Stripe API call that resolves the fee.
+
+Setup is a runbook, not a code change: `docs/runbooks/xero-connect.md`. The
+env vars are documented (commented out) in `.env.example`.
+
+What a fork most often needs to change:
+
+| Thing | Where | Why |
+|---|---|---|
+| Sales tax | `LineAmountTypes: "NoTax"` in `src/lib/xero-sync.ts` + `XERO_TAX_TYPE` | The blueprint assumes a tax-exempt org, so the invoice total equals the Stripe gross to the cent. A tax-registered org changes **both** together, or the payment part-allocates and the clearing account never nets to zero. |
+| Invoice line wording | `FLOW_LABELS` in `src/lib/xero-sync.ts` | Derived from the tier labels in `forms/tiers.ts`, so renaming a tier is usually enough. |
+| Sweep schedule | `apps-script/xero-sweeper/` | Hourly Apps Script GET is the entire retry mechanism — the webhook pushes inline and gives up after one attempt. |
+
+Two contracts you must **not** change once rows exist:
+
+- The **flow keys** `advanced_new` / `basic_new` / `renewal` / `auto_renewal`
+  (`XeroSyncFlow` in `src/lib/xero-sync-sheet.ts`), written verbatim into
+  column C of the **Xero Sync** tab.
+- The **Xero Sync** column order (A–R). Same rule as every other sheet tab.
+
+`XERO_ALLOW_LIVE` is the environment guard: `false` on staging, `true` on
+production. It is compared against the Stripe event's `livemode` and refuses
+to act on a mismatch, so a test payment can never reach the production Xero
+org. The tenant check in `xero-auth.ts` is the second layer.
+
 ## 7. Sample form content (the big one)
 
 The blueprint ships with generic sample data modeled on a real professional-
@@ -293,5 +323,7 @@ runs $82–485/mo.
 - [ ] Stripe products + prices created, webhook endpoints registered
 - [ ] Email provider configured, sending domain verified, SPF/DKIM/DMARC set
 - [ ] Sample form content in section 7 reviewed + replaced
+- [ ] Xero (only if used): org connected per `docs/runbooks/xero-connect.md`,
+      `XERO_ALLOW_LIVE` correct per environment, sweeper trigger installed
 - [ ] `npm run test` green, `npm run check` reviewed for new type errors
 - [ ] Smoke test full apply + renewal flow on staging with a test card
