@@ -12,6 +12,7 @@ const mockSendBasicApplicationNotification = vi.fn();
 const mockSendRenewalPdLogLink = vi.fn();
 const mockSendRenewalAdminNotification = vi.fn();
 const mockAppendCheckoutLog = vi.fn();
+const mockUpdateBasicApplicationStatus = vi.fn();
 const mockCreateAdvancedApplicationReviewDoc = vi.fn();
 const mockCreateBasicApplicationReviewDoc = vi.fn();
 const mockGetMembership = vi.fn();
@@ -39,6 +40,7 @@ vi.mock("../../lib/email-sender", () => ({
 
 vi.mock("../../lib/google-sheets", () => ({
   appendCheckoutLog: mockAppendCheckoutLog,
+  updateBasicApplicationStatus: mockUpdateBasicApplicationStatus,
 }));
 
 vi.mock("../../lib/notification-rules", () => ({
@@ -345,6 +347,7 @@ describe("stripe-webhook", () => {
       mockCreateBasicApplicationReviewDoc.mockResolvedValue("https://docs.google.com/document/d/assoc123");
       mockSendBasicConfirmation.mockResolvedValue(undefined);
       mockSendBasicApplicationNotification.mockResolvedValue(undefined);
+      mockUpdateBasicApplicationStatus.mockResolvedValue(true);
 
       const { POST } = await import("../../pages/api/stripe-webhook");
       const session = makeCheckoutSession({
@@ -363,6 +366,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
+      expect(mockUpdateBasicApplicationStatus).toHaveBeenCalledWith("assoc_app_456", "paid");
       expect(mockCreateBasicApplicationReviewDoc).toHaveBeenCalled();
       expect(mockSendBasicConfirmation).toHaveBeenCalledWith(
         "jane@example.com",
