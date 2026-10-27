@@ -7,10 +7,10 @@ import {
   formatAmount,
   isCheckoutDryRunEnabled,
   getNextRenewalAnchorEpoch,
-  getPriceForPlan,
   getSiteBaseUrl,
   type MembershipPlan,
-} from "../../lib/stripe-checkout";
+} from "../../lib/membership-terms";
+import { getPriceForPlan } from "../../lib/stripe-checkout";
 import { appendBasicApplication } from "../../lib/google-sheets";
 import { CURRENCY, formatAnchorDate } from "../../lib/config";
 import { logger } from "../../lib/logger";

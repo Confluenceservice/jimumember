@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import Stripe from "stripe";
-import { formatAmount, getPriceForPlan, type MembershipPlan } from "../../lib/stripe-checkout";
+import { formatAmount, type MembershipPlan } from "../../lib/membership-terms";
+import { getPriceForPlan } from "../../lib/stripe-checkout";
 import { CURRENCY } from "../../lib/config";
 import { logger } from "../../lib/logger";
 

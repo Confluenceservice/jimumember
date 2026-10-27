@@ -5,8 +5,8 @@ import { appendRenewal, type PdEntry } from "../../../../lib/renewal-sheet";
 import {
   getSiteBaseUrl,
   isCheckoutDryRunEnabled,
-  isStripeRetryableError,
-} from "../../../../lib/stripe-checkout";
+} from "../../../../lib/membership-terms";
+import { isStripeRetryableError } from "../../../../lib/stripe-checkout";
 import { validateTier } from "../../../../lib/forms/runtime";
 import { getTier } from "../../../../lib/forms/tiers";
 

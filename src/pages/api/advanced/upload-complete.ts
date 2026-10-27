@@ -7,8 +7,8 @@ import {
   isCheckoutDryRunEnabled,
   getNextRenewalAnchorEpoch,
   getSiteBaseUrl,
-  isStripeRetryableError,
-} from "../../../lib/stripe-checkout";
+} from "../../../lib/membership-terms";
+import { isStripeRetryableError } from "../../../lib/stripe-checkout";
 import { getApplicantByToken } from "../../../lib/upload-sheet";
 import { validateCompletion } from "../../../lib/upload-sheet";
 import { CURRENCY, formatAnchorDate } from "../../../lib/config";

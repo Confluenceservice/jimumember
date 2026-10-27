@@ -172,7 +172,7 @@ those by hand if you change amounts.
 
 Changing the anchor env vars is now **fully self-contained** — no copy edits
 needed. The pro-rata calculation and subscription `trial_end` honour the anchor
-(via `getNextRenewalAnchorDate` in `src/lib/stripe-checkout.ts`), and all
+(via `getNextRenewalAnchorDate` in `src/lib/membership-terms.ts`), and all
 user-facing date copy renders the anchor dynamically through
 `formatAnchorDate()`: the landing pages (`index.astro` / `advanced/apply.astro`)
 and the `renewalMessage` in `create-checkout-session.ts`,

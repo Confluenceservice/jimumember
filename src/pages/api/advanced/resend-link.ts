@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/node";
 import { getApplicantByToken } from "../../../lib/upload-sheet";
 import { sendResumeLink } from "../../../lib/email-sender";
 import { logger } from "../../../lib/logger";
-import { getSiteBaseUrl } from "../../../lib/stripe-checkout";
+import { getSiteBaseUrl } from "../../../lib/membership-terms";
 
 // Resends the resume-link email to the applicant identified by resume token.
 // Used by the in-form "Email me my access link" button so applicants who

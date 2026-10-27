@@ -25,9 +25,11 @@ vi.mock("../../../../lib/renewal-sheet", () => ({
   markRenewalPaid: vi.fn(),
   getRenewalById: vi.fn(),
 }));
-vi.mock("../../../../lib/stripe-checkout", () => ({
+vi.mock("../../../../lib/membership-terms", () => ({
   getSiteBaseUrl: mockGetSiteBaseUrl,
   isCheckoutDryRunEnabled: mockIsCheckoutDryRunEnabled,
+}));
+vi.mock("../../../../lib/stripe-checkout", () => ({
   isStripeRetryableError: mockIsStripeRetryableError,
 }));
 vi.mock("stripe", () => ({
