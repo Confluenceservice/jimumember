@@ -1,0 +1,10 @@
+[prepare]
+run = "npm ci"
+
+[[check]]
+name = "test"
+run = "npm test"
+
+[[check]]
+name = "typecheck"
+run = "npm run check"
