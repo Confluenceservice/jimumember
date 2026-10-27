@@ -9,7 +9,7 @@
  *
  * See docs/CUSTOMIZE.md → "Localisation constants" before deploying for a
  * different region/currency. Note that Stripe Prices must also be created in
- * the matching currency, or the currency guard in stripe-products.ts will
+ * the matching currency, or the currency guard in payments/stripe/prices.ts will
  * reject them and /api/health will report "degraded".
  */
 

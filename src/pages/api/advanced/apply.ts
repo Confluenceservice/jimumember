@@ -11,7 +11,7 @@ import {
 } from "../../../lib/upload-sheet";
 import { sendResumeLink } from "../../../lib/email-sender";
 import { logger } from "../../../lib/logger";
-import { getSiteBaseUrl } from "../../../lib/stripe-checkout";
+import { getSiteBaseUrl } from "../../../lib/membership-terms";
 import { listDriveFiles } from "../../../lib/drive-files";
 const applicantSaveQueues = new Map<string, Promise<void>>();
 async function queueApplicantSave(applicantId: string, operation: () => Promise<void>): Promise<void> {

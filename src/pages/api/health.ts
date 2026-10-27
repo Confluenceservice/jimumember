@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
-import Stripe from "stripe";
 import { logger } from "../../lib/logger";
-import { resolveRenewalPrice } from "../../lib/stripe-products";
+import { getPaymentProvider, type PaymentProvider } from "../../lib/payments";
 import { listTiers } from "../../lib/forms/tiers";
 
 type SubsystemStatus = "connected" | "disconnected" | "not_configured";
@@ -16,13 +15,16 @@ type RenewalTierResult =
   | { ok: false; error: string };
 
 async function safeResolveRenewalPrice(
-  key: `${string}_renewal`,
+  provider: PaymentProvider | null,
+  providerError: string | undefined,
+  tierSlug: string,
 ): Promise<RenewalTierResult> {
+  if (!provider) return { ok: false, error: providerError ?? "Payment provider unavailable" };
   try {
-    const price = await resolveRenewalPrice(key);
+    const price = await provider.resolvePrice(tierSlug, "renewal");
     return {
       ok: true,
-      priceId: price.priceId,
+      priceId: price.priceRef,
       currency: price.currency,
       unitAmount: price.unitAmount,
     };
@@ -32,20 +34,12 @@ async function safeResolveRenewalPrice(
   }
 }
 
-async function checkStripe(): Promise<SubsystemResult> {
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) return { status: "not_configured" };
-
-  try {
-    const stripe = new Stripe(secretKey);
-    await stripe.products.list({ limit: 1 });
-    return { status: "connected" };
-  } catch (err) {
-    return {
-      status: "disconnected",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+async function checkPayment(
+  provider: PaymentProvider | null,
+  providerError: string | undefined,
+): Promise<SubsystemResult> {
+  if (!provider) return { status: "not_configured", error: providerError };
+  return provider.healthCheck();
 }
 
 // Verifies Mailgun is configured. We intentionally do NOT make a network
@@ -67,12 +61,21 @@ async function checkMailgun(): Promise<SubsystemResult> {
 }
 
 export const GET: APIRoute = async () => {
+  // An invalid PAYMENT_PROVIDER must degrade the report, not crash the
+  // endpoint that backs the Fly liveness check.
+  let provider: PaymentProvider | null = null;
+  let providerError: string | undefined;
+  try {
+    provider = getPaymentProvider();
+  } catch (err) {
+    providerError = err instanceof Error ? err.message : String(err);
+  }
+
   // Phase M: iterate TIERS — N-tier ready. Each tier contributes one entry
   // to renewal_prices, keyed by tier slug.
   const renewalEntries = await Promise.all(
     listTiers().map(async (tier) => {
-      const key = `${tier.storageValue}_renewal` as `${string}_renewal`;
-      const result = await safeResolveRenewalPrice(key);
+      const result = await safeResolveRenewalPrice(provider, providerError, tier.slug);
       if (!result.ok) {
         logger.error("health.renewal_price_check_failed", {
           tier: tier.slug,
@@ -85,13 +88,15 @@ export const GET: APIRoute = async () => {
   const renewalPrices = Object.fromEntries(renewalEntries);
   const allRenewalsOk = renewalEntries.every(([, r]) => r.ok);
 
-  const [stripe, email] = await Promise.all([checkStripe(), checkMailgun()]);
+  const [stripe, email] = await Promise.all([checkPayment(provider, providerError), checkMailgun()]);
 
   if (stripe.status === "disconnected") {
     logger.error("health.stripe_check_failed", { error: stripe.error });
   }
   if (stripe.status === "not_configured") {
-    logger.warn("health.check", { reason: "STRIPE_SECRET_KEY not configured" });
+    logger.warn("health.check", {
+      reason: providerError ?? "STRIPE_SECRET_KEY not configured",
+    });
   }
   if (email.status === "disconnected") {
     logger.error("health.mailgun_check_failed", { error: email.error });

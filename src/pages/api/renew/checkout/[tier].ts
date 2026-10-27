@@ -1,23 +1,12 @@
 import type { APIRoute } from "astro";
-import Stripe from "stripe";
-import { resolveRenewalPrice, type LookupKey } from "../../../../lib/stripe-products";
 import { appendRenewal, type PdEntry } from "../../../../lib/renewal-sheet";
 import {
   getSiteBaseUrl,
   isCheckoutDryRunEnabled,
-  isStripeRetryableError,
-} from "../../../../lib/stripe-checkout";
+} from "../../../../lib/membership-terms";
+import { CHECKOUT_REF_PLACEHOLDER, getPaymentProvider } from "../../../../lib/payments";
 import { validateTier } from "../../../../lib/forms/runtime";
 import { getTier } from "../../../../lib/forms/tiers";
-
-/**
- * Derive the Stripe renewal lookup key from the tier config. Adding a tier
- * to TIERS automatically extends this — no code edit required (Phase D).
- */
-function lookupKeyForTier(tierSlug: string): LookupKey {
-  const tier = getTier(tierSlug);
-  return `${tier.storageValue}_renewal` as LookupKey;
-}
 
 function coercePdEntries(raw: unknown): PdEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -41,16 +30,6 @@ function coercePdEntries(raw: unknown): PdEntry[] {
   return out;
 }
 
-let stripeInstance: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!stripeInstance) {
-    const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) throw new Error("MISSING_CONFIG: STRIPE_SECRET_KEY");
-    stripeInstance = new Stripe(key, { apiVersion: "2026-06-24.dahlia" as Stripe.LatestApiVersion });
-  }
-  return stripeInstance;
-}
-
 function badRequest(field: string, message: string) {
   return new Response(JSON.stringify({ error: message, field }), { status: 400, headers: { "content-type": "application/json" } });
 }
@@ -67,7 +46,7 @@ export const POST: APIRoute = async ({ request, params }) => {
   try { tierConfig = getTier(tierSlug); }
   catch { return badRequest("tier", `Unknown tier: ${tierSlug}`); }
 
-  const lookupKey = lookupKeyForTier(tierSlug);
+  const provider = getPaymentProvider();
 
   let body: unknown;
   try { body = await request.json(); }
@@ -94,7 +73,7 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   let priceConfig;
   try {
-    priceConfig = await resolveRenewalPrice(lookupKey);
+    priceConfig = await provider.resolvePrice(tierSlug, "renewal");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     if (msg.includes("MISSING_CONFIG")) return serverError("MISSING_CONFIG", msg);
@@ -106,7 +85,7 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   if (isCheckoutDryRunEnabled()) {
     return new Response(JSON.stringify({
-      dryRun: true, priceValidated: true, priceId: priceConfig.priceId, renewalId,
+      dryRun: true, priceValidated: true, priceId: priceConfig.priceRef, renewalId,
     }), { status: 200, headers: { "content-type": "application/json" } });
   }
 
@@ -124,18 +103,14 @@ export const POST: APIRoute = async ({ request, params }) => {
     return serverError("SHEET_WRITE_FAILED", `Failed to write renewal row: ${msg}`, true);
   }
 
-  let session;
+  let checkout;
   try {
-    session = await getStripe().checkout.sessions.create({
-      mode: "payment",
-      success_url: `${siteBaseUrl}/renew/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`,
-      line_items: [{ quantity: 1, price: priceConfig.priceId }],
-      customer_email: email,
-      customer_creation: "always",
-      client_reference_id: renewalId,
-      payment_intent_data: { receipt_email: email, setup_future_usage: "off_session" },
-      // NOTE: pdEntries are intentionally NOT placed in Stripe metadata — a
+    checkout = await provider.createCheckout({
+      mode: "one_time",
+      lineItem: { kind: "price", priceRef: priceConfig.priceRef },
+      customerEmail: email,
+      clientReference: renewalId,
+      // NOTE: pdEntries are intentionally NOT placed in provider metadata — a
       // member with several PD rows would exceed Stripe's 500-char per-value
       // limit and the session create would throw. They are persisted in the
       // Renewals sheet by appendRenewal() above; the webhook reads them back
@@ -145,13 +120,16 @@ export const POST: APIRoute = async ({ request, params }) => {
         first_name: firstName, last_name: lastName, email, phone,
         amount_cents: String(priceConfig.unitAmount),
       },
-    }, { idempotencyKey: `renewal:${tier}:${renewalId}` });
+      successUrl: `${siteBaseUrl}/renew/success?session_id=${CHECKOUT_REF_PLACEHOLDER}`,
+      cancelUrl: `${siteBaseUrl}/renew/${tierSlug}?year=${year}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}&email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`,
+      idempotencyKey: `renewal:${tier}:${renewalId}`,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    return serverError("CHECKOUT_ERROR", msg, isStripeRetryableError(err));
+    return serverError("CHECKOUT_ERROR", msg, provider.isRetryableError(err));
   }
 
-  return new Response(JSON.stringify({ url: session.url, renewalId }), {
+  return new Response(JSON.stringify({ url: checkout.redirectUrl, renewalId }), {
     status: 200, headers: { "content-type": "application/json" },
   });
 };

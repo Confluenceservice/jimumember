@@ -35,7 +35,7 @@ vi.mock("../../../lib/logger", () => ({
   },
 }));
 
-vi.mock("../../../lib/stripe-checkout", () => ({
+vi.mock("../../../lib/membership-terms", () => ({
   getSiteBaseUrl: mockGetSiteBaseUrl,
 }));
 

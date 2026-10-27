@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-import Stripe from "stripe";
 import * as Sentry from "@sentry/node";
 import crypto from "node:crypto";
 import {
@@ -7,10 +6,10 @@ import {
   formatAmount,
   isCheckoutDryRunEnabled,
   getNextRenewalAnchorEpoch,
-  getPriceForPlan,
   getSiteBaseUrl,
   type MembershipPlan,
-} from "../../lib/stripe-checkout";
+} from "../../lib/membership-terms";
+import { CHECKOUT_REF_PLACEHOLDER, getPaymentProvider, type PriceInfo } from "../../lib/payments";
 import { appendBasicApplication } from "../../lib/google-sheets";
 import { CURRENCY, formatAnchorDate } from "../../lib/config";
 import { logger } from "../../lib/logger";
@@ -35,38 +34,10 @@ type CreateSessionPayload = {
   applicationDate?: string;
 };
 
-type ExistingCustomerInfo = {
-  id?: string;
-  hasPriorSubscriptions: boolean;
-};
-
 const VALID_PLANS: MembershipPlan[] = ["basic", "advanced"];
 
 function badRequest(message: string): Response {
   return Response.json({ error: message }, { status: 400 });
-}
-
-async function getExistingCustomerInfo(
-  stripe: Stripe,
-  email: string,
-): Promise<ExistingCustomerInfo> {
-  const customers = await stripe.customers.list({ email, limit: 1 });
-  const customerId = customers.data[0]?.id;
-
-  if (!customerId) {
-    return { hasPriorSubscriptions: false };
-  }
-
-  const subs = await stripe.subscriptions.list({
-    customer: customerId,
-    status: "all",
-    limit: 1,
-  });
-
-  return {
-    id: customerId,
-    hasPriorSubscriptions: subs.data.length > 0,
-  };
 }
 
 /**
@@ -122,48 +93,63 @@ export const POST: APIRoute = async ({ request }) => {
   const signature = (associateValues ? String(associateValues.signature ?? "") : (payload.signature?.trim() ?? ""));
   const applicationDate = (associateValues ? String(associateValues.applicationDate ?? "") : (payload.applicationDate?.trim() ?? ""));
 
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) {
+  const provider = getPaymentProvider();
+  const missingApiConfig = provider.missingConfig("api");
+  if (missingApiConfig.length > 0) {
     return Response.json(
-      { error: "Server is missing STRIPE_SECRET_KEY." },
+      { error: `Server is missing ${missingApiConfig[0]}.` },
       { status: 500 },
     );
   }
 
-  const stripe = new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
   const dryRun = isCheckoutDryRunEnabled();
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  const recurringPriceId = getPriceForPlan(plan);
   const billingCycleAnchor = getNextRenewalAnchorEpoch();
   const siteBaseUrl = getSiteBaseUrl(request.url);
-  if (!recurringPriceId) {
+
+  let recurringPrice: PriceInfo;
+  try {
+    recurringPrice = await provider.resolvePrice(plan, "application");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("MISSING_CONFIG")) {
+      return Response.json(
+        { error: `Server is missing recurring price ID for plan '${plan}'.` },
+        { status: 500 },
+      );
+    }
+    if (message.includes("INVALID_CURRENCY") || message.includes("INVALID_UNIT_AMOUNT")) {
+      return Response.json(
+        { error: `Recurring price must be a fixed ${CURRENCY.toUpperCase()} amount.` },
+        { status: 500 },
+      );
+    }
+    Sentry.captureException(error, { extra: { plan, email } });
+    logger.error("checkout_session.price_resolve_failed", { plan, error: message });
+    return Response.json({ error: message }, { status: 500 });
+  }
+
+  const missingWebhookConfig = provider.missingConfig("webhook");
+  if (dryRun && missingWebhookConfig.length > 0) {
     return Response.json(
-      { error: `Server is missing recurring price ID for plan '${plan}'.` },
+      { error: `Server is missing ${missingWebhookConfig[0]} required for dry-run validation.` },
       { status: 500 },
     );
   }
 
-  if (dryRun && !webhookSecret) {
-    return Response.json(
-      { error: "Server is missing STRIPE_WEBHOOK_SECRET required for dry-run validation." },
-      { status: 500 },
-    );
-  }
-
-  const recurringPrice = await stripe.prices.retrieve(recurringPriceId);
-  if (recurringPrice.currency !== CURRENCY || !recurringPrice.unit_amount) {
+  if (!recurringPrice.unitAmount) {
     return Response.json(
       { error: `Recurring price must be a fixed ${CURRENCY.toUpperCase()} amount.` },
       { status: 500 },
     );
   }
 
-  const annualAmount = recurringPrice.unit_amount;
-  const customerInfo = await getExistingCustomerInfo(stripe, email);
+  const recurringPriceId = recurringPrice.priceRef;
+  const annualAmount = recurringPrice.unitAmount;
+  const returningCustomer = await provider.findReturningCustomer(email);
 
   // First-term amount: prorated based on weeks remaining until next July 1.
   // New customers get the prorated amount; existing subscribers pay full price.
-  const firstTermAmount = customerInfo.hasPriorSubscriptions
+  const firstTermAmount = returningCustomer?.hadSubscription
     ? annualAmount
     : calcFirstTermAmount(annualAmount);
   const proratedFirstTerm = firstTermAmount !== annualAmount;
@@ -175,7 +161,7 @@ export const POST: APIRoute = async ({ request }) => {
     logger.info("checkout_session.dry_run_validated", {
       plan,
       email,
-      customerId: customerInfo.id,
+      customerId: returningCustomer?.customerRef,
       recurringPriceId,
       firstTermAmount,
       annualAmount,
@@ -196,67 +182,21 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  // mode=payment for Option C: one-time charge, subscription created in webhook
-  const params: Stripe.Checkout.SessionCreateParams = {
-    mode: "payment",
-    success_url:
-      plan === "basic"
-        ? `${siteBaseUrl}/associate-membership?session_id={CHECKOUT_SESSION_ID}`
-        : `${siteBaseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteBaseUrl}/cancel`,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: CURRENCY,
-          unit_amount: firstTermAmount,
-          product_data: {
-            // Phase K: tier label resolved via getTier (single source of truth
-            // for "Associate Membership" / "Professional Membership" / future tiers).
-            name: getTier(plan as "basic" | "advanced").label,
-            description: renewalMessage,
-          },
-        },
-      },
-    ],
-    metadata: {
-      flow: "option_c",
-      plan,
-      recurring_price_id: recurringPriceId,
-      annual_amount: String(annualAmount),
-      next_july1_epoch: String(billingCycleAnchor),
-      renewal_message: renewalMessage,
-      first_name: firstName,
-      last_name: lastName,
-      phone: phone ?? "",
-    },
-    client_reference_id: email,
-    custom_text: {
-      submit: {
-        message: renewalMessage,
-      },
-    },
+  const metadata: Record<string, string> = {
+    flow: "option_c",
+    plan,
+    recurring_price_id: recurringPriceId,
+    annual_amount: String(annualAmount),
+    next_july1_epoch: String(billingCycleAnchor),
+    renewal_message: renewalMessage,
+    first_name: firstName,
+    last_name: lastName,
+    phone: phone ?? "",
   };
   if (basicApplicationId) {
-    params.metadata = {
-      ...params.metadata,
-      application_source: "apply",
-      basic_application_id: basicApplicationId,
-      list_on_page: listOnPage ?? "",
-    };
-  }
-
-  // Save payment method for future off-session charges (renewal billing)
-  params.payment_intent_data = {
-    setup_future_usage: "off_session",
-    receipt_email: email,
-  };
-
-  if (customerInfo.id) {
-    params.customer = customerInfo.id;
-  } else {
-    params.customer_creation = "always";
-    params.customer_email = email;
+    metadata.application_source = "apply";
+    metadata.basic_application_id = basicApplicationId;
+    metadata.list_on_page = listOnPage ?? "";
   }
 
   try {
@@ -282,16 +222,36 @@ export const POST: APIRoute = async ({ request }) => {
     }
     // Include firstTermAmount in the key: the prorated amount shrinks each
     // week toward July 1, so a static key would make a return visit in a
-    // later week collide with Stripe's idempotency cache (same key, different
-    // unit_amount → hard idempotency-conflict error).
-    const session = await stripe.checkout.sessions.create(params, {
+    // later week collide with the provider's idempotency cache (same key,
+    // different amount → hard idempotency-conflict error).
+    const checkout = await provider.createCheckout({
+      mode: "first_term_then_annual",
+      lineItem: {
+        kind: "amount",
+        amount: firstTermAmount,
+        currency: CURRENCY,
+        // Phase K: tier label resolved via getTier (single source of truth
+        // for "Associate Membership" / "Professional Membership" / future tiers).
+        name: getTier(plan as "basic" | "advanced").label,
+        description: renewalMessage,
+      },
+      customerEmail: email,
+      customerRef: returningCustomer?.customerRef,
+      clientReference: email,
+      metadata,
+      successUrl:
+        plan === "basic"
+          ? `${siteBaseUrl}/associate-membership?session_id=${CHECKOUT_REF_PLACEHOLDER}`
+          : `${siteBaseUrl}/success?session_id=${CHECKOUT_REF_PLACEHOLDER}`,
+      cancelUrl: `${siteBaseUrl}/cancel`,
+      submitMessage: renewalMessage,
       idempotencyKey: `checkout:${plan}:${email}:${firstTermAmount}`,
     });
 
     logger.info("checkout_session.created", {
       plan,
-      sessionId: session.id,
-      customerId: customerInfo.id,
+      sessionId: checkout.checkoutRef,
+      customerId: returningCustomer?.customerRef,
       firstTermAmount,
       annualAmount,
       proratedFirstTerm,
@@ -300,8 +260,8 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     return Response.json({
-      id: session.id,
-      url: session.url,
+      id: checkout.checkoutRef,
+      url: checkout.redirectUrl,
       plan,
       firstTermAmount,
       annualAmount,
@@ -311,10 +271,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (error) {
     Sentry.captureException(error, { extra: { plan, email } });
-    const message =
-      error instanceof Stripe.errors.StripeError
-        ? error.message
-        : "Unable to create checkout session.";
+    const message = provider.userFacingError(error) ?? "Unable to create checkout session.";
     logger.error("checkout_session.create_failed", {
       plan,
       error: message,

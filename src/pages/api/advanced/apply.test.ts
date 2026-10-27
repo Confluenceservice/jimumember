@@ -50,7 +50,7 @@ vi.mock("../../../lib/email-sender", () => ({
   sendResumeLink: mockSendResumeLink,
 }));
 
-vi.mock("../../../lib/stripe-checkout", () => ({
+vi.mock("../../../lib/membership-terms", () => ({
   getSiteBaseUrl: mockGetSiteBaseUrl,
 }));
 

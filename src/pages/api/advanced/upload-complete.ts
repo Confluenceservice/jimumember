@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-import Stripe from "stripe";
 import * as Sentry from "@sentry/node";
 import {
   calcFirstTermAmount,
@@ -7,8 +6,9 @@ import {
   isCheckoutDryRunEnabled,
   getNextRenewalAnchorEpoch,
   getSiteBaseUrl,
-  isStripeRetryableError,
-} from "../../../lib/stripe-checkout";
+} from "../../../lib/membership-terms";
+import { CHECKOUT_REF_PLACEHOLDER, getPaymentProvider } from "../../../lib/payments";
+import { getTier } from "../../../lib/forms/tiers";
 import { getApplicantByToken } from "../../../lib/upload-sheet";
 import { validateCompletion } from "../../../lib/upload-sheet";
 import { CURRENCY, formatAnchorDate } from "../../../lib/config";
@@ -62,46 +62,59 @@ export const POST: APIRoute = async ({ request, url }) => {
     );
   }
 
-  // Create Stripe checkout session
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) {
+  // Create checkout
+  const provider = getPaymentProvider();
+  const missingApiConfig = provider.missingConfig("api");
+  if (missingApiConfig.length > 0) {
     return Response.json(
-      { error: "Server is missing STRIPE_SECRET_KEY.", code: "MISSING_CONFIG" },
+      { error: `Server is missing ${missingApiConfig[0]}.`, code: "MISSING_CONFIG" },
       { status: 500 }
     );
   }
 
-  const stripe = new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
+  const tier = getTier("advanced");
   const dryRun = isCheckoutDryRunEnabled();
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  const recurringPriceId = process.env.STRIPE_PRICE_2?.trim();
   const billingCycleAnchor = getNextRenewalAnchorEpoch();
   const siteBaseUrl = getSiteBaseUrl(url.href);
 
-  if (!recurringPriceId) {
-    return Response.json(
-      { error: "Server is missing STRIPE_PRICE_2.", code: "MISSING_CONFIG" },
-      { status: 500 }
-    );
-  }
-
-  if (dryRun && !webhookSecret) {
-    return Response.json(
-      { error: "Server is missing STRIPE_WEBHOOK_SECRET required for dry-run validation.", code: "MISSING_CONFIG" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const recurringPrice = await stripe.prices.retrieve(recurringPriceId);
-    if (recurringPrice.currency !== CURRENCY || !recurringPrice.unit_amount) {
+    let recurringPrice;
+    try {
+      recurringPrice = await provider.resolvePrice(tier.slug, "application");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("MISSING_CONFIG")) {
+        return Response.json(
+          { error: `Server is missing ${tier.priceEnvVar}.`, code: "MISSING_CONFIG" },
+          { status: 500 }
+        );
+      }
+      if (message.includes("INVALID_CURRENCY") || message.includes("INVALID_UNIT_AMOUNT")) {
+        return Response.json(
+          { error: `Recurring price must be a fixed ${CURRENCY.toUpperCase()} amount.`, code: "CHECKOUT_ERROR" },
+          { status: 500 }
+        );
+      }
+      throw error;
+    }
+
+    const missingWebhookConfig = provider.missingConfig("webhook");
+    if (dryRun && missingWebhookConfig.length > 0) {
+      return Response.json(
+        { error: `Server is missing ${missingWebhookConfig[0]} required for dry-run validation.`, code: "MISSING_CONFIG" },
+        { status: 500 }
+      );
+    }
+
+    if (!recurringPrice.unitAmount) {
       return Response.json(
         { error: `Recurring price must be a fixed ${CURRENCY.toUpperCase()} amount.`, code: "CHECKOUT_ERROR" },
         { status: 500 }
       );
     }
 
-    const annualAmount = recurringPrice.unit_amount;
+    const recurringPriceId = recurringPrice.priceRef;
+    const annualAmount = recurringPrice.unitAmount;
 
     // First-term amount: prorated based on weeks remaining until next July 1.
     // Upload applicants are always first-time, so they get the prorated amount.
@@ -132,23 +145,21 @@ export const POST: APIRoute = async ({ request, url }) => {
       });
     }
 
-    const params: Stripe.Checkout.SessionCreateParams = {
-      mode: "payment",
-      success_url: `${siteBaseUrl}/advanced/success-upload?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBaseUrl}/advanced/apply?token=${token}`,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: CURRENCY,
-            unit_amount: firstTermAmount,
-            product_data: {
-              name: "Professional Membership",
-              description: renewalMessage,
-            },
-          },
-        },
-      ],
+    // Include firstTermAmount in the key: the prorated amount shrinks each
+    // week toward July 1, so a static key would make a return visit in a
+    // later week collide with the provider's idempotency cache (same key,
+    // different amount → hard idempotency-conflict error).
+    const checkout = await provider.createCheckout({
+      mode: "first_term_then_annual",
+      lineItem: {
+        kind: "amount",
+        amount: firstTermAmount,
+        currency: CURRENCY,
+        name: tier.label,
+        description: renewalMessage,
+      },
+      customerEmail: applicant.email,
+      clientReference: applicant.id,
       metadata: {
         flow: "option_c",
         plan: "advanced",
@@ -161,49 +172,31 @@ export const POST: APIRoute = async ({ request, url }) => {
         first_name: applicant.firstName,
         last_name: applicant.lastName,
       },
-      client_reference_id: applicant.id,
-      custom_text: {
-        submit: {
-          message: renewalMessage,
-        },
-      },
-    };
-
-    params.payment_intent_data = {
-      setup_future_usage: "off_session",
-      receipt_email: applicant.email,
-    };
-
-    params.customer_creation = "always";
-    params.customer_email = applicant.email;
-
-    // Include firstTermAmount in the key: the prorated amount shrinks each
-    // week toward July 1, so a static key would make a return visit in a
-    // later week collide with Stripe's idempotency cache (same key, different
-    // unit_amount → hard idempotency-conflict error).
-    const session = await stripe.checkout.sessions.create(params, {
+      successUrl: `${siteBaseUrl}/advanced/success-upload?session_id=${CHECKOUT_REF_PLACEHOLDER}`,
+      cancelUrl: `${siteBaseUrl}/advanced/apply?token=${token}`,
+      submitMessage: renewalMessage,
       idempotencyKey: `upload-complete:${applicant.id}:${firstTermAmount}`,
     });
 
     logger.info("checkout_session.created_from_upload", {
       plan: "professional",
       applicantId: applicant.id,
-      sessionId: session.id,
+      sessionId: checkout.checkoutRef,
       firstTermAmount,
       annualAmount,
       proratedFirstTerm,
     });
 
     return Response.json({
-      id: session.id,
-      url: session.url,
+      id: checkout.checkoutRef,
+      url: checkout.redirectUrl,
       plan: "advanced",
       firstTermAmount,
       annualAmount,
       proratedFirstTerm,
     });
   } catch (error) {
-    const retryable = isStripeRetryableError(error);
+    const retryable = provider.isRetryableError(error);
     Sentry.captureException(error, { extra: { applicantId: applicant.id, retryable } });
     logger.error("checkout_session.create_failed", {
       error: error instanceof Error ? error.message : "Unknown",

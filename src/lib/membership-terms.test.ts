@@ -6,7 +6,7 @@ import {
   getNextRenewalAnchorEpoch,
   formatAmount,
   calcFirstTermAmount,
-} from "./stripe-checkout";
+} from "./membership-terms";
 
 // Matches TIMEZONE in config.ts — these fixtures test the zone-relative
 // anchor/proration math, not any specific timezone's offset.

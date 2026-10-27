@@ -1,45 +1,43 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  mockResolveRenewalPrice,
+  mockPricesRetrieve,
   mockAppendRenewal,
   mockStripeSessionsCreate,
   mockGetSiteBaseUrl,
   mockIsCheckoutDryRunEnabled,
-  mockIsStripeRetryableError,
 } = vi.hoisted(() => ({
-  mockResolveRenewalPrice: vi.fn(),
+  mockPricesRetrieve: vi.fn(),
   mockAppendRenewal: vi.fn(),
   mockStripeSessionsCreate: vi.fn(),
   mockGetSiteBaseUrl: vi.fn(() => "https://test.example.com"),
   mockIsCheckoutDryRunEnabled: vi.fn(() => false),
-  mockIsStripeRetryableError: vi.fn(() => false),
 }));
 
-vi.mock("../../../../lib/stripe-products", () => ({
-  resolveRenewalPrice: mockResolveRenewalPrice,
-  invalidateRenewalPriceCache: vi.fn(),
-}));
 vi.mock("../../../../lib/renewal-sheet", () => ({
   appendRenewal: mockAppendRenewal,
   markRenewalPaid: vi.fn(),
   getRenewalById: vi.fn(),
 }));
-vi.mock("../../../../lib/stripe-checkout", () => ({
+vi.mock("../../../../lib/membership-terms", () => ({
   getSiteBaseUrl: mockGetSiteBaseUrl,
   isCheckoutDryRunEnabled: mockIsCheckoutDryRunEnabled,
-  isStripeRetryableError: mockIsStripeRetryableError,
 }));
-vi.mock("stripe", () => ({
-  default: vi.fn(function () {
-    return { checkout: { sessions: { create: mockStripeSessionsCreate } } };
-  }),
-}));
-
-process.env.STRIPE_SECRET_KEY = "sk_test_dummy";
-process.env.STRIPE_PRICE_1 = "price_basic_75";
+// The route is exercised through the real Stripe adapter; only the SDK is mocked.
+vi.mock("stripe", () => {
+  const Ctor: any = vi.fn(function () {
+    return {
+      prices: { retrieve: mockPricesRetrieve },
+      checkout: { sessions: { create: mockStripeSessionsCreate } },
+    };
+  });
+  Ctor.errors = { StripeError: class extends Error {} };
+  return { default: Ctor };
+});
 
 import { POST } from "./[tier]";
+import { invalidateStripePriceCache } from "../../../../lib/payments/stripe/prices";
+import { resetStripeClientForTests } from "../../../../lib/payments/stripe/client";
 
 const VALID_BODY = { firstName: "Bob", lastName: "Doe", email: "bob@example.com", year: 2026 };
 
@@ -56,7 +54,14 @@ describe("checkout/[tier]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsCheckoutDryRunEnabled.mockReturnValue(false);
-    mockResolveRenewalPrice.mockResolvedValue({ priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 });
+    invalidateStripePriceCache();
+    resetStripeClientForTests();
+    process.env.STRIPE_SECRET_KEY = "sk_test_dummy";
+    process.env.STRIPE_PRICE_1_RENEWAL = "price_basic_75";
+    process.env.STRIPE_PRICE_2_RENEWAL = "price_adv_150";
+    mockPricesRetrieve.mockImplementation(async (id: string) => ({
+      id, active: true, currency: "usd", unit_amount: id === "price_basic_75" ? 7500 : 15000,
+    }));
     mockAppendRenewal.mockResolvedValue(undefined);
     mockStripeSessionsCreate.mockResolvedValue({ id: "cs_am_1", url: "https://stripe.com/c/cs_am_1" });
   });
@@ -67,7 +72,7 @@ describe("checkout/[tier]", () => {
     const json = await response.json();
     expect(json.url).toBe("https://stripe.com/c/cs_am_1");
 
-    expect(mockResolveRenewalPrice).toHaveBeenCalledWith("basic_renewal");
+    expect(mockPricesRetrieve).toHaveBeenCalledWith("price_basic_75");
     expect(mockAppendRenewal).toHaveBeenCalledWith(expect.objectContaining({
       tier: "basic", phone: "", pdEntries: [], amountCents: 7500, paymentStatus: "pending",
     }));
@@ -85,7 +90,6 @@ describe("checkout/[tier]", () => {
   });
 
   it("happy path (professional): phone + pdEntries go to sheet; pd_entries NOT in metadata", async () => {
-    mockResolveRenewalPrice.mockResolvedValue({ priceId: "price_adv_150", currency: "nzd", unitAmount: 15000 });
     const proBody = {
       firstName: "Alice",
       lastName: "Smith",
@@ -99,7 +103,7 @@ describe("checkout/[tier]", () => {
     const response = await call(proBody, "advanced");
     expect(response.status).toBe(200);
 
-    expect(mockResolveRenewalPrice).toHaveBeenCalledWith("adv_renewal");
+    expect(mockPricesRetrieve).toHaveBeenCalledWith("price_adv_150");
     expect(mockAppendRenewal).toHaveBeenCalledWith(expect.objectContaining({
       tier: "adv",
       phone: "+64 21 123 4567",
@@ -122,7 +126,6 @@ describe("checkout/[tier]", () => {
   });
 
   it("professional with empty pdEntries writes [] to sheet; metadata omits pd_entries", async () => {
-    mockResolveRenewalPrice.mockResolvedValue({ priceId: "price_adv_150", currency: "nzd", unitAmount: 15000 });
     const response = await call({
       firstName: "Alice", lastName: "Smith", email: "alice@example.com",
       phone: "021 123 4567", year: 2026, pdEntries: [],
@@ -142,7 +145,7 @@ describe("checkout/[tier]", () => {
 
   it("uses dynamic [tier] URL segment as the route parameter", async () => {
     await call(VALID_BODY, "basic");
-    expect(mockResolveRenewalPrice).toHaveBeenCalledWith("basic_renewal");
+    expect(mockPricesRetrieve).toHaveBeenCalledWith("price_basic_75");
   });
 
   it("returns 400 on missing fields", async () => {
@@ -163,11 +166,25 @@ describe("checkout/[tier]", () => {
   });
 
   it("returns 500 MISSING_CONFIG when STRIPE_PRICE_1_RENEWAL missing", async () => {
-    mockResolveRenewalPrice.mockRejectedValueOnce(new Error("MISSING_CONFIG: STRIPE_PRICE_1_RENEWAL not set"));
+    delete process.env.STRIPE_PRICE_1_RENEWAL;
     const response = await call(VALID_BODY, "basic");
     expect(response.status).toBe(500);
     const json = await response.json();
     expect(json.code).toBe("MISSING_CONFIG");
+  });
+
+  it("returns 500 PRICE_INACTIVE when the renewal price is inactive", async () => {
+    mockPricesRetrieve.mockResolvedValue({ id: "price_basic_75", active: false, currency: "usd", unit_amount: 7500 });
+    const response = await call(VALID_BODY, "basic");
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe("PRICE_INACTIVE");
+  });
+
+  it("success_url carries the Stripe session placeholder", async () => {
+    await call(VALID_BODY, "basic");
+    expect(mockStripeSessionsCreate.mock.calls[0][0].success_url).toBe(
+      "https://test.example.com/renew/success?session_id={CHECKOUT_SESSION_ID}",
+    );
   });
 
   it("dry-run returns { dryRun: true } without creating session or writing sheet", async () => {

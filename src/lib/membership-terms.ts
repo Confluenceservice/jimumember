@@ -77,12 +77,6 @@ export function getSiteBaseUrl(requestUrl: string): string {
   return new URL(requestUrl).origin;
 }
 
-export function getPriceForPlan(plan: MembershipPlan): string {
-  const tier = TIERS[plan];
-  if (!tier) return "";
-  return process.env[tier.priceEnvVar] ?? "";
-}
-
 export function getPlanDisplayName(plan: MembershipPlan): string {
   return TIERS[plan]?.label ?? plan;
 }
@@ -94,10 +88,4 @@ export function formatAmount(amountInCents: number): string {
 export function isCheckoutDryRunEnabled(): boolean {
   const value = process.env.CHECKOUT_DRY_RUN?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes" || value === "on";
-}
-
-export function isStripeRetryableError(error: unknown): boolean {
-  if (error instanceof Error && error.name === "StripeConnectionError") return true;
-  if (error instanceof Error && error.name === "StripeAPIError") return true;
-  return false;
 }

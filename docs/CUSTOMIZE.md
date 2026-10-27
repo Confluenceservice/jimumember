@@ -67,6 +67,12 @@ exact column letters — the code reads positionally.
 
 ## 5. Stripe
 
+Payment code lives behind a provider interface in `src/lib/payments/` (spec
+`017-payment-provider-abstraction`). `PAYMENT_PROVIDER` selects the provider and
+defaults to `stripe`; Airwallex support is planned and not yet available. Only
+`src/lib/payments/stripe/` talks to the Stripe SDK — the Stripe API version is
+pinned in one place, `src/lib/payments/stripe/client.ts`.
+
 | Env var | Purpose |
 |---------|---------|
 | `STRIPE_SECRET_KEY` | `sk_test_…` for staging, `sk_live_…` for prod |
@@ -172,7 +178,7 @@ those by hand if you change amounts.
 
 Changing the anchor env vars is now **fully self-contained** — no copy edits
 needed. The pro-rata calculation and subscription `trial_end` honour the anchor
-(via `getNextRenewalAnchorDate` in `src/lib/stripe-checkout.ts`), and all
+(via `getNextRenewalAnchorDate` in `src/lib/membership-terms.ts`), and all
 user-facing date copy renders the anchor dynamically through
 `formatAnchorDate()`: the landing pages (`index.astro` / `advanced/apply.astro`)
 and the `renewalMessage` in `create-checkout-session.ts`,
