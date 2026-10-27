@@ -18,11 +18,10 @@ vi.mock("../../lib/logger", () => ({
   },
 }));
 
-const mockResolveRenewalPrice = vi.fn();
-const mockInvalidateRenewalPriceCache = vi.fn();
-vi.mock("../../lib/stripe-products", () => ({
-  resolveRenewalPrice: mockResolveRenewalPrice,
-  invalidateRenewalPriceCache: mockInvalidateRenewalPriceCache,
+const mockResolveStripePrice = vi.fn();
+vi.mock("../../lib/payments/stripe/prices", () => ({
+  resolveStripePrice: mockResolveStripePrice,
+  invalidateStripePriceCache: vi.fn(),
 }));
 
 async function getHandler() {
@@ -34,9 +33,9 @@ describe("/api/health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockProductsList.mockResolvedValue({ data: [] });
-    mockResolveRenewalPrice.mockImplementation(async (key: string) => {
-      if (key === "adv_renewal") return { priceId: "price_adv_150", currency: "nzd", unitAmount: 15000 };
-      return { priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 };
+    mockResolveStripePrice.mockImplementation(async (slug: string) => {
+      if (slug === "advanced") return { priceRef: "price_adv_150", currency: "nzd", unitAmount: 15000 };
+      return { priceRef: "price_basic_75", currency: "nzd", unitAmount: 7500 };
     });
   });
 
@@ -68,6 +67,37 @@ describe("/api/health", () => {
           basic: { ok: true, priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 },
         },
       });
+    });
+  });
+
+  describe("payment provider selection", () => {
+    afterEach(() => {
+      delete process.env.PAYMENT_PROVIDER;
+    });
+
+    it("asks the provider for each tier's renewal price", async () => {
+      process.env.STRIPE_SECRET_KEY = "sk_test_ok";
+      const GET = await getHandler();
+      await GET({} as never);
+      expect(mockResolveStripePrice).toHaveBeenCalledWith("advanced", "renewal");
+      expect(mockResolveStripePrice).toHaveBeenCalledWith("basic", "renewal");
+    });
+
+    it("reports degraded (still 200) instead of crashing when PAYMENT_PROVIDER is invalid", async () => {
+      process.env.PAYMENT_PROVIDER = "paypal";
+      process.env.MAILGUN_API_KEY = "key-test";
+      process.env.MAILGUN_DOMAIN = "mg.example.com";
+      process.env.MAILGUN_FROM = "JimuMember <no-reply@mg.example.com>";
+
+      const GET = await getHandler();
+      const res = await GET({} as never);
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.status).toBe("degraded");
+      expect(body.stripe).toBe("not_configured");
+      expect(body.errors.stripe).toContain('Unknown PAYMENT_PROVIDER "paypal"');
+      expect(body.renewal_prices.basic.ok).toBe(false);
     });
   });
 
@@ -203,9 +233,9 @@ describe("/api/health", () => {
       process.env.MAILGUN_DOMAIN = "mg.example.com";
       process.env.MAILGUN_FROM = "JimuMember <no-reply@mg.example.com>";
 
-      mockResolveRenewalPrice.mockImplementation(async (key: string) => {
-        if (key === "adv_renewal") throw new Error("PRICE_INACTIVE: no active price");
-        return { priceId: "price_basic_75", currency: "nzd", unitAmount: 7500 };
+      mockResolveStripePrice.mockImplementation(async (slug: string) => {
+        if (slug === "advanced") throw new Error("PRICE_INACTIVE: no active price");
+        return { priceRef: "price_basic_75", currency: "nzd", unitAmount: 7500 };
       });
 
       const GET = await getHandler();
@@ -224,7 +254,7 @@ describe("/api/health", () => {
       process.env.MAILGUN_DOMAIN = "mg.example.com";
       process.env.MAILGUN_FROM = "JimuMember <no-reply@mg.example.com>";
 
-      mockResolveRenewalPrice.mockRejectedValue(new Error("MISSING_CONFIG: STRIPE_PRODUCT_PM_RENEWAL not set"));
+      mockResolveStripePrice.mockRejectedValue(new Error("MISSING_CONFIG: STRIPE_PRODUCT_PM_RENEWAL not set"));
 
       const GET = await getHandler();
       const res = await GET({} as never);
