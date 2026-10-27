@@ -1,11 +1,9 @@
 import Stripe from "stripe";
 import type { HealthStatus, PaymentProvider, ReturningCustomer } from "../types";
+import { createStripeCheckout, ensureStripeSubscription, getStripeCheckout } from "./checkout";
 import { getStripeClient } from "./client";
 import { resolveStripePrice } from "./prices";
-
-const notImplemented = (): never => {
-  throw new Error("Stripe adapter method not implemented yet");
-};
+import { parseStripeWebhook } from "./webhook";
 
 function envSet(name: string): boolean {
   return !!process.env[name]?.trim();
@@ -30,11 +28,10 @@ export const stripeProvider: PaymentProvider = {
     return { customerRef, hadSubscription: subs.data.length > 0 };
   },
 
-  // Tasks 5: createCheckout, getCheckout, ensureSubscription, parseWebhook.
-  createCheckout: notImplemented,
-  getCheckout: notImplemented,
-  ensureSubscription: notImplemented,
-  parseWebhook: notImplemented,
+  createCheckout: createStripeCheckout,
+  getCheckout: getStripeCheckout,
+  ensureSubscription: ensureStripeSubscription,
+  parseWebhook: parseStripeWebhook,
 
   async healthCheck(): Promise<HealthStatus> {
     if (!envSet("STRIPE_SECRET_KEY")) return { status: "not_configured" };
