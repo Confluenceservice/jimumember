@@ -21,15 +21,15 @@ Form-derived cells written by `appendRenewal`:
 | I | `amount_paid_cents` | managed | managed | managed |
 | J | `currency` | managed | managed | managed |
 | K | `payment_status` | managed | managed | managed |
-| L | `stripe_session` | managed (backfilled from webhook) | managed | managed |
+| L | `payment_ref` (was `stripe_session`; column unchanged) | managed (backfilled from webhook) | managed | managed |
 | M | `created_at` | managed | managed | managed |
 | N | `paid_at` | managed (set by webhook) | managed | managed |
 
-"Managed" cells stay in the API route + Stripe webhook — the schema owns only the form-derived cells.
+"Managed" cells stay in the API route + payment webhook — the schema owns only the form-derived cells.
 
 ## Advanced Applications sheet (48 columns)
 
-Form-derived cells (32 of 48) written by `createApplicantRow` / `updateApplicantFormData`. Managed cells (16 of 48): `A applicant_id`, `AH email_hash`, `AI-AO doc counts`, `AP complete`, `AQ stripe_session`, `AR paid`, `AS created_at`, `AT paid_at`, `AU email_verified`, `AF declaration_signed_at`.
+Form-derived cells (32 of 48) written by `createApplicantRow` / `updateApplicantFormData`. Managed cells (16 of 48): `A applicant_id`, `AH email_hash`, `AI-AO doc counts`, `AP complete`, `AQ payment_ref` (was `stripe_session`; column unchanged), `AR paid`, `AS created_at`, `AT paid_at`, `AU email_verified`, `AF declaration_signed_at`.
 
 `AV signature` — the schema-driven signature field: a typed full name OR a Drive link to a drawn PNG. Written on autosave via `updateApplicantFormData`, not embedded in the review Google Doc.
 
@@ -40,3 +40,14 @@ See `advancedApply.columnMap` for the field → column mapping (32 entries).
 Form-derived cells (13 of 16) written by `appendBasicApplication`. Managed cells (3 of 16): `A submitted_at`, `B application_id`, `P checkout_status`.
 
 See `basicApply.columnMap` for the field → column mapping (13 entries).
+
+## Provider columns added by spec 017
+
+Two trailing `provider` columns record which payment provider handled a row. Neither moves any existing column.
+
+| Sheet | Column | Header | Notes |
+|-------|--------|--------|-------|
+| Memberships | J | `provider` | Managed. Header written automatically when J1 is empty; blank on legacy rows until a Stripe event touches them (then `stripe`). |
+| Checkout Log | J | `provider` | Managed. The tab has no code-defined headers: add a `provider` header in J1 by hand. |
+
+Header *text* of existing sheets is never rewritten by the app; renaming `stripe_session` → `payment_ref` in an existing sheet is optional and cosmetic (the code reads columns by position).

@@ -19,7 +19,7 @@ Async Google Doc generation per paid application. Aggregate index docs per tier.
 **Applicant:** {firstName} {lastName}
 **Email:** {email}
 **Phone:** {phone}
-**Paid:** {paidAt} (session {stripeSession})
+**Paid:** {paidAt} (payment ref {paymentRef})
 
 ## About You
 - Date of Birth: {dateOfBirth}

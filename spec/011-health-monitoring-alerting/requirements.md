@@ -12,7 +12,7 @@
 
 - **REQ-HM-001** `GET /api/health` returns overall status + per-subsystem status. No auth (public endpoint).
 - **REQ-HM-002** Subsystems probed:
-  - **Stripe**: `stripe.prices.list({ limit: 1 })` — confirms API key works
+  - **Payment provider** (spec 017): the active provider's health probe (Stripe: `products.list({ limit: 1 })`) — confirms the API key works
   - **Email**: presence of `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` + `MAILGUN_FROM`
   - **Renewal prices**: `env.stripe.price(tier, 'renewal')` resolves for both tiers
 - **REQ-HM-003** Status values: `ok` (all green), `degraded` (some non-critical subsystems down), `down` (critical subsystem down).
@@ -26,6 +26,7 @@
     "timestamp": "2026-06-29T12:34:56Z"
   }
   ```
+- **REQ-HM-004a** (spec 017) The response reports the payment subsystem as `payment: { "provider": "stripe", "status": "connected|disconnected|not_configured", "error"?: string }` and mirrors failures in `errors.payment`. For one release, while the provider is Stripe, the deprecated aliases `stripe: "<status>"` and `errors.stripe` are also sent so an already-deployed alert worker keeps working; with any other provider (or an unresolvable `PAYMENT_PROVIDER`) the aliases are omitted. The alert worker reads `payment.status`, falling back to `stripe`. (The JSON example above is illustrative and predates the shipped shape.)
 - **REQ-HM-005** Cloudflare Worker (`health-alert-worker`) runs on cron schedule (e.g. hourly), calls `/api/health`, posts to Slack webhook if `status != 'ok'`.
 - **REQ-HM-006** Slack message includes: status, failing subsystems, timestamp, environment (staging/prod via `STAGING_PREFIX`).
 

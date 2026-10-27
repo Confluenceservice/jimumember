@@ -20,8 +20,8 @@ A fork chooses one payment provider (Stripe or Airwallex) per deployment. Paymen
 
 ## Planned (later plans)
 
-- **REQ-PP-007** Sheet headers `stripe_session` → `payment_ref`; `provider` column on Memberships and checkout log.
-- **REQ-PP-008** `/api/health` exposes `payment: { provider, ok }`, keeping `stripe` as an alias for one release.
+- **REQ-PP-007** *(implemented, plan 2)* Sheet headers `stripe_session` → `payment_ref` in code (column letters unchanged; existing sheets' header text is never rewritten); `provider` column J on Memberships and Checkout Log.
+- **REQ-PP-008** *(implemented, plan 2)* `/api/health` exposes `payment: { provider, status, error? }`, keeping `stripe` as an alias for one release (Stripe only); the alert worker reads `payment` first; dry-run copy is provider-neutral.
 - **REQ-PP-009** Airwallex adapter (Billing Checkout, Billing subscriptions, HMAC webhook verification).
 - **REQ-PP-010** Airwallex is for new deployments only: startup fails if the Memberships sheet holds active Stripe members.
 

@@ -97,7 +97,7 @@ resolve subscription → metadata.flow != option_c ─► skip
 getRenewalByStripeRef(invoice.id) exists? ─► skip (idempotent replay)
    │
    ▼
-sync: appendRenewal({ …, payment_status:'paid', stripe_session: invoice.id })
+sync: appendRenewal({ …, payment_status:'paid', payment_ref: invoice.id  /* renamed from stripe_session by spec 017 */ })
    │
    ├─async─► sendRenewalAdminNotification(renewal)
    ├─async─► if tier === 'adv': sendRenewalPdLogLink(renewal)

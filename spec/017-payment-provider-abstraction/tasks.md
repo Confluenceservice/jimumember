@@ -12,3 +12,14 @@ See `docs/superpowers/plans/2026-10-27-payment-seam-stripe-adapter.md` (plan 1: 
 - [x] Task 7: shared event handler + thin webhook route
 - [x] Task 8: health via provider
 - [x] Task 9: final verification + docs
+
+## Plan 2 — `docs/superpowers/plans/2026-10-28-sheet-health-migration.md`
+
+- [x] Task 1: `stripe_session` → `payment_ref` in code
+- [x] Task 2: Memberships `provider` column (J)
+- [x] Task 3: Checkout Log `provider` column (J)
+- [x] Task 4: `/api/health` `payment` key + `stripe` alias
+- [x] Task 5: alert worker reads `payment` ?? `stripe`
+- [x] Task 6: provider-neutral dry-run copy
+- [x] Task 7: docs, upgrade notes, spec status
+- [ ] Task 8: final verification

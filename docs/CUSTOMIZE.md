@@ -82,6 +82,15 @@ pinned in one place, `src/lib/payments/stripe/client.ts`.
 | `STRIPE_PRICE_1_RENEWAL` | Renewal price for tier index 1 (basic) |
 | `STRIPE_PRICE_2_RENEWAL` | Renewal price for tier index 2 (advanced) |
 
+### Upgrading an existing deployment (spec 017)
+
+Existing Stripe deployments need no manual step before or after deploying. In this order:
+
+1. **Deploy the app first.** Nothing breaks: sheet reads are positional, old header text keeps working, and `/api/health` still returns the `stripe` key.
+2. *Optional, cosmetic:* rename the header cell `stripe_session` → `payment_ref` (applicant sheet `AQ1`, Renewals `L1`, Basic Applications if present). The app never rewrites existing header cells.
+3. **Memberships column J (`provider`):** the app writes the J1 header automatically when it is empty; legacy rows are stamped `stripe` the next time a Stripe event touches them. **Checkout Log column J:** add a `provider` header in J1 by hand (that tab has no code-defined headers).
+4. **Redeploy the health-alert worker** (`wrangler deploy` from `.run/health-alert-worker/`) at any time after step 1. Old and new workers both work against old and new apps (`payment` is read first, `stripe` is the fallback).
+
 Webhook endpoints (configure in Stripe Dashboard):
 - Staging: `https://your-app-staging.fly.dev/api/stripe-webhook`
 - Production: `https://your-app.example/api/stripe-webhook`

@@ -52,7 +52,7 @@ Stripe webhook → checkout.session.completed (metadata.flow === 'renewal')
 extract renewal_id from metadata
    │
    ▼
-markRenewalPaid(renewal_id, amountPaidCents, stripeSession)
+markRenewalPaid(renewal_id, amountPaidCents, paymentRef)
    │
    ▼
 if tier === 'adv': sendRenewalPdLogLink(...)
@@ -75,7 +75,7 @@ H pd_entries        JSON array (managed, empty on submit; populated by spec 006)
 I amount_paid_cents managed (set by webhook)
 J currency          managed (ISO 4217)
 K payment_status    'pending' | 'paid'
-L stripe_session    managed
+L payment_ref       managed (renamed from stripe_session by spec 017)
 M created_at        ISO 8601
 N paid_at           ISO 8601 (set by webhook)
 ```
