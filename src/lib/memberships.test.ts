@@ -13,7 +13,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // hoisted above normal const initialisation (TDZ otherwise).
 const { sheet, mockEnsureSheetWithHeaders, mockReadRange, mockUpdateRange, mockAppendToRange } =
   vi.hoisted(() => {
-    const sheet: { rows: string[][]; ensured: string[] } = { rows: [], ensured: [] };
+    const sheet: { rows: string[][]; ensured: string[]; headerJ1: string; failJ1Update: boolean } = {
+      rows: [], ensured: [], headerJ1: "", failJ1Update: false,
+    };
 
     const mockEnsureSheetWithHeaders = vi.fn(async (name: string, _headers: readonly string[]) => {
       sheet.ensured.push(name);
@@ -23,7 +25,10 @@ const { sheet, mockEnsureSheetWithHeaders, mockReadRange, mockUpdateRange, mockA
       if (/!A2:A$/.test(range)) {
         return sheet.rows.map((r) => [r[0] ?? ""]);
       }
-      const m = range.match(/!A(\d+):I\1$/);
+      if (/!J1:J1$/.test(range)) {
+        return sheet.headerJ1 ? [[sheet.headerJ1]] : [];
+      }
+      const m = range.match(/!A(\d+):J\1$/);
       if (m) {
         const row = sheet.rows[Number(m[1]) - 2];
         return row ? [row] : [];
@@ -32,7 +37,12 @@ const { sheet, mockEnsureSheetWithHeaders, mockReadRange, mockUpdateRange, mockA
     });
 
     const mockUpdateRange = vi.fn(async (range: string, values: unknown[][]) => {
-      const m = range.match(/!A(\d+):I\1$/);
+      if (/!J1:J1$/.test(range)) {
+        if (sheet.failJ1Update) throw new Error("sheets down");
+        sheet.headerJ1 = String((values[0] as unknown[])[0]);
+        return;
+      }
+      const m = range.match(/!A(\d+):J\1$/);
       if (!m) throw new Error(`unexpected updateRange in test: ${range}`);
       sheet.rows[Number(m[1]) - 2] = values[0] as string[];
     });
@@ -72,6 +82,7 @@ import {
 } from "./memberships";
 
 const BASE = {
+  provider: "stripe",
   plan: "basic",
   recurringPriceId: "price_123",
   nextJuly1Epoch: 1751328000,
@@ -82,6 +93,8 @@ const BASE = {
 beforeEach(() => {
   sheet.rows = [];
   sheet.ensured = [];
+  sheet.headerJ1 = "";
+  sheet.failJ1Update = false;
   vi.clearAllMocks();
   _resetMembershipsCacheForTesting();
 });
@@ -131,7 +144,14 @@ describe("getMembership", () => {
       subscriptionId: "sub_test456",
       nextJuly1Epoch: 1751328000,
       joinedAt: "2026-03-23T12:00:00.000Z",
+      provider: "stripe",
     });
+  });
+
+  it("reads a legacy 9-column row as provider \"\" without throwing", async () => {
+    sheet.rows.push(["cus_legacy", "basic", "price_1", "active", "sub_1", "1751328000", "2025-01-01T00:00:00.000Z", "2025-02-01T00:00:00.000Z", "evt_old"]);
+    const r = await getMembership("cus_legacy");
+    expect(r).toMatchObject({ customerId: "cus_legacy", status: "active", subscriptionId: "sub_1", provider: "" });
   });
 
   it("returns null for unknown customer", async () => {
@@ -263,5 +283,70 @@ describe("per-customer write serialisation", () => {
     await expect(setAwaitingSubscription("cus_err", BASE)).rejects.toThrow("boom");
     await setActive("cus_err", "sub_after_err");
     expect((await getMembership("cus_err"))?.status).toBe("active");
+  });
+});
+
+describe("provider column (J)", () => {
+  it("writes the provider as the 10th cell and uses A:J ranges", async () => {
+    await setAwaitingSubscription("cus_p", BASE, "cs_1");
+    expect(sheet.rows[0]).toHaveLength(10);
+    expect(sheet.rows[0][9]).toBe("stripe");
+    expect(mockAppendToRange).toHaveBeenCalledWith("'Memberships'!A1:J1", expect.any(Array));
+  });
+
+  it("includes provider in the headers passed to ensureSheetWithHeaders", async () => {
+    await setAwaitingSubscription("cus_p", BASE);
+    const headers = mockEnsureSheetWithHeaders.mock.calls[0][1] as string[];
+    expect(headers[9]).toBe("provider");
+    expect(headers).toHaveLength(10);
+  });
+
+  it("a status change on a legacy 9-column row preserves A-I and stamps the provider", async () => {
+    const legacy = ["cus_legacy", "basic", "price_1", "awaiting_subscription", "sub_1", "1751328000", "2025-01-01T00:00:00.000Z", "2025-02-01T00:00:00.000Z", "evt_old"];
+    sheet.rows.push([...legacy]);
+    await setActive("cus_legacy", "sub_1", "in_9", "stripe");
+    const row = sheet.rows[0];
+    expect(row.slice(0, 3)).toEqual(legacy.slice(0, 3));
+    expect(row[3]).toBe("active");
+    expect(row[4]).toBe("sub_1");
+    expect(row[5]).toBe(legacy[5]);
+    expect(row[6]).toBe(legacy[6]);
+    expect(row[8]).toBe("in_9");
+    expect(row[9]).toBe("stripe");
+  });
+
+  it("a status change without a provider argument keeps the row's existing provider", async () => {
+    await setAwaitingSubscription("cus_p", { ...BASE, provider: "airwallex" });
+    await setPaymentFailed("cus_p", "in_1");
+    expect(sheet.rows[0][9]).toBe("airwallex");
+    await setCancelled("cus_p", "sub_1");
+    expect(sheet.rows[0][9]).toBe("airwallex");
+  });
+
+  it("upsert-on-missing writes the passed provider, or empty when none is passed", async () => {
+    await setActive("cus_new1", "sub_1", "evt_1", "stripe");
+    await setCancelled("cus_new2", "evt_2");
+    expect((await getMembership("cus_new1"))?.provider).toBe("stripe");
+    expect((await getMembership("cus_new2"))?.provider).toBe("");
+  });
+
+  it("backfills the J1 header when it is empty, once", async () => {
+    await setAwaitingSubscription("cus_h", BASE);
+    await setActive("cus_h", "sub_1");
+    expect(sheet.headerJ1).toBe("provider");
+    expect(mockUpdateRange.mock.calls.filter((c) => /!J1:J1$/.test(String(c[0])))).toHaveLength(1);
+  });
+
+  it("does not touch J1 when it already has a value", async () => {
+    sheet.headerJ1 = "custom";
+    await setAwaitingSubscription("cus_h", BASE);
+    expect(sheet.headerJ1).toBe("custom");
+  });
+
+  it("a failing J1 header backfill is non-fatal and logged", async () => {
+    sheet.failJ1Update = true;
+    await expect(setAwaitingSubscription("cus_h", BASE)).resolves.toBeUndefined();
+    expect(sheet.rows).toHaveLength(1);
+    expect(mockWarn).toHaveBeenCalledWith("membership_provider_header_backfill_failed", expect.any(Object));
   });
 });

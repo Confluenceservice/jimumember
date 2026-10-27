@@ -392,7 +392,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetPaymentFailed).toHaveBeenCalledWith("cus_123", "in_123");
+      expect(mockSetPaymentFailed).toHaveBeenCalledWith("cus_123", "in_123", "stripe");
     });
   });
 
@@ -405,7 +405,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123", "stripe");
     });
 
     it("calls setCancelled when subscription is unpaid", async () => {
@@ -416,7 +416,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123", "stripe");
     });
 
     it("does not call setCancelled for active subscription", async () => {
@@ -440,7 +440,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123", "stripe");
     });
   });
 
@@ -473,7 +473,7 @@ describe("stripe-webhook", () => {
         expect.objectContaining({ subscriptionId: "sub_test_123" }),
         "cs_test_123",
       );
-      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_test_123", "cs_test_123");
+      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_test_123", "cs_test_123", "stripe");
     });
   });
 
@@ -563,7 +563,7 @@ describe("stripe-webhook", () => {
         renewalId,
       );
       // Durable mirror self-heal with the invoice as provenance.
-      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_123", "in_cycle_1");
+      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_123", "in_cycle_1", "stripe");
     });
 
     it("records a basic auto-renewal without a PD-log link", async () => {

@@ -162,10 +162,10 @@ describe("handlePaymentEvent", () => {
     );
     expect(m.setAwaitingSubscription).toHaveBeenCalledWith(
       "cus_1",
-      expect.objectContaining({ plan: "basic", recurringPriceId: "price_1", nextJuly1Epoch: 1782864000, subscriptionId: "sub_1" }),
+      expect.objectContaining({ plan: "basic", recurringPriceId: "price_1", nextJuly1Epoch: 1782864000, subscriptionId: "sub_1", provider: "stripe" }),
       "cs_1",
     );
-    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "cs_1");
+    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "cs_1", "stripe");
   });
 
   it("skips ensureSubscription when the membership already has a subscription", async () => {
@@ -228,7 +228,7 @@ describe("handlePaymentEvent", () => {
         paymentStatus: "paid",
       }),
     );
-    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "in_1");
+    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "in_1", "stripe");
 
     m.getRenewalByPaymentRef.mockResolvedValue({ renewalId: "existing" });
     m.appendRenewal.mockClear();
@@ -251,7 +251,7 @@ describe("handlePaymentEvent", () => {
     await handlePaymentEvent({ ...failed, metadata: {} }, provider, log);
     expect(m.setPaymentFailed).not.toHaveBeenCalled();
     await handlePaymentEvent({ ...failed, metadata: { flow: "option_c" } }, provider, log);
-    expect(m.setPaymentFailed).toHaveBeenCalledWith("cus_1", "in_9");
+    expect(m.setPaymentFailed).toHaveBeenCalledWith("cus_1", "in_9", "stripe");
   });
 
   it("subscription_cancelled marks the membership cancelled; non-option_c is ignored", async () => {
@@ -262,7 +262,7 @@ describe("handlePaymentEvent", () => {
     await handlePaymentEvent({ ...cancelled, metadata: { flow: "other" } }, provider, log);
     expect(m.setCancelled).not.toHaveBeenCalled();
     await handlePaymentEvent({ ...cancelled, metadata: { flow: "option_c" } }, provider, log);
-    expect(m.setCancelled).toHaveBeenCalledWith("cus_1", "sub_1");
+    expect(m.setCancelled).toHaveBeenCalledWith("cus_1", "sub_1", "stripe");
   });
 
   it("subscription_updated never cancels", async () => {

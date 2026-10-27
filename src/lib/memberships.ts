@@ -39,6 +39,7 @@ const HEADERS = [
   "joined_at", // G
   "updated_at", // H
   "last_event", // I
+  "provider", // J
 ] as const;
 
 export type MembershipStatus =
@@ -58,6 +59,8 @@ export interface MembershipRecord {
    *  July 1. Matches the `next_july1_epoch` Stripe-metadata wire contract. */
   nextJuly1Epoch: number;
   joinedAt: string; // ISO
+  /** Payment provider that owns this customer/subscription; "" on legacy (pre-017) rows. */
+  provider: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,12 +68,32 @@ export interface MembershipRecord {
 
 let ensuredPromise: Promise<void> | null = null;
 
+/**
+ * `ensureSheetWithHeaders` only looks at A1, so a sheet created before the
+ * provider column existed never gets its J1 header. Backfill it once,
+ * best-effort: a failure must not block membership writes.
+ */
+async function backfillProviderHeader(): Promise<void> {
+  try {
+    const cell = await readRange(`'${SHEET_NAME}'!J1:J1`);
+    if (!cell[0]?.[0]) {
+      await updateRange(`'${SHEET_NAME}'!J1:J1`, [["provider"]]);
+    }
+  } catch (err) {
+    logger.warn("membership_provider_header_backfill_failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 function ensureSheet(): Promise<void> {
   if (!ensuredPromise) {
-    ensuredPromise = ensureSheetWithHeaders(SHEET_NAME, HEADERS).catch((err) => {
-      ensuredPromise = null; // allow retry on next call
-      throw err;
-    });
+    ensuredPromise = ensureSheetWithHeaders(SHEET_NAME, HEADERS)
+      .then(backfillProviderHeader)
+      .catch((err) => {
+        ensuredPromise = null; // allow retry on next call
+        throw err;
+      });
   }
   return ensuredPromise;
 }
@@ -89,6 +112,7 @@ function rowToRecord(row: string[]): MembershipRecord {
     subscriptionId: row[4] || undefined,
     nextJuly1Epoch: Number(row[5] ?? 0),
     joinedAt: row[6] ?? "",
+    provider: row[9] ?? "",
   };
 }
 
@@ -102,7 +126,8 @@ function recordToRow(r: MembershipRecord, lastEvent: string | undefined): string
     String(r.nextJuly1Epoch ?? 0),
     r.joinedAt,
     new Date().toISOString(), // updated_at — staleness visible to the admin
-    lastEvent ?? "", // provenance: which Stripe event/session wrote this
+    lastEvent ?? "", // provenance: which provider event/session wrote this
+    r.provider,
   ];
 }
 
@@ -115,16 +140,16 @@ async function findRowNumber(customerId: string): Promise<number | null> {
 }
 
 async function readRow(rowNumber: number): Promise<string[]> {
-  const rows = await readRange(`'${SHEET_NAME}'!A${rowNumber}:I${rowNumber}`);
+  const rows = await readRange(`'${SHEET_NAME}'!A${rowNumber}:J${rowNumber}`);
   return rows[0] ?? [];
 }
 
 async function writeRow(rowNumber: number, values: string[]): Promise<void> {
-  await updateRange(`'${SHEET_NAME}'!A${rowNumber}:I${rowNumber}`, [values]);
+  await updateRange(`'${SHEET_NAME}'!A${rowNumber}:J${rowNumber}`, [values]);
 }
 
 async function appendRowValues(values: string[]): Promise<void> {
-  await appendToRange(`'${SHEET_NAME}'!A1:I1`, values);
+  await appendToRange(`'${SHEET_NAME}'!A1:J1`, values);
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +204,7 @@ async function setStatus(
   status: MembershipStatus,
   subscriptionId: string | undefined,
   lastEvent: string | undefined,
+  provider: string | undefined,
 ): Promise<void> {
   return serialised(customerId, async () => {
     const rowNumber = await findRowNumber(customerId);
@@ -198,6 +224,7 @@ async function setStatus(
         subscriptionId,
         nextJuly1Epoch: 0,
         joinedAt: "",
+        provider: provider ?? "",
       };
       await appendRowValues(recordToRow(partial, lastEvent));
       return;
@@ -205,6 +232,7 @@ async function setStatus(
     const record = rowToRecord(await readRow(rowNumber));
     record.status = status;
     if (subscriptionId) record.subscriptionId = subscriptionId;
+    record.provider = provider ?? record.provider;
     await writeRow(rowNumber, recordToRow(record, lastEvent));
   });
 }
@@ -213,16 +241,25 @@ export async function setActive(
   customerId: string,
   subscriptionId: string,
   lastEvent?: string,
+  provider?: string,
 ): Promise<void> {
-  return setStatus(customerId, "active", subscriptionId, lastEvent);
+  return setStatus(customerId, "active", subscriptionId, lastEvent, provider);
 }
 
-export async function setPaymentFailed(customerId: string, lastEvent?: string): Promise<void> {
-  return setStatus(customerId, "payment_failed", undefined, lastEvent);
+export async function setPaymentFailed(
+  customerId: string,
+  lastEvent?: string,
+  provider?: string,
+): Promise<void> {
+  return setStatus(customerId, "payment_failed", undefined, lastEvent, provider);
 }
 
-export async function setCancelled(customerId: string, lastEvent?: string): Promise<void> {
-  return setStatus(customerId, "cancelled", undefined, lastEvent);
+export async function setCancelled(
+  customerId: string,
+  lastEvent?: string,
+  provider?: string,
+): Promise<void> {
+  return setStatus(customerId, "cancelled", undefined, lastEvent, provider);
 }
 
 export async function hasActiveSubscription(customerId: string): Promise<boolean> {

@@ -231,10 +231,11 @@ async function handleCheckoutCompleted(
       nextJuly1Epoch,
       joinedAt: new Date().toISOString(),
       subscriptionId,
+      provider: event.provider,
     }, sessionId);
 
     // Mark as active since subscription is now set up
-    await setActive(customerId, subscriptionId, sessionId);
+    await setActive(customerId, subscriptionId, sessionId, event.provider);
   }
 
   // Mark professional applicant paid/complete in the application sheet.
@@ -542,7 +543,7 @@ async function handleRenewalCharged(
   }
 
   // Durable mirror (REQ-SW-008) — also self-heals a prior payment_failed.
-  setActive(customerRef, subscriptionRef, providerRef).catch((err) => {
+  setActive(customerRef, subscriptionRef, providerRef, event.provider).catch((err) => {
     log.error("invoice.paid.set_active_failed", {
       customerId: customerRef,
       subscriptionId: subscriptionRef,
@@ -560,7 +561,7 @@ async function handleRenewalFailed(
 ): Promise<void> {
   if (event.metadata.flow !== "option_c") return;
 
-  await setPaymentFailed(event.customerRef, event.providerRef || undefined);
+  await setPaymentFailed(event.customerRef, event.providerRef || undefined, event.provider);
   log.warn("invoice.payment_failed", {
     customerId: event.customerRef,
     invoiceId: event.providerRef,
@@ -574,7 +575,7 @@ async function handleSubscriptionEvent(
   if (event.metadata.flow !== "option_c") return;
 
   if (event.type === "subscription_cancelled") {
-    await setCancelled(event.customerRef, event.subscriptionRef);
+    await setCancelled(event.customerRef, event.subscriptionRef, event.provider);
     log.info("subscription.cancelled", {
       customerId: event.customerRef,
       subscriptionId: event.subscriptionRef,
