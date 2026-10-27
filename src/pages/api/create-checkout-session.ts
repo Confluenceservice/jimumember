@@ -172,7 +172,7 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({
       dryRun: true,
       message:
-        "CHECKOUT_DRY_RUN is enabled. Stripe keys and price configuration validated; no Checkout Session was created.",
+        "CHECKOUT_DRY_RUN is enabled. Payment provider keys and price configuration validated; no checkout was created.",
       plan,
       firstTermAmount,
       annualAmount,

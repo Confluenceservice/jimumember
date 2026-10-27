@@ -1179,7 +1179,7 @@ const token = Astro.url.searchParams.get("token");
         if (data.dryRun) {
           btn.disabled = false;
           btn.textContent = "Proceed to Payment";
-          alert(data.message || "Dry run passed. Stripe configuration validated.");
+          alert(data.message || "Dry run passed. Payment configuration validated.");
           return;
         }
         if (data.url) {

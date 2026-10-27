@@ -156,7 +156,8 @@ describe("POST /api/create-checkout-session (characterization)", () => {
     const res = await call(BASE_BODY);
     const body = await res.json();
     expect(body.dryRun).toBe(true);
-    expect(body.message).toContain("Stripe keys and price configuration validated");
+    expect(body.message).toContain("Payment provider keys and price configuration validated");
+    expect(body.message).not.toContain("Stripe");
     expect(m.sessionsCreate).not.toHaveBeenCalled();
   });
 
