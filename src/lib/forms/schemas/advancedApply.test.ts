@@ -135,7 +135,7 @@ describe("advancedApply schema", () => {
     });
     const row = toRow(schema, r.values);
     // AH (emailHash), AS (created_at), AT paid_at, AU email_verified,
-    // AP complete, AQ stripe_session, AR paid, AI-AO doc counts.
+    // AP complete, AQ payment_ref, AR paid, AI-AO doc counts.
     // (NB: AU is email_verified per upload-sheet.ts:89 — CLAUDE.md's
     // "spare/reserved" is stale; the code is the source of truth.)
     const managed = ["AH", "AS", "AT", "AU", "AP", "AQ", "AR", "AI", "AJ", "AK", "AL", "AM", "AN", "AO"];

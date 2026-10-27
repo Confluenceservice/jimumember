@@ -14,7 +14,7 @@
  * Storage column map (form-derived cells only):
  *   C renewal_year, D first_name, E last_name, F email
  *   (A renewal_id, B tier, G phone, H pd_entries, I amount_paid_cents,
- *    J currency, K payment_status, L stripe_session, M created_at,
+ *    J currency, K payment_status, L payment_ref, M created_at,
  *    N paid_at are managed cells — written by the API route + Stripe
  *    webhook, not by this schema.)
  */

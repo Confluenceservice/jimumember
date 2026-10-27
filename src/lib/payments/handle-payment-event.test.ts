@@ -11,7 +11,7 @@ const m = vi.hoisted(() => ({
   getApplicantById: vi.fn(),
   markApplicantPaid: vi.fn(),
   getRenewalById: vi.fn(),
-  getRenewalByStripeRef: vi.fn(),
+  getRenewalByPaymentRef: vi.fn(),
   markRenewalPaid: vi.fn(),
   appendRenewal: vi.fn(),
   sendRenewalAdminNotification: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock("../upload-sheet", () => ({
 }));
 vi.mock("../renewal-sheet", () => ({
   getRenewalById: m.getRenewalById,
-  getRenewalByStripeRef: m.getRenewalByStripeRef,
+  getRenewalByPaymentRef: m.getRenewalByPaymentRef,
   markRenewalPaid: m.markRenewalPaid,
   appendRenewal: m.appendRenewal,
   getRenewalsSheetUrl: vi.fn().mockReturnValue(undefined),
@@ -119,7 +119,7 @@ describe("handlePaymentEvent", () => {
     m.setActive.mockResolvedValue(undefined);
     m.appendCheckoutLog.mockResolvedValue(undefined);
     m.updateBasicApplicationStatus.mockResolvedValue(true);
-    m.getRenewalByStripeRef.mockResolvedValue(null);
+    m.getRenewalByPaymentRef.mockResolvedValue(null);
     m.appendRenewal.mockResolvedValue(undefined);
     m.sendRenewalAdminNotification.mockResolvedValue(undefined);
     m.sendRenewalPdLogLink.mockResolvedValue(undefined);
@@ -224,13 +224,13 @@ describe("handlePaymentEvent", () => {
         email: "jane@example.com",
         amountCents: 15000,
         currency: "usd",
-        stripeSession: "in_1",
+        paymentRef: "in_1",
         paymentStatus: "paid",
       }),
     );
     expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "in_1");
 
-    m.getRenewalByStripeRef.mockResolvedValue({ renewalId: "existing" });
+    m.getRenewalByPaymentRef.mockResolvedValue({ renewalId: "existing" });
     m.appendRenewal.mockClear();
     await handlePaymentEvent(charged(), provider, log);
     expect(m.appendRenewal).not.toHaveBeenCalled();

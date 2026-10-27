@@ -12,7 +12,7 @@ import { getApplicantById, markApplicantPaid } from "../upload-sheet";
 import {
   appendRenewal,
   getRenewalById,
-  getRenewalByStripeRef,
+  getRenewalByPaymentRef,
   markRenewalPaid,
   getRenewalsSheetUrl,
 } from "../renewal-sheet";
@@ -451,9 +451,9 @@ async function handleRenewalCharged(
   }
 
   // D4 — idempotency at the ledger boundary: the provider reference lives in
-  // the Renewals row's stripe_session column (semantically "the payment
+  // the Renewals row's payment_ref column (semantically "the payment
   // reference"). Replay of the same charge → no duplicate row.
-  const existing = await getRenewalByStripeRef(providerRef);
+  const existing = await getRenewalByPaymentRef(providerRef);
   if (existing) {
     log.info("invoice.paid.already_recorded", {
       invoiceId: providerRef,
@@ -499,7 +499,7 @@ async function handleRenewalCharged(
     pdEntries: [],
     amountCents: event.amount,
     currency: event.currency,
-    stripeSession: providerRef,
+    paymentRef: providerRef,
     paymentStatus: "paid",
     createdAt: paidAt,
     paidAt,

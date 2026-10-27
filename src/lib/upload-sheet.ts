@@ -31,7 +31,7 @@ export interface UploadStatus {
   emailHash: string;
   docs: Partial<Record<DocType, number>>;
   complete: boolean;
-  stripeSessionId?: string;
+  paymentRef?: string;
   paid: boolean;
   createdAt: string;
   paidAt?: string;
@@ -99,7 +99,7 @@ const SHEET_HEADERS = [
   "doc_fundamentals_count",   // AN
   "doc_insurance_count",      // AO
   "complete",        // AP
-  "stripe_session",  // AQ
+  "payment_ref",  // AQ
   "paid",           // AR
   "created_at",     // AS
   "paid_at",        // AT
@@ -205,7 +205,7 @@ export async function createApplicantRow(
     0, // doc_fundamentals_count  // AN
     0, // doc_insurance_count     // AO
     "FALSE", // complete   // AP
-    "", // stripe_session  // AQ
+    "", // payment_ref  // AQ
     "FALSE", // paid      // AR
     new Date().toISOString(), // created_at // AS
     "", // paid_at         // AT
@@ -356,7 +356,7 @@ export async function updateDocCount(
 
 export async function markComplete(
   applicantId: string,
-  stripeSessionId: string
+  paymentRef: string
 ): Promise<void> {
   const rows = await readRange(`${DEFAULT_SHEET_NAME}!A:A`);
   let rowIndex = -1;
@@ -372,8 +372,8 @@ export async function markComplete(
     throw new Error(`Applicant not found: ${applicantId}`);
   }
 
-  // Update columns AP (complete) and AQ (stripe_session)
-  await updateRange(`${DEFAULT_SHEET_NAME}!AP${rowIndex}:AQ${rowIndex}`, [["TRUE", stripeSessionId]]);
+  // Update columns AP (complete) and AQ (payment_ref)
+  await updateRange(`${DEFAULT_SHEET_NAME}!AP${rowIndex}:AQ${rowIndex}`, [["TRUE", paymentRef]]);
 }
 
 export async function markPaid(applicantId: string): Promise<void> {
@@ -462,7 +462,7 @@ export interface ApplicantInfo {
   docFundamentalsCount: number;
   docInsuranceCount: number;
   complete: string;
-  stripeSession: string;
+  paymentRef: string;
   paid: string;
   createdAt: string;
   paidAt: string;
@@ -533,7 +533,7 @@ export async function getApplicantByToken(
         docFundamentalsCount: Number(row[39]) || 0,
         docInsuranceCount: Number(row[40]) || 0,
         complete: String(row[41] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
-        stripeSession: row[42] ?? "",
+        paymentRef: row[42] ?? "",
         paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
@@ -600,7 +600,7 @@ export async function getApplicantByEmail(
         docFundamentalsCount: Number(row[39]) || 0,
         docInsuranceCount: Number(row[40]) || 0,
         complete: String(row[41] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
-        stripeSession: row[42] ?? "",
+        paymentRef: row[42] ?? "",
         paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
@@ -640,7 +640,7 @@ export async function getUploadStatus(
         emailHash: row[33] ?? "",
         docs,
         complete,
-        stripeSessionId: row[42] || undefined,
+        paymentRef: row[42] || undefined,
         paid: String(row[43] ?? "").toUpperCase() === "TRUE",
         createdAt: row[44] ?? "",
         paidAt: row[45] || undefined,
@@ -770,7 +770,7 @@ export async function getApplicantById(applicantId: string): Promise<ApplicantIn
         docFundamentalsCount: Number(row[39]) || 0,
         docInsuranceCount: Number(row[40]) || 0,
         complete: String(row[41] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
-        stripeSession: row[42] ?? "",
+        paymentRef: row[42] ?? "",
         paid: String(row[43] ?? "").toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
         createdAt: row[44] ?? "",
         paidAt: row[45] ?? "",
@@ -785,8 +785,8 @@ export async function getApplicantById(applicantId: string): Promise<ApplicantIn
 
 export async function markApplicantPaid(
   applicantId: string,
-  stripeSessionId: string
+  paymentRef: string
 ): Promise<void> {
-  await markComplete(applicantId, stripeSessionId);
+  await markComplete(applicantId, paymentRef);
   await markPaid(applicantId);
 }

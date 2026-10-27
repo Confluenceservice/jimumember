@@ -143,7 +143,7 @@ function makeRow(overrides: Record<string, string | number> = {}): string[] {
   return row;
 }
 
-const HEADER_ROW = "applicant_id email first_name last_name phone date_of_birth ethnicity address postal_address business_name website qualifications experience further_requirements core_competencies referee1_name referee1_role referee1_email referee1_phone referee2_name referee2_role referee2_email referee2_phone declaration_accuracy declaration_ethics declaration_scope declaration_member_services declaration_interview declaration_professional_dev declaration_criminal_check declaration_meetings declaration_signed_at resume_token email_hash doc_training_count doc_ethics_count doc_criminal_count doc_planning_cert_count doc_specialist_training_count doc_fundamentals_count doc_insurance_count complete stripe_session paid created_at paid_at".split(" ");
+const HEADER_ROW = "applicant_id email first_name last_name phone date_of_birth ethnicity address postal_address business_name website qualifications experience further_requirements core_competencies referee1_name referee1_role referee1_email referee1_phone referee2_name referee2_role referee2_email referee2_phone declaration_accuracy declaration_ethics declaration_scope declaration_member_services declaration_interview declaration_professional_dev declaration_criminal_check declaration_meetings declaration_signed_at resume_token email_hash doc_training_count doc_ethics_count doc_criminal_count doc_planning_cert_count doc_specialist_training_count doc_fundamentals_count doc_insurance_count complete payment_ref paid created_at paid_at".split(" ");
 
 function resetSheetData(rows: string[][]) {
   const mocks = getMocks();
@@ -344,7 +344,7 @@ describe("upload-sheet", () => {
         .rejects.toThrow("Applicant not found: app_missing");
     });
 
-    it("sets complete=TRUE and stripe_session in columns AP and AQ", async () => {
+    it("sets complete=TRUE and payment_ref in columns AP and AQ", async () => {
       const mocks = getMocks();
       resetSheetData([HEADER_ROW, makeRow({ 0: "app_complete" })]);
       mocks.mockSpreadsheetsValuesUpdate.mockResolvedValue({});
@@ -530,6 +530,24 @@ describe("upload-sheet", () => {
 
       const row = mocks.mockSpreadsheetsValuesAppend.mock.calls[0][0].requestBody.values[0];
       expect(row[46]).toBe("FALSE");
+    });
+
+    it("creates the applicant sheet with a payment_ref header at column AQ (not stripe_session)", async () => {
+      const mocks = getMocks();
+      mocks.mockSpreadsheetsGet.mockResolvedValue({ data: { sheets: [] } });
+      mocks.mockSpreadsheetsBatchUpdate.mockResolvedValue({});
+      mocks.mockSpreadsheetsValuesUpdate.mockResolvedValue({});
+      mocks.mockSpreadsheetsValuesAppend.mockResolvedValue({});
+
+      const { createApplicantRow } = await import("./upload-sheet");
+      await createApplicantRow("app_h", "Jane", "Doe", "0271234567", "jane@example.com", "tok_h");
+
+      const headerWrite = mocks.mockSpreadsheetsValuesUpdate.mock.calls
+        .map((c) => c[0])
+        .find((c) => /!A1:[A-Z]+1$/.test(String(c.range)));
+      const headers = headerWrite.requestBody.values[0] as string[];
+      expect(headers[42]).toBe("payment_ref");
+      expect(headers).not.toContain("stripe_session");
     });
 
     it("markEmailVerified writes TRUE to column AU{rowIndex}", async () => {
