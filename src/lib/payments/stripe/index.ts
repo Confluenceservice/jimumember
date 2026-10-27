@@ -44,7 +44,11 @@ export const stripeProvider: PaymentProvider = {
   },
 
   isRetryableError(err) {
-    return err instanceof Error && (err.name === "StripeConnectionError" || err.name === "StripeAPIError");
+    // Walk `cause` so a Stripe error wrapped by the price resolver still counts.
+    for (let e: unknown = err, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
+      if (e.name === "StripeConnectionError" || e.name === "StripeAPIError") return true;
+    }
+    return false;
   },
 
   userFacingError(err) {

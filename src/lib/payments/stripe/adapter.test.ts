@@ -103,6 +103,12 @@ describe("stripe adapter", () => {
     expect(stripeProvider.isRetryableError("x")).toBe(false);
   });
 
+  it("isRetryableError sees a retryable Stripe error wrapped as the cause", () => {
+    const conn = Object.assign(new Error("x"), { name: "StripeConnectionError" });
+    expect(stripeProvider.isRetryableError(new Error("PRICE_RETRIEVE_FAILED", { cause: conn }))).toBe(true);
+    expect(stripeProvider.isRetryableError(new Error("PRICE_RETRIEVE_FAILED", { cause: new Error("y") }))).toBe(false);
+  });
+
   it("userFacingError returns the message of Stripe errors only", () => {
     expect(stripeProvider.userFacingError(new m.FakeStripeError("declined"))).toBe("declined");
     expect(stripeProvider.userFacingError(new Error("boom"))).toBeNull();

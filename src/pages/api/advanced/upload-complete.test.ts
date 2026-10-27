@@ -160,6 +160,22 @@ describe("POST /api/advanced/upload-complete (characterization)", () => {
     });
   });
 
+  it("a transient Stripe error while looking up the price is still retryable", async () => {
+    const err = new Error("net down");
+    err.name = "StripeConnectionError";
+    m.pricesRetrieve.mockRejectedValue(err);
+    const res = await call({ token: "tok_1" });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ code: "CHECKOUT_ERROR", retryable: true });
+  });
+
+  it("trims whitespace around STRIPE_PRICE_2 (professional checkout always did)", async () => {
+    process.env.STRIPE_PRICE_2 = "price_adv\n";
+    const res = await call({ token: "tok_1" });
+    expect(res.status).toBe(200);
+    expect(m.pricesRetrieve).toHaveBeenCalledWith("price_adv");
+  });
+
   it("other error is a 500 CHECKOUT_ERROR not retryable", async () => {
     m.sessionsCreate.mockRejectedValue(new Error("boom"));
     const res = await call({ token: "tok_1" });

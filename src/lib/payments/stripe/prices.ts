@@ -20,7 +20,7 @@ export async function resolveStripePrice(tierSlug: string, kind: PriceKind): Pro
     throw err;
   }
   const envVar = kind === "renewal" ? tier.renewalPriceEnvVar : tier.priceEnvVar;
-  const priceId = process.env[envVar];
+  const priceId = process.env[envVar]?.trim();
   if (!priceId) {
     throw new Error(`MISSING_CONFIG: ${envVar} not set`);
   }
@@ -37,7 +37,8 @@ export async function resolveStripePrice(tierSlug: string, kind: PriceKind): Pro
     price = await stripe.prices.retrieve(priceId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    throw new Error(`PRICE_RETRIEVE_FAILED: ${msg} (priceId=${priceId})`);
+    // Keep the Stripe error as `cause` so isRetryableError still sees it.
+    throw new Error(`PRICE_RETRIEVE_FAILED: ${msg} (priceId=${priceId})`, { cause: err });
   }
 
   if (!price.active) {

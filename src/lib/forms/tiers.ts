@@ -9,7 +9,7 @@
  *     into the dynamic `[tier].ts`)
  *   - two Astro pages (`renew/pro.astro` + `renew/associate.astro`, now
  *     collapsed into the dynamic `[tier].astro`)
- *   - the `LookupKey` enum in `stripe-products.ts`
+ *   - the `LookupKey` enum in `stripe-products.ts` (since replaced by `payments/stripe/prices.ts`)
  *
  * Adding a third tier is now one entry here + two schema files
  * (`renew${Tier}.ts` / `apply${Tier}.ts`) + a Stripe price — no API code
