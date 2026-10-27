@@ -22,4 +22,4 @@ See `docs/superpowers/plans/2026-10-27-payment-seam-stripe-adapter.md` (plan 1: 
 - [x] Task 5: alert worker reads `payment` ?? `stripe`
 - [x] Task 6: provider-neutral dry-run copy
 - [x] Task 7: docs, upgrade notes, spec status
-- [ ] Task 8: final verification
+- [x] Task 8: final verification
