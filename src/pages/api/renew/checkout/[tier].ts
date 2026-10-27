@@ -96,7 +96,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     await appendRenewal({
       renewalId, tier, year, firstName, lastName, email, phone,
       pdEntries, amountCents: priceConfig.unitAmount, currency: priceConfig.currency,
-      stripeSession: "", paymentStatus: "pending", createdAt,
+      paymentRef: "", paymentStatus: "pending", createdAt,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

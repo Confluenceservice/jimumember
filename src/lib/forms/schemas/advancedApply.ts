@@ -17,7 +17,7 @@
  *
  * 47-column row layout: `createApplicantRow` takes 31 positional args
  * (the original 31 form-derived cells). Managed cells (emailHash,
- * created_at, doc counts, complete, paid, stripe_session, declarationSignedAt)
+ * created_at, doc counts, complete, paid, payment_ref, declarationSignedAt)
  * stay in `apply.ts` + `upload-sheet.ts` — `toRow` produces the
  * form-derived cells only.
  */
@@ -237,7 +237,7 @@ export const schema: FormSchema = {
     columnMap: {
       // 31 form-derived columns. Letters mirror `createApplicantRow`'s
       // positional contract in upload-sheet.ts. Managed cells (emailHash,
-      // doc counts, complete, paid, stripe_session, declarationSignedAt,
+      // doc counts, complete, paid, payment_ref, declarationSignedAt,
       // created_at, paid_at) stay in upload-sheet.ts / apply.ts.
       firstName: "C",
       lastName: "D",

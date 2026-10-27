@@ -158,7 +158,7 @@ const anchor = formatAnchorDate();
         const data = await response.json();
         if (data.dryRun) {
           setLoading(false);
-          setStatus(data.message || "Dry run passed. Stripe configuration validated.", "ok");
+          setStatus(data.message || "Dry run passed. Payment configuration validated.", "ok");
           return;
         }
 

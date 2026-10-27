@@ -12,7 +12,7 @@ import { getApplicantById, markApplicantPaid } from "../upload-sheet";
 import {
   appendRenewal,
   getRenewalById,
-  getRenewalByStripeRef,
+  getRenewalByPaymentRef,
   markRenewalPaid,
   getRenewalsSheetUrl,
 } from "../renewal-sheet";
@@ -112,6 +112,7 @@ async function handleCheckoutCompleted(
       amountPaid: renewal.amountPaidCents,
       sessionId,
       customerId: event.customerRef ?? "",
+      provider: event.provider,
     }).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("renewal_checkout_log_failed", { err: msg, renewalId });
@@ -231,10 +232,11 @@ async function handleCheckoutCompleted(
       nextJuly1Epoch,
       joinedAt: new Date().toISOString(),
       subscriptionId,
+      provider: event.provider,
     }, sessionId);
 
     // Mark as active since subscription is now set up
-    await setActive(customerId, subscriptionId, sessionId);
+    await setActive(customerId, subscriptionId, sessionId, event.provider);
   }
 
   // Mark professional applicant paid/complete in the application sheet.
@@ -281,6 +283,7 @@ async function handleCheckoutCompleted(
     amountPaid: event.amountTotal,
     sessionId,
     customerId,
+    provider: event.provider,
   }).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     const sentry = getSentry();
@@ -451,9 +454,9 @@ async function handleRenewalCharged(
   }
 
   // D4 — idempotency at the ledger boundary: the provider reference lives in
-  // the Renewals row's stripe_session column (semantically "the payment
+  // the Renewals row's payment_ref column (semantically "the payment
   // reference"). Replay of the same charge → no duplicate row.
-  const existing = await getRenewalByStripeRef(providerRef);
+  const existing = await getRenewalByPaymentRef(providerRef);
   if (existing) {
     log.info("invoice.paid.already_recorded", {
       invoiceId: providerRef,
@@ -499,7 +502,7 @@ async function handleRenewalCharged(
     pdEntries: [],
     amountCents: event.amount,
     currency: event.currency,
-    stripeSession: providerRef,
+    paymentRef: providerRef,
     paymentStatus: "paid",
     createdAt: paidAt,
     paidAt,
@@ -542,7 +545,7 @@ async function handleRenewalCharged(
   }
 
   // Durable mirror (REQ-SW-008) — also self-heals a prior payment_failed.
-  setActive(customerRef, subscriptionRef, providerRef).catch((err) => {
+  setActive(customerRef, subscriptionRef, providerRef, event.provider).catch((err) => {
     log.error("invoice.paid.set_active_failed", {
       customerId: customerRef,
       subscriptionId: subscriptionRef,
@@ -560,7 +563,7 @@ async function handleRenewalFailed(
 ): Promise<void> {
   if (event.metadata.flow !== "option_c") return;
 
-  await setPaymentFailed(event.customerRef, event.providerRef || undefined);
+  await setPaymentFailed(event.customerRef, event.providerRef || undefined, event.provider);
   log.warn("invoice.payment_failed", {
     customerId: event.customerRef,
     invoiceId: event.providerRef,
@@ -574,7 +577,7 @@ async function handleSubscriptionEvent(
   if (event.metadata.flow !== "option_c") return;
 
   if (event.type === "subscription_cancelled") {
-    await setCancelled(event.customerRef, event.subscriptionRef);
+    await setCancelled(event.customerRef, event.subscriptionRef, event.provider);
     log.info("subscription.cancelled", {
       customerId: event.customerRef,
       subscriptionId: event.subscriptionRef,

@@ -9,7 +9,7 @@
  *   C renewal_year, D first_name, E last_name, F email, G phone,
  *   H pd_entries (JSON)
  * Managed cells (A renewal_id, B tier, I amount_paid_cents, J currency,
- * K payment_status, L stripe_session, M created_at, N paid_at) stay
+ * K payment_status, L payment_ref, M created_at, N paid_at) stay
  * in the API route + Stripe webhook.
  */
 

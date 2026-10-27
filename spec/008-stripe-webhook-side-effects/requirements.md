@@ -35,7 +35,7 @@ Stripe sends webhook events for checkout completion, subscription updates, and i
 
 1. Application payment → webhook fires → applicant `paid=TRUE`, `paid_at` set, review doc created, confirmation email sent.
 2. Renewal payment → webhook fires → Renewals row `paid`, admin notified, advanced PD-log link email sent.
-3. `invoice.payment_succeeded` (billing_reason `subscription_cycle`, flow `option_c`) → Renewals row appended as `paid` with the invoice ID in `stripe_session` + admin notification + (advanced) PD-log link + `setActive()`; replay of the same invoice → no duplicate row. `subscription_create` and $0 invoices are skipped. Handle `invoice.payment_succeeded` only — never also `invoice.paid` (double-processing).
+3. `invoice.payment_succeeded` (billing_reason `subscription_cycle`, flow `option_c`) → Renewals row appended as `paid` with the invoice ID in `payment_ref` (renamed from `stripe_session` by spec 017) + admin notification + (advanced) PD-log link + `setActive()`; replay of the same invoice → no duplicate row. `subscription_create` and $0 invoices are skipped. Handle `invoice.payment_succeeded` only — never also `invoice.paid` (double-processing).
 4. `customer.subscription.updated` to `past_due` → `setPaymentFailed()`.
 5. Same event ID replayed → no double side effects.
 6. Side effect failure (e.g. Mailgun 500) → logged + 200 returned (Stripe must not retry infinitely).

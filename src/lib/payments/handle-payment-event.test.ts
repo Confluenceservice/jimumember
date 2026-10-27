@@ -11,7 +11,7 @@ const m = vi.hoisted(() => ({
   getApplicantById: vi.fn(),
   markApplicantPaid: vi.fn(),
   getRenewalById: vi.fn(),
-  getRenewalByStripeRef: vi.fn(),
+  getRenewalByPaymentRef: vi.fn(),
   markRenewalPaid: vi.fn(),
   appendRenewal: vi.fn(),
   sendRenewalAdminNotification: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock("../upload-sheet", () => ({
 }));
 vi.mock("../renewal-sheet", () => ({
   getRenewalById: m.getRenewalById,
-  getRenewalByStripeRef: m.getRenewalByStripeRef,
+  getRenewalByPaymentRef: m.getRenewalByPaymentRef,
   markRenewalPaid: m.markRenewalPaid,
   appendRenewal: m.appendRenewal,
   getRenewalsSheetUrl: vi.fn().mockReturnValue(undefined),
@@ -119,7 +119,7 @@ describe("handlePaymentEvent", () => {
     m.setActive.mockResolvedValue(undefined);
     m.appendCheckoutLog.mockResolvedValue(undefined);
     m.updateBasicApplicationStatus.mockResolvedValue(true);
-    m.getRenewalByStripeRef.mockResolvedValue(null);
+    m.getRenewalByPaymentRef.mockResolvedValue(null);
     m.appendRenewal.mockResolvedValue(undefined);
     m.sendRenewalAdminNotification.mockResolvedValue(undefined);
     m.sendRenewalPdLogLink.mockResolvedValue(undefined);
@@ -138,6 +138,9 @@ describe("handlePaymentEvent", () => {
       log,
     );
     expect(m.markRenewalPaid).toHaveBeenCalledWith("r1", "cs_1", expect.any(String));
+    expect(m.appendCheckoutLog).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "cs_1", customerId: "cus_1", provider: "stripe", plan: "renewal_basic" }),
+    );
     expect(ensureSubscription).not.toHaveBeenCalled();
   });
 
@@ -162,10 +165,13 @@ describe("handlePaymentEvent", () => {
     );
     expect(m.setAwaitingSubscription).toHaveBeenCalledWith(
       "cus_1",
-      expect.objectContaining({ plan: "basic", recurringPriceId: "price_1", nextJuly1Epoch: 1782864000, subscriptionId: "sub_1" }),
+      expect.objectContaining({ plan: "basic", recurringPriceId: "price_1", nextJuly1Epoch: 1782864000, subscriptionId: "sub_1", provider: "stripe" }),
       "cs_1",
     );
-    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "cs_1");
+    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "cs_1", "stripe");
+    expect(m.appendCheckoutLog).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "cs_1", customerId: "cus_1", provider: "stripe", plan: "basic", amountPaid: 5000 }),
+    );
   });
 
   it("skips ensureSubscription when the membership already has a subscription", async () => {
@@ -224,13 +230,13 @@ describe("handlePaymentEvent", () => {
         email: "jane@example.com",
         amountCents: 15000,
         currency: "usd",
-        stripeSession: "in_1",
+        paymentRef: "in_1",
         paymentStatus: "paid",
       }),
     );
-    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "in_1");
+    expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "in_1", "stripe");
 
-    m.getRenewalByStripeRef.mockResolvedValue({ renewalId: "existing" });
+    m.getRenewalByPaymentRef.mockResolvedValue({ renewalId: "existing" });
     m.appendRenewal.mockClear();
     await handlePaymentEvent(charged(), provider, log);
     expect(m.appendRenewal).not.toHaveBeenCalled();
@@ -251,7 +257,7 @@ describe("handlePaymentEvent", () => {
     await handlePaymentEvent({ ...failed, metadata: {} }, provider, log);
     expect(m.setPaymentFailed).not.toHaveBeenCalled();
     await handlePaymentEvent({ ...failed, metadata: { flow: "option_c" } }, provider, log);
-    expect(m.setPaymentFailed).toHaveBeenCalledWith("cus_1", "in_9");
+    expect(m.setPaymentFailed).toHaveBeenCalledWith("cus_1", "in_9", "stripe");
   });
 
   it("subscription_cancelled marks the membership cancelled; non-option_c is ignored", async () => {
@@ -262,7 +268,7 @@ describe("handlePaymentEvent", () => {
     await handlePaymentEvent({ ...cancelled, metadata: { flow: "other" } }, provider, log);
     expect(m.setCancelled).not.toHaveBeenCalled();
     await handlePaymentEvent({ ...cancelled, metadata: { flow: "option_c" } }, provider, log);
-    expect(m.setCancelled).toHaveBeenCalledWith("cus_1", "sub_1");
+    expect(m.setCancelled).toHaveBeenCalledWith("cus_1", "sub_1", "stripe");
   });
 
   it("subscription_updated never cancels", async () => {

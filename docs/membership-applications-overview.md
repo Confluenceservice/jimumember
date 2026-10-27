@@ -165,7 +165,7 @@ When `checkout.session.completed` fires at `/api/stripe-webhook`:
 1. **Subscription created** — recurring annual subscription with trial end set to 1 July (next renewal date)
 2. **Membership activated** — `setAwaitingSubscription()` → `setActive()` in the memberships system
 3. **Sheet updated** — `complete=TRUE`, `paid=TRUE`, `paid_at` timestamp recorded
-4. **Checkout logged** — a row written to the **Checkout Log** sheet (timestamp, name, email, plan, amount, session ID, customer ID)
+4. **Checkout logged** — a row written to the **Checkout Log** sheet (timestamp, name, email, plan, amount, session ID, customer ID, provider)
 5. **Google Doc generated** — `createApplicationReviewDoc()` creates a formatted summary document in Google Drive (see below)
 
 ---
@@ -205,7 +205,7 @@ The doc is saved in the configured Google Drive folder (`GOOGLE_DRIVE_REVIEW_DOC
 | F | `date_of_birth` | AN | `doc_fundamentals_count` |
 | G | `ethnicity` | AO | `doc_insurance_count` |
 | H | `address` | AP | `complete` |
-| I | `postal_address` | AQ | `stripe_session` |
+| I | `postal_address` | AQ | `payment_ref` (was `stripe_session`) |
 | J | `business_name` | AR | `paid` |
 | K | `website` | AS | `created_at` |
 | L | `qualifications` (JSON) | AT | `paid_at` |
@@ -226,7 +226,7 @@ The doc is saved in the configured Google Drive folder (`GOOGLE_DRIVE_REVIEW_DOC
 
 ### Checkout Log Sheet
 
-Written after each successful payment: timestamp, firstName, lastName, phone, email, plan, amount ($), sessionId, customerId
+Written after each successful payment: timestamp, firstName, lastName, phone, email, plan, amount ($), sessionId (the provider's checkout reference), customerId, provider (column J — add the header by hand on existing sheets)
 
 ---
 
@@ -434,4 +434,4 @@ Handles `checkout.session.completed` for both plans. Distinguishes by `plan` met
 
 ### Checkout Log
 
-Every successful payment writes a row to the **Checkout Log** sheet: timestamp, firstName, lastName, phone, email, plan, amount ($), sessionId, customerId.
+Every successful payment writes a row to the **Checkout Log** sheet: timestamp, firstName, lastName, phone, email, plan, amount ($), sessionId, customerId, provider.

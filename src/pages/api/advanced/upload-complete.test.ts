@@ -144,6 +144,8 @@ describe("POST /api/advanced/upload-complete (characterization)", () => {
     const body = await res.json();
     expect(body.dryRun).toBe(true);
     expect(body.plan).toBe("advanced");
+    expect(body.message).toContain("Payment provider keys and price configuration validated");
+    expect(body.message).not.toContain("Stripe");
     expect(m.sessionsCreate).not.toHaveBeenCalled();
   });
 

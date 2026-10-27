@@ -161,12 +161,12 @@ const HEADERS = {
     "application_id", "submitted_at", "first_name", "last_name", "email",
     "phone", "full_address", "postal_address", "business_name", "interest_joining",
     "training_details", "list_on_page", "listing_details", "signature",
-    "stripe_session", "created_at",
+    "payment_ref", "created_at",
   ],
   "Renewals": [
     "renewal_id", "tier", "renewal_year", "first_name", "last_name", "email",
     "phone", "pd_entries", "amount_paid_cents", "currency", "payment_status",
-    "stripe_session", "created_at", "paid_at",
+    "payment_ref", "created_at", "paid_at",
   ],
   "Email log": [
     "timestamp", "direction", "recipient", "subject", "body", "status", "error",

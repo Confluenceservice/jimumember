@@ -7,7 +7,7 @@
 //
 // Self-contained plain JS (like bin/setup-google-workspace.js) so it runs
 // with plain `node` — it does NOT import src/lib/*.ts. The sheet contract it
-// writes (9 columns A-I) is defined in spec 000 REQ-OV-003 and mirrored in
+// writes (10 columns A-J) is defined in spec 000 REQ-OV-003 and mirrored in
 // src/lib/memberships.ts; keep the three in sync.
 //
 // Env required: STRIPE_SECRET_KEY, GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL,
@@ -24,7 +24,7 @@ import { google } from "googleapis";
 const SHEET_NAME = "Memberships";
 const HEADERS = [
   "customer_id", "plan", "recurring_price_id", "status", "subscription_id",
-  "next_anchor_epoch", "joined_at", "updated_at", "last_event",
+  "next_anchor_epoch", "joined_at", "updated_at", "last_event", "provider",
 ];
 
 const args = process.argv.slice(2);
@@ -73,7 +73,7 @@ async function ensureSheet() {
   });
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `'${SHEET_NAME}'!A1:I1`,
+    range: `'${SHEET_NAME}'!A1:J1`,
     valueInputOption: "RAW",
     requestBody: { values: [HEADERS] },
   });
@@ -95,7 +95,7 @@ async function upsertRow(customerId, row) {
   if (rowNumber === null) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `'${SHEET_NAME}'!A1:I1`,
+      range: `'${SHEET_NAME}'!A1:J1`,
       valueInputOption: "RAW",
       requestBody: { values: [row] },
     });
@@ -103,7 +103,7 @@ async function upsertRow(customerId, row) {
   }
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `'${SHEET_NAME}'!A${rowNumber}:I${rowNumber}`,
+    range: `'${SHEET_NAME}'!A${rowNumber}:J${rowNumber}`,
     valueInputOption: "RAW",
     requestBody: { values: [row] },
   });
@@ -142,6 +142,7 @@ for await (const sub of stripe.subscriptions.list({ status: "all", limit: 100 })
     new Date(sub.created * 1000).toISOString(),
     new Date().toISOString(),
     `backfill:${sub.id}`,
+    "stripe", // provider — this script only rebuilds Stripe members
   ];
 
   if (DRY_RUN) {

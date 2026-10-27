@@ -90,12 +90,13 @@ describe("google-sheets", () => {
         amountPaid: 7500,
         sessionId: "cs_test_abc123",
         customerId: "cus_xyz789",
+        provider: "stripe",
       });
 
       expect(mockAppend).toHaveBeenCalledOnce();
       expect(mockAppend).toHaveBeenCalledWith({
         spreadsheetId: "1Zbqn6BSExD5V9cPmA2rCJ2rN5f7gnP9fHjP0s5oq_I8",
-        range: "A1:I1",
+        range: "A1:J1",
         valueInputOption: "RAW",
         requestBody: {
           values: [[
@@ -108,6 +109,7 @@ describe("google-sheets", () => {
             "$75.00",
             "cs_test_abc123",
             "cus_xyz789",
+            "stripe",
           ]],
         },
       });
@@ -126,6 +128,7 @@ describe("google-sheets", () => {
         amountPaid: 14999, // $149.99
         sessionId: "cs_test_xyz",
         customerId: "cus_abc",
+        provider: "stripe",
       });
 
       const call = mockAppend.mock.calls[0][0];
@@ -146,6 +149,7 @@ describe("google-sheets", () => {
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
+        provider: "stripe",
       })).rejects.toThrow("Missing GOOGLE_SHEETS_SPREADSHEET_ID.");
     });
 
@@ -163,6 +167,7 @@ describe("google-sheets", () => {
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
+        provider: "stripe",
       })).rejects.toThrow("Missing GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL");
     });
 
@@ -180,6 +185,7 @@ describe("google-sheets", () => {
         amountPaid: 7500,
         sessionId: "cs_test",
         customerId: "cus_test",
+        provider: "stripe",
       })).rejects.toThrow("Missing GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL");
     });
 
@@ -196,6 +202,7 @@ describe("google-sheets", () => {
         amountPaid: 0,
         sessionId: "cs_test",
         customerId: "cus_test",
+        provider: "stripe",
       });
 
       const call = mockAppend.mock.calls[0][0];
@@ -215,6 +222,7 @@ describe("google-sheets", () => {
         amountPaid: 0,
         sessionId: "",
         customerId: "",
+        provider: "stripe",
       });
 
       expect(mockAppend).toHaveBeenCalledOnce();

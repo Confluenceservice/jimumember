@@ -17,8 +17,11 @@ type CheckoutLogEntry = {
   email: string;
   plan: string;
   amountPaid: number;
+  /** The provider's checkout reference (Stripe session id etc.) — column H. */
   sessionId: string;
   customerId: string;
+  /** Payment provider id (column J), e.g. "stripe". */
+  provider: string;
 };
 type AssociateApplicationEntry = {
   submittedAt: string;
@@ -80,9 +83,10 @@ export async function appendCheckoutLog(entry: CheckoutLogEntry): Promise<void> 
     amountDisplay,
     entry.sessionId,
     entry.customerId,
+    entry.provider,
   ];
 
-  await appendToRange("A1:I1", row);
+  await appendToRange("A1:J1", row);
 }
 
 type EmailLogEntry = {

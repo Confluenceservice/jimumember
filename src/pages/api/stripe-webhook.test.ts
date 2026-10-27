@@ -25,7 +25,7 @@ const mockGetApplicantById = vi.fn();
 const mockMarkApplicantPaid = vi.fn();
 const mockMarkRenewalPaid = vi.fn();
 const mockGetRenewalById = vi.fn();
-const mockGetRenewalByStripeRef = vi.fn();
+const mockGetRenewalByPaymentRef = vi.fn();
 const mockAppendRenewal = vi.fn();
 const mockGetRecipientsForEvent = vi.fn();
 
@@ -69,7 +69,7 @@ vi.mock("../../lib/upload-sheet", () => ({
 vi.mock("../../lib/renewal-sheet", () => ({
   markRenewalPaid: mockMarkRenewalPaid,
   getRenewalById: mockGetRenewalById,
-  getRenewalByStripeRef: mockGetRenewalByStripeRef,
+  getRenewalByPaymentRef: mockGetRenewalByPaymentRef,
   appendRenewal: mockAppendRenewal,
   getRenewalsSheetUrl: vi.fn().mockReturnValue(undefined),
 }));
@@ -392,7 +392,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetPaymentFailed).toHaveBeenCalledWith("cus_123", "in_123");
+      expect(mockSetPaymentFailed).toHaveBeenCalledWith("cus_123", "in_123", "stripe");
     });
   });
 
@@ -405,7 +405,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123", "stripe");
     });
 
     it("calls setCancelled when subscription is unpaid", async () => {
@@ -416,7 +416,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123", "stripe");
     });
 
     it("does not call setCancelled for active subscription", async () => {
@@ -440,7 +440,7 @@ describe("stripe-webhook", () => {
       const req = makeReq(body, buildSignature(body));
       const res = await POST(req);
       expect(res.status).toBe(200);
-      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123");
+      expect(mockSetCancelled).toHaveBeenCalledWith("cus_123", "sub_123", "stripe");
     });
   });
 
@@ -473,13 +473,13 @@ describe("stripe-webhook", () => {
         expect.objectContaining({ subscriptionId: "sub_test_123" }),
         "cs_test_123",
       );
-      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_test_123", "cs_test_123");
+      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_test_123", "cs_test_123", "stripe");
     });
   });
 
   describe("POST handler - invoice.payment_succeeded (auto-renewal, REQ-MR-009/010)", () => {
     beforeEach(() => {
-      mockGetRenewalByStripeRef.mockResolvedValue(null);
+      mockGetRenewalByPaymentRef.mockResolvedValue(null);
       mockAppendRenewal.mockResolvedValue(undefined);
       mockSetActive.mockResolvedValue(undefined);
       mockSendRenewalAdminNotification.mockResolvedValue(undefined);
@@ -541,7 +541,7 @@ describe("stripe-webhook", () => {
           email: "jane@example.com",
           amountCents: 15000,
           currency: "nzd",
-          stripeSession: "in_cycle_1",
+          paymentRef: "in_cycle_1",
           paymentStatus: "paid",
           paidAt: expect.any(String),
         }),
@@ -563,7 +563,7 @@ describe("stripe-webhook", () => {
         renewalId,
       );
       // Durable mirror self-heal with the invoice as provenance.
-      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_123", "in_cycle_1");
+      expect(mockSetActive).toHaveBeenCalledWith("cus_123", "sub_123", "in_cycle_1", "stripe");
     });
 
     it("records a basic auto-renewal without a PD-log link", async () => {
@@ -579,10 +579,10 @@ describe("stripe-webhook", () => {
     });
 
     it("is idempotent: an already-recorded invoice appends nothing and fires no side effects", async () => {
-      mockGetRenewalByStripeRef.mockResolvedValueOnce({ renewalId: "r_prev" });
+      mockGetRenewalByPaymentRef.mockResolvedValueOnce({ renewalId: "r_prev" });
       const res = await post(makeCycleInvoice());
       expect(res.status).toBe(200);
-      expect(mockGetRenewalByStripeRef).toHaveBeenCalledWith("in_cycle_1");
+      expect(mockGetRenewalByPaymentRef).toHaveBeenCalledWith("in_cycle_1");
       expect(mockAppendRenewal).not.toHaveBeenCalled();
       expect(mockSendRenewalAdminNotification).not.toHaveBeenCalled();
       expect(mockSetActive).not.toHaveBeenCalled();
@@ -639,7 +639,7 @@ describe("stripe-webhook", () => {
         amountPaidCents: 15000,
         currency: "nzd",
         paymentStatus: "pending",
-        stripeSession: "cs_renewal_1",
+        paymentRef: "cs_renewal_1",
         createdAt: "2026-06-23T10:00:00Z",
         paidAt: "",
       });
@@ -714,7 +714,7 @@ describe("stripe-webhook", () => {
         amountPaidCents: 7500,
         currency: "nzd",
         paymentStatus: "paid",
-        stripeSession: "cs_renewal_2",
+        paymentRef: "cs_renewal_2",
         createdAt: "2026-06-23T10:00:00Z",
         paidAt: "2026-06-23T10:01:00Z",
       });
@@ -794,7 +794,7 @@ describe("stripe-webhook", () => {
         amountPaidCents: 15000,
         currency: "nzd",
         paymentStatus: "pending",
-        stripeSession: "cs_renewal_routed",
+        paymentRef: "cs_renewal_routed",
         createdAt: "2026-06-23T10:00:00Z",
         paidAt: "",
       });

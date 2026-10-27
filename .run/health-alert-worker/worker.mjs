@@ -8,6 +8,8 @@
 //   TARGET_NAME   — display label for the Slack alert (default: "production")
 //   ORG_NAME      — org name shown in the Slack alert header (default: "JimuMember")
 
+import { summarizeResult } from "./summarize.mjs";
+
 function loadTargets(env) {
   const url = env.TARGET_URL?.trim();
   if (!url) return [];
@@ -89,19 +91,6 @@ async function check(target) {
       error: String(err && err.message ? err.message : err),
     };
   }
-}
-
-function summarizeResult(r) {
-  return {
-    name: r.name,
-    ok: r.ok,
-    httpStatus: r.httpStatus,
-    latencyMs: r.latencyMs,
-    stripe: r.body && r.body.stripe,
-    email: r.body && r.body.email,
-    status: r.body && r.body.status,
-    error: r.error,
-  };
 }
 
 async function postSlack(webhook, results, env) {
