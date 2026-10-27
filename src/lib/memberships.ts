@@ -76,8 +76,16 @@ let ensuredPromise: Promise<void> | null = null;
 async function backfillProviderHeader(): Promise<void> {
   try {
     const cell = await readRange(`'${SHEET_NAME}'!J1:J1`);
-    if (!cell[0]?.[0]) {
+    const header = cell[0]?.[0];
+    if (!header) {
       await updateRange(`'${SHEET_NAME}'!J1:J1`, [["provider"]]);
+    } else if (header !== "provider") {
+      // Column J used to be free for the admin; it now holds the provider id
+      // and is overwritten by status changes. Say so loudly, once per process.
+      logger.warn("membership_provider_column_not_empty", {
+        header,
+        hint: "Memberships column J is app-owned (provider); move any admin data out of it",
+      });
     }
   } catch (err) {
     logger.warn("membership_provider_header_backfill_failed", {

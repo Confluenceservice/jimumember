@@ -343,6 +343,21 @@ describe("provider column (J)", () => {
     expect(sheet.headerJ1).toBe("custom");
   });
 
+  it("warns when J1 holds an admin's own header, since column J is now app-owned", async () => {
+    sheet.headerJ1 = "admin notes";
+    await setAwaitingSubscription("cus_h", BASE);
+    expect(mockWarn).toHaveBeenCalledWith(
+      "membership_provider_column_not_empty",
+      expect.objectContaining({ header: "admin notes" }),
+    );
+  });
+
+  it("does not warn when J1 already says provider", async () => {
+    sheet.headerJ1 = "provider";
+    await setAwaitingSubscription("cus_h", BASE);
+    expect(mockWarn).not.toHaveBeenCalledWith("membership_provider_column_not_empty", expect.anything());
+  });
+
   it("a failing J1 header backfill is non-fatal and logged", async () => {
     sheet.failJ1Update = true;
     await expect(setAwaitingSubscription("cus_h", BASE)).resolves.toBeUndefined();

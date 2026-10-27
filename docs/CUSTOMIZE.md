@@ -88,7 +88,7 @@ Existing Stripe deployments need no manual step before or after deploying. In th
 
 1. **Deploy the app first.** Nothing breaks: sheet reads are positional, old header text keeps working, and `/api/health` still returns the `stripe` key.
 2. *Optional, cosmetic:* rename the header cell `stripe_session` → `payment_ref` (applicant sheet `AQ1`, Renewals `L1`, Basic Applications if present). The app never rewrites existing header cells.
-3. **Memberships column J (`provider`):** the app writes the J1 header automatically when it is empty; legacy rows are stamped `stripe` the next time a Stripe event touches them. **Checkout Log column J:** add a `provider` header in J1 by hand (that tab has no code-defined headers).
+3. **Memberships column J (`provider`):** the app writes the J1 header automatically when it is empty; legacy rows are stamped `stripe` the next time a Stripe event touches them. **Checkout Log column J:** add a `provider` header in J1 by hand (that tab has no code-defined headers). Column J of both tabs is now app-owned: if you keep your own notes in column J of Memberships, move them out first (the app logs `membership_provider_column_not_empty` when J1 holds something else, and overwrites that column on status changes).
 4. **Redeploy the health-alert worker** (`wrangler deploy` from `.run/health-alert-worker/`) at any time after step 1. Old and new workers both work against old and new apps (`payment` is read first, `stripe` is the fallback).
 
 Webhook endpoints (configure in Stripe Dashboard):
