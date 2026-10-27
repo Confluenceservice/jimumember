@@ -31,6 +31,8 @@ vi.mock("../../../lib/logger", () => ({
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 
 import { POST } from "./upload-complete";
+import { invalidateStripePriceCache } from "../../../lib/payments/stripe/prices";
+import { resetStripeClientForTests } from "../../../lib/payments/stripe/client";
 
 // Value printed by the pre-refactor code for annual=15000 at 2026-01-15T00:00:00Z.
 // Hardcoded on purpose: the proration helper moves in Task 2.
@@ -50,6 +52,8 @@ async function call(body: unknown) {
 describe("POST /api/advanced/upload-complete (characterization)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidateStripePriceCache();
+    resetStripeClientForTests();
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-01-15T00:00:00Z"));
     process.env.STRIPE_SECRET_KEY = "sk_test";
@@ -70,7 +74,7 @@ describe("POST /api/advanced/upload-complete (characterization)", () => {
     const [params, opts] = m.sessionsCreate.mock.calls[0];
     expect(params.mode).toBe("payment");
     expect(params.line_items[0].price_data.unit_amount).toBe(PRORATED);
-    expect(params.line_items[0].price_data.product_data.name).toBe("Professional Membership");
+    expect(params.line_items[0].price_data.product_data.name).toBe("Advanced Membership");
     expect(params.metadata).toMatchObject({
       flow: "option_c",
       plan: "advanced",

@@ -8,6 +8,8 @@ vi.mock("stripe", () => ({
 }));
 
 import { GET } from "./session-info";
+import { invalidateStripePriceCache } from "../../lib/payments/stripe/prices";
+import { resetStripeClientForTests } from "../../lib/payments/stripe/client";
 
 async function call(sessionId: string | null) {
   const url = new URL(
@@ -21,6 +23,8 @@ async function call(sessionId: string | null) {
 describe("GET /api/session-info (characterization)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidateStripePriceCache();
+    resetStripeClientForTests();
     process.env.STRIPE_SECRET_KEY = "sk_test";
   });
 

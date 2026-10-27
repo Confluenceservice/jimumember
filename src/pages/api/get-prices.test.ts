@@ -11,6 +11,8 @@ vi.mock("../../lib/logger", () => ({
 }));
 
 import { GET } from "./get-prices";
+import { invalidateStripePriceCache } from "../../lib/payments/stripe/prices";
+import { resetStripeClientForTests } from "../../lib/payments/stripe/client";
 
 async function call() {
   return GET({ request: new Request("https://app.test/api/get-prices") } as any);
@@ -19,11 +21,14 @@ async function call() {
 describe("GET /api/get-prices (characterization)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidateStripePriceCache();
+    resetStripeClientForTests();
     process.env.STRIPE_SECRET_KEY = "sk_test";
     process.env.STRIPE_PRICE_1 = "price_basic";
     process.env.STRIPE_PRICE_2 = "price_adv";
     mockPricesRetrieve.mockImplementation(async (id: string) => ({
       id,
+      active: true,
       currency: "usd",
       unit_amount: id === "price_basic" ? 7500 : 15000,
     }));
@@ -38,7 +43,7 @@ describe("GET /api/get-prices (characterization)", () => {
   it("skips a plan whose price retrieve throws", async () => {
     mockPricesRetrieve.mockImplementation(async (id: string) => {
       if (id === "price_adv") throw new Error("gone");
-      return { id, currency: "usd", unit_amount: 7500 };
+      return { id, active: true, currency: "usd", unit_amount: 7500 };
     });
     const body = await (await call()).json();
     expect(body.basic.amount).toBe(7500);
@@ -52,8 +57,17 @@ describe("GET /api/get-prices (characterization)", () => {
     expect(body.advanced.amount).toBe(15000);
   });
 
+  it("skips an inactive price (new: the shared resolver rejects inactive prices)", async () => {
+    mockPricesRetrieve.mockImplementation(async (id: string) => ({
+      id, active: id !== "price_adv", currency: "usd", unit_amount: 7500,
+    }));
+    const body = await (await call()).json();
+    expect(body.basic.amount).toBe(7500);
+    expect(body.advanced).toBeUndefined();
+  });
+
   it("skips a price in the wrong currency", async () => {
-    mockPricesRetrieve.mockResolvedValue({ id: "x", currency: "nzd", unit_amount: 7500 });
+    mockPricesRetrieve.mockResolvedValue({ id: "x", active: true, currency: "nzd", unit_amount: 7500 });
     const body = await (await call()).json();
     expect(body).toEqual({});
   });

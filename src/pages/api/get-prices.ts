@@ -1,8 +1,6 @@
 import type { APIRoute } from "astro";
-import Stripe from "stripe";
 import { formatAmount, type MembershipPlan } from "../../lib/membership-terms";
-import { getPriceForPlan } from "../../lib/stripe-checkout";
-import { CURRENCY } from "../../lib/config";
+import { getPaymentProvider } from "../../lib/payments";
 import { logger } from "../../lib/logger";
 
 type PriceInfo = {
@@ -12,34 +10,32 @@ type PriceInfo = {
 
 type PricesResponse = Partial<Record<MembershipPlan, PriceInfo>>;
 
-export const GET: APIRoute = async ({ request }) => {
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) {
-    return Response.json({ error: "Server is missing STRIPE_SECRET_KEY." }, { status: 500 });
+export const GET: APIRoute = async () => {
+  const provider = getPaymentProvider();
+  const missing = provider.missingConfig("api");
+  if (missing.length > 0) {
+    return Response.json({ error: `Server is missing ${missing[0]}.` }, { status: 500 });
   }
-
-  const stripe = new Stripe(secretKey);
 
   const plans: MembershipPlan[] = ["basic", "advanced"];
   const prices: PricesResponse = {};
 
   for (const plan of plans) {
-    const priceId = getPriceForPlan(plan);
-    if (!priceId) {
-      logger.warn(`get_prices.missing_price_id`, { plan });
-      continue;
-    }
-
     try {
-      const price = await stripe.prices.retrieve(priceId);
-      if (price.currency === CURRENCY && price.unit_amount) {
+      const price = await provider.resolvePrice(plan, "application");
+      if (price.unitAmount) {
         prices[plan] = {
-          amount: price.unit_amount,
-          formatted: formatAmount(price.unit_amount),
+          amount: price.unitAmount,
+          formatted: formatAmount(price.unitAmount),
         };
       }
     } catch (err) {
-      logger.error(`get_prices.retrieve_failed`, { plan, priceId, error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("MISSING_CONFIG")) {
+        logger.warn(`get_prices.missing_price_id`, { plan });
+      } else {
+        logger.error(`get_prices.retrieve_failed`, { plan, error: message });
+      }
     }
   }
 

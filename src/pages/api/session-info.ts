@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import Stripe from "stripe";
+import { getPaymentProvider } from "../../lib/payments";
 
 export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
@@ -9,29 +9,22 @@ export const GET: APIRoute = async ({ request }) => {
     return Response.json({ error: "Missing session_id." }, { status: 400 });
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) {
+  const provider = getPaymentProvider();
+  if (provider.missingConfig("api").length > 0) {
     return Response.json({ error: "Server misconfiguration." }, { status: 500 });
   }
 
-  const stripe = new Stripe(secretKey);
-
   try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["line_items"],
-    });
+    const checkout = await provider.getCheckout(sessionId);
 
     return Response.json({
-      plan: session.metadata?.plan ?? null,
-      firstName: session.metadata?.first_name ?? null,
-      lastName: session.metadata?.last_name ?? null,
-      phone: session.metadata?.phone ?? null,
-      email: session.customer_email ?? null,
-      amount: session.amount_total ?? null,
-      customerId:
-        typeof session.customer === "string"
-          ? session.customer
-          : session.customer?.id ?? null,
+      plan: checkout.metadata.plan ?? null,
+      firstName: checkout.metadata.first_name ?? null,
+      lastName: checkout.metadata.last_name ?? null,
+      phone: checkout.metadata.phone ?? null,
+      email: checkout.customerEmail,
+      amount: checkout.amountTotal,
+      customerId: checkout.customerRef,
     });
   } catch {
     return Response.json({ error: "Session not found." }, { status: 404 });

@@ -35,6 +35,8 @@ vi.mock("../../lib/logger", () => ({
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 
 import { POST } from "./create-checkout-session";
+import { invalidateStripePriceCache } from "../../lib/payments/stripe/prices";
+import { resetStripeClientForTests } from "../../lib/payments/stripe/client";
 
 // Value printed by the pre-refactor code for annual=10000 at 2026-01-15T00:00:00Z
 // (weeks until 1 July / 52). Hardcoded on purpose: the helper moves in Task 2.
@@ -56,6 +58,8 @@ const BASE_BODY = { plan: "basic", firstName: "Ann", lastName: "Lee", email: "A@
 describe("POST /api/create-checkout-session (characterization)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidateStripePriceCache();
+    resetStripeClientForTests();
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-01-15T00:00:00Z"));
     process.env.STRIPE_SECRET_KEY = "sk_test";
@@ -182,6 +186,13 @@ describe("POST /api/create-checkout-session (characterization)", () => {
     const res = await call(BASE_BODY);
     expect(res.status).toBe(500);
     expect((await res.json()).error).toBe("Recurring price must be a fixed USD amount.");
+  });
+
+  it("inactive price is a 500 and creates no session", async () => {
+    m.pricesRetrieve.mockResolvedValue({ ...PRICE, active: false });
+    const res = await call(BASE_BODY);
+    expect(res.status).toBe(500);
+    expect(m.sessionsCreate).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid plan with 400", async () => {
