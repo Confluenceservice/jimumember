@@ -1,20 +1,56 @@
-import type { PaymentProvider } from "../types";
+import Stripe from "stripe";
+import type { HealthStatus, PaymentProvider, ReturningCustomer } from "../types";
+import { getStripeClient } from "./client";
+import { resolveStripePrice } from "./prices";
 
 const notImplemented = (): never => {
-  throw new Error("Stripe adapter not implemented yet");
+  throw new Error("Stripe adapter method not implemented yet");
 };
 
-// Placeholder until the adapter lands (plan 1, Tasks 4-5).
+function envSet(name: string): boolean {
+  return !!process.env[name]?.trim();
+}
+
 export const stripeProvider: PaymentProvider = {
   id: "stripe",
-  missingConfig: notImplemented,
-  resolvePrice: notImplemented,
-  findReturningCustomer: notImplemented,
+
+  missingConfig(scope) {
+    const names = scope === "webhook" ? ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] : ["STRIPE_SECRET_KEY"];
+    return names.filter((n) => !envSet(n));
+  },
+
+  resolvePrice: resolveStripePrice,
+
+  async findReturningCustomer(email): Promise<ReturningCustomer | null> {
+    const stripe = getStripeClient();
+    const customers = await stripe.customers.list({ email, limit: 1 });
+    const customerRef = customers.data[0]?.id;
+    if (!customerRef) return null;
+    const subs = await stripe.subscriptions.list({ customer: customerRef, status: "all", limit: 1 });
+    return { customerRef, hadSubscription: subs.data.length > 0 };
+  },
+
+  // Tasks 5: createCheckout, getCheckout, ensureSubscription, parseWebhook.
   createCheckout: notImplemented,
   getCheckout: notImplemented,
   ensureSubscription: notImplemented,
   parseWebhook: notImplemented,
-  healthCheck: notImplemented,
-  isRetryableError: notImplemented,
-  userFacingError: notImplemented,
+
+  async healthCheck(): Promise<HealthStatus> {
+    if (!envSet("STRIPE_SECRET_KEY")) return { status: "not_configured" };
+    try {
+      await getStripeClient().products.list({ limit: 1 });
+      return { status: "connected" };
+    } catch (err) {
+      return { status: "disconnected", error: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  isRetryableError(err) {
+    return err instanceof Error && (err.name === "StripeConnectionError" || err.name === "StripeAPIError");
+  },
+
+  userFacingError(err) {
+    return err instanceof Stripe.errors.StripeError ? err.message : null;
+  },
 };
