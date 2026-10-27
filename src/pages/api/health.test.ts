@@ -60,6 +60,7 @@ describe("/api/health", () => {
       const body = await res.json();
       expect(body).toEqual({
         status: "ok",
+        payment: { provider: "stripe", status: "connected" },
         stripe: "connected",
         email: "connected",
         renewal_prices: {
@@ -95,9 +96,31 @@ describe("/api/health", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe("degraded");
-      expect(body.stripe).toBe("not_configured");
-      expect(body.errors.stripe).toContain('Unknown PAYMENT_PROVIDER "paypal"');
+      expect(body.payment.provider).toBe("paypal");
+      expect(body.payment.status).toBe("not_configured");
+      expect(body.payment.error).toContain('Unknown PAYMENT_PROVIDER "paypal"');
+      expect(body).not.toHaveProperty("stripe");
+      expect(body.errors.payment).toContain('Unknown PAYMENT_PROVIDER "paypal"');
+      expect(body.errors).not.toHaveProperty("stripe");
       expect(body.renewal_prices.basic.ok).toBe(false);
+    });
+
+    it("treats ' Stripe ' as stripe and keeps the alias", async () => {
+      process.env.PAYMENT_PROVIDER = " Stripe ";
+      process.env.STRIPE_SECRET_KEY = "sk_test_ok";
+      const GET = await getHandler();
+      const body = await (await GET({} as never)).json();
+      expect(body.payment).toEqual({ provider: "stripe", status: "connected" });
+      expect(body.stripe).toBe("connected");
+    });
+
+    it("echoes the airwallex provider id when it is rejected as unavailable", async () => {
+      process.env.PAYMENT_PROVIDER = "airwallex";
+      const GET = await getHandler();
+      const body = await (await GET({} as never)).json();
+      expect(body.payment.provider).toBe("airwallex");
+      expect(body.payment.status).toBe("not_configured");
+      expect(body).not.toHaveProperty("stripe");
     });
   });
 
@@ -115,6 +138,7 @@ describe("/api/health", () => {
       const body = await res.json();
       expect(body.status).toBe("degraded");
       expect(body.stripe).toBe("not_configured");
+      expect(body.payment).toEqual({ provider: "stripe", status: "not_configured" });
       expect(body.email).toBe("connected");
     });
 
@@ -133,8 +157,10 @@ describe("/api/health", () => {
       const body = await res.json();
       expect(body.status).toBe("degraded");
       expect(body.stripe).toBe("disconnected");
+      expect(body.payment).toEqual({ provider: "stripe", status: "disconnected", error: "Invalid API Key" });
       expect(body.email).toBe("connected");
       expect(body.errors.stripe).toContain("Invalid API Key");
+      expect(body.errors.payment).toContain("Invalid API Key");
     });
   });
 

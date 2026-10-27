@@ -88,12 +88,19 @@ export const GET: APIRoute = async () => {
   const renewalPrices = Object.fromEntries(renewalEntries);
   const allRenewalsOk = renewalEntries.every(([, r]) => r.ok);
 
-  const [stripe, email] = await Promise.all([checkPayment(provider, providerError), checkMailgun()]);
+  const [payment, email] = await Promise.all([checkPayment(provider, providerError), checkMailgun()]);
+  // When the provider can't be resolved, echo what was configured so the
+  // alert says which provider is broken.
+  const providerId =
+    provider?.id ?? (process.env.PAYMENT_PROVIDER?.trim().toLowerCase() || "stripe");
+  // `stripe` / `errors.stripe` are deprecated aliases kept for one release so
+  // an already-deployed alert worker keeps working; they only describe Stripe.
+  const stripeAlias = providerId === "stripe";
 
-  if (stripe.status === "disconnected") {
-    logger.error("health.stripe_check_failed", { error: stripe.error });
+  if (payment.status === "disconnected") {
+    logger.error("health.stripe_check_failed", { error: payment.error });
   }
-  if (stripe.status === "not_configured") {
+  if (payment.status === "not_configured") {
     logger.warn("health.check", {
       reason: providerError ?? "STRIPE_SECRET_KEY not configured",
     });
@@ -114,18 +121,24 @@ export const GET: APIRoute = async () => {
   // to function — a silently stale or missing price must surface as degraded
   // so the Slack health alerter fires.
   const healthy =
-    stripe.status === "connected" &&
+    payment.status === "connected" &&
     email.status === "connected" &&
     allRenewalsOk;
   const body: Record<string, unknown> = {
     status: healthy ? "ok" : "degraded",
-    stripe: stripe.status,
+    payment: {
+      provider: providerId,
+      status: payment.status,
+      ...(payment.error ? { error: payment.error } : {}),
+    },
+    ...(stripeAlias ? { stripe: payment.status } : {}),
     email: email.status,
     renewal_prices: renewalPrices,
   };
-  if (stripe.error || email.error || !allRenewalsOk) {
+  if (payment.error || email.error || !allRenewalsOk) {
     body.errors = {
-      ...(stripe.error ? { stripe: stripe.error } : {}),
+      ...(payment.error ? { payment: payment.error } : {}),
+      ...(payment.error && stripeAlias ? { stripe: payment.error } : {}),
       ...(email.error ? { email: email.error } : {}),
       ...renewalEntries
         .filter(([, r]) => !r.ok)
