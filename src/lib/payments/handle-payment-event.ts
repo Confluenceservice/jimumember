@@ -112,6 +112,7 @@ async function handleCheckoutCompleted(
       amountPaid: renewal.amountPaidCents,
       sessionId,
       customerId: event.customerRef ?? "",
+      provider: event.provider,
     }).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.error("renewal_checkout_log_failed", { err: msg, renewalId });
@@ -282,6 +283,7 @@ async function handleCheckoutCompleted(
     amountPaid: event.amountTotal,
     sessionId,
     customerId,
+    provider: event.provider,
   }).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     const sentry = getSentry();

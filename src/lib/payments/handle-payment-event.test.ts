@@ -138,6 +138,9 @@ describe("handlePaymentEvent", () => {
       log,
     );
     expect(m.markRenewalPaid).toHaveBeenCalledWith("r1", "cs_1", expect.any(String));
+    expect(m.appendCheckoutLog).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "cs_1", customerId: "cus_1", provider: "stripe", plan: "renewal_basic" }),
+    );
     expect(ensureSubscription).not.toHaveBeenCalled();
   });
 
@@ -166,6 +169,9 @@ describe("handlePaymentEvent", () => {
       "cs_1",
     );
     expect(m.setActive).toHaveBeenCalledWith("cus_1", "sub_1", "cs_1", "stripe");
+    expect(m.appendCheckoutLog).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "cs_1", customerId: "cus_1", provider: "stripe", plan: "basic", amountPaid: 5000 }),
+    );
   });
 
   it("skips ensureSubscription when the membership already has a subscription", async () => {
