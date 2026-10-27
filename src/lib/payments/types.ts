@@ -58,6 +58,14 @@ export interface EnsureSubscriptionInput {
   plan: string;
 }
 
+interface SubscriptionEventFields {
+  provider: ProviderId;
+  subscriptionRef: string;
+  customerRef: string;
+  status: string;
+  metadata: Record<string, string>;
+}
+
 export type PaymentEvent =
   | {
       type: "checkout_completed";
@@ -91,14 +99,8 @@ export type PaymentEvent =
       customerRef: string;
       metadata: Record<string, string>;
     }
-  | {
-      type: "subscription_updated" | "subscription_cancelled";
-      provider: ProviderId;
-      subscriptionRef: string;
-      customerRef: string;
-      status: string;
-      metadata: Record<string, string>;
-    };
+  | ({ type: "subscription_updated" } & SubscriptionEventFields)
+  | ({ type: "subscription_cancelled" } & SubscriptionEventFields);
 
 export interface ParsedWebhook {
   eventType: string;
